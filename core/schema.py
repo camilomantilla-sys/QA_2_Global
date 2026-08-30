@@ -39,7 +39,10 @@ _PC_FIELDS = [
     FieldSpec("third_party_impression", ["Third_Party_Impression"], kind="url", multi=True),
     FieldSpec("third_party_survey", ["Third_Party_Survey"], kind="url", multi=True),
     FieldSpec("creative_group", ["Creative_Group"], multi=True),
-    FieldSpec("status", ["Status"], required=True),
+    # Status puede faltar en Innovid Current Views.
+    # La ausencia desactiva las reglas de estado mediante Capability Profile,
+    # pero no bloquea las demás validaciones disponibles.
+    FieldSpec("status", ["Status"], required=False),
     FieldSpec("stopped", ["Stopped"], kind="bool"),
     FieldSpec("ad_type", ["Ad_Type"]),
     FieldSpec("creative_type", ["Creative_Type"]),
@@ -70,7 +73,10 @@ _PL_FIELDS = [
     FieldSpec("start_date", ["Start_Date"], required=True, kind="date"),
     FieldSpec("end_date", ["End_Date"], required=True, kind="date"),
     FieldSpec("placement_type", ["Placement_Type"], required=True),
-    FieldSpec("status", ["Status"], required=True),
+    # Status puede faltar en Innovid Current Views.
+    # La ausencia desactiva las reglas de estado mediante Capability Profile,
+    # pero no bloquea las demás validaciones disponibles.
+    FieldSpec("status", ["Status"], required=False),
     FieldSpec("hidden", ["Hidden"], kind="bool"),
     FieldSpec("stopped", ["Stopped"], kind="bool"),
     FieldSpec("booked_units", ["Booked_Units"], kind="number"),

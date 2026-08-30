@@ -90,7 +90,18 @@ TS_PLACEMENTS = SheetSpec(
 # ---------------------------------------------------------------- Creative Rotations
 
 _TS_ROTATION_FIELDS = [
-    FieldSpec("group_name", ["Creative Rotation Name"], required=True),
+    FieldSpec(
+        "group_name",
+        [
+            "Creative Rotation Name",
+            "Creative Rotation",
+            "Creative Rotation |",
+            "Creative Rotation|",
+            "Creative Rotation | Creative Name",
+            "Creative Rotation / Creative Name",
+        ],
+        required=True,
+    ),
     FieldSpec("creative_name", ["Creative Name"], required=True),
     FieldSpec("universal_ad_id", ["Universal Ad-ID (Video/Audio Only)",
                                   "Universal Ad-ID"], kind="id"),

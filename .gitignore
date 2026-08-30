@@ -9,3 +9,57 @@ __pycache__/
 *.xls
 .DS_Store
 .vscode/
+# Python
+*.py[cod]
+
+# Virtual environments
+venv/
+
+# Temporary backups
+backups/
+*.bak
+*.bak_*
+*_before_*.py
+
+# QA2 generated diagnostics
+*_context.txt
+*_diagnostic.txt
+*_diagnostics.txt
+*_run.txt
+*_run_v*.txt
+tests_inventory*.txt
+problem_*headers*.txt
+decision_headers.txt
+wpp_*headers*.txt
+wpp_*rows*.txt
+wpp_group_keys.txt
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Excel temporary files
+~$*.xlsx
+~$*.xlsm
+
+# OS files
+Thumbs.db
+
+# Python generated files
+
+# Virtual environments
+
+# Local backups
+
+# Generated QA diagnostics
+*_inventory.txt
+tags_integrated_qa*.txt
+tags_parser_run*.txt
+qa2_first_run.txt
+problem_*.txt
+wpp_*.txt
+
+# Temporary Microsoft Office files
+
+# Streamlit local secrets
+
+# Operating system

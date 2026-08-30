@@ -225,6 +225,176 @@ def _impl_type(vals: dict[str, object]) -> str:
 
 # ------------------------------------------------------------------ hoja
 
+def _repair_wpp_combined_rotation_header(
+    grid,
+    header_row: int,
+    cmap: ColumnMap,
+    spec: SheetSpec,
+    anomalies: list[Anomaly],
+) -> None:
+    """
+    Repara una variante defectuosa de WPP donde los encabezados
+    'Creative Rotation' y 'Creative Name' fueron combinados.
+
+    Contrato controlado:
+      columna del encabezado combinado     -> group_name
+      columna inmediatamente a la derecha  -> creative_name
+
+    Solo aplica al contrato TS_ROTATIONS. Nunca se usa como fallback
+    general para otras hojas o campos.
+    """
+    if spec is not TS_ROTATIONS:
+        return
+
+    missing_group = not cmap.has("group_name")
+    missing_creative = not cmap.has("creative_name")
+
+    if not missing_group and not missing_creative:
+        return
+
+    combined_col = None
+    combined_header = ""
+
+    for col, cell in sorted(grid.row_cells(header_row).items()):
+        key = norm_key(cell.text)
+
+        if "creativerotation" in key and "creativename" in key:
+            combined_col = col
+            combined_header = cell.text
+            break
+
+    repair_reason = ""
+
+    if combined_col is not None:
+        repair_reason = (
+            "encabezado combinado detectado: "
+            f"{combined_header!r}"
+        )
+
+    # Fallback controlado para TS WPP defectuosa:
+    #
+    # La columna A contiene Creative Rotation Name, pero la celda A1
+    # no tiene encabezado. La columna B sí contiene Creative Name.
+    #
+    # Solo se aplica cuando:
+    #   1. Estamos leyendo TS_ROTATIONS.
+    #   2. group_name está ausente.
+    #   3. creative_name fue reconocido.
+    #   4. creative_name está en columna B o posterior.
+    #   5. La columna inmediatamente anterior contiene datos reales.
+    if combined_col is None and missing_group:
+        creative_col = cmap.col("creative_name")
+
+        if creative_col is not None and creative_col > 1:
+            candidate_group_col = creative_col - 1
+
+            populated_group_cells = 0
+            samples = []
+
+            first_data_row = header_row + 1
+            last_sample_row = min(grid.max_row, header_row + 40)
+
+            for row_number in range(first_data_row, last_sample_row + 1):
+                candidate_cell = grid.cell(
+                    row_number,
+                    candidate_group_col,
+                )
+
+                creative_cell = grid.cell(
+                    row_number,
+                    creative_col,
+                )
+
+                if (
+                    candidate_cell is not None
+                    and candidate_cell.has_value
+                    and creative_cell is not None
+                    and creative_cell.has_value
+                ):
+                    populated_group_cells += 1
+
+                    if len(samples) < 3:
+                        samples.append(candidate_cell.text)
+
+            if populated_group_cells >= 2:
+                combined_col = candidate_group_col
+                combined_header = "(columna sin encabezado)"
+                repair_reason = (
+                    "group_name inferido desde la columna inmediatamente "
+                    "anterior a Creative Name; "
+                    f"{populated_group_cells} filas con evidencia"
+                )
+
+    if combined_col is None:
+        return
+
+    if missing_group:
+        cmap.single["group_name"] = combined_col
+
+    if missing_creative:
+        creative_col = combined_col + 1
+
+        # La segunda columna puede tener el mismo texto por una celda
+        # combinada o estar vacía debido al error de construcción.
+        cmap.single["creative_name"] = creative_col
+
+    cmap.missing_required = [
+        field_name
+        for field_name in cmap.missing_required
+        if field_name not in {"group_name", "creative_name"}
+    ]
+
+    cmap.missing_optional = [
+        field_name
+        for field_name in cmap.missing_optional
+        if field_name not in {"group_name", "creative_name"}
+    ]
+
+    # Elimina únicamente la anomalía anterior causada por estos campos.
+    cleaned_anomalies = []
+
+    for anomaly in anomalies:
+        if anomaly.code != "EXT-COLUMN-MISSING":
+            cleaned_anomalies.append(anomaly)
+            continue
+
+        missing = set(anomaly.detail.get("missing", []))
+        remaining = missing - {"group_name", "creative_name"}
+
+        if remaining:
+            cleaned_anomalies.append(
+                Anomaly(
+                    "EXT-COLUMN-MISSING",
+                    "FATAL",
+                    "Columnas requeridas ausentes: "
+                    + ", ".join(sorted(remaining)),
+                    detail={"missing": sorted(remaining)},
+                )
+            )
+
+    anomalies[:] = cleaned_anomalies
+
+    anomalies.append(
+        Anomaly(
+            "TS-WPP-COMBINED-ROTATION-HEADER",
+            "WARNING",
+            (
+                "La hoja Creative Rotations tiene una estructura "
+                "incompleta o un encabezado defectuoso. "
+                f"{repair_reason}. Se aplicó el mapeo controlado: "
+                f"columna {combined_col}=group_name y "
+                f"columna {cmap.col('creative_name')}=creative_name."
+            ),
+            detail={
+                "header_row": header_row,
+                "combined_column": combined_col,
+                "group_name_column": combined_col,
+                "creative_name_column": combined_col + 1,
+            },
+        )
+    )
+
+
 def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
                  intent_fields: list[str], resolver: ColorResolver,
                  primary_key: str) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]:
@@ -245,8 +415,20 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
     res.header_evidence = hres.evidence
 
     cmap, anomalies = map_columns(grid, hres.row, spec)
+
+    # Excepción controlada para WPP con encabezado combinado:
+    # "Creative Rotation | Creative Name".
+    _repair_wpp_combined_rotation_header(
+        grid,
+        hres.row,
+        cmap,
+        spec,
+        anomalies,
+    )
+
     res.cmap = cmap
     res.anomalies += anomalies
+
     if any(a.severity == "FATAL" for a in res.anomalies):
         return res, region
 
