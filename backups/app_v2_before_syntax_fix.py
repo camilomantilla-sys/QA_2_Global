@@ -6,8 +6,8 @@ import warnings
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import pandas as pd  # type: ignore
-import streamlit as st  # type: ignore
+import pandas as pd
+import streamlit as st
 
 
 # ============================================================
@@ -1143,16 +1143,14 @@ with tempfile.TemporaryDirectory(
 
             filter_columns = st.columns([2, 1, 1])
 
-            with filter_columns[0]:
-                search_text = st.text_input(
+            with filter_columnssearch_text = st.text_input(
                     "Buscar Placement ID o nombre",
                     placeholder=(
                         "Escribe un ID o una parte del nombre"
                     ),
                 )
 
-            with filter_columns[1]:
-                status_filter = st.multiselect(
+            with filter_columnsstatus_filter = st.multiselect(
                     "Resultado",
                     options=[
                         "FAIL",
@@ -1170,8 +1168,7 @@ with tempfile.TemporaryDirectory(
                     ],
                 )
 
-            with filter_columns[2]:
-                request_options = sorted(
+            with filter_columnsrequest_options = sorted(
                     {
                         (
                             item.expected.request_type
@@ -1519,8 +1516,7 @@ with tempfile.TemporaryDirectory(
 
                                 url_columns = st.columns(2)
 
-                                with url_columns[0]:
-                                    st.caption(
+                                with url_columnsst.caption(
                                         "URL esperada en Traffic Sheet"
                                     )
                                     st.code(
@@ -1529,8 +1525,7 @@ with tempfile.TemporaryDirectory(
                                         language=None,
                                     )
 
-                                with url_columns[1]:
-                                    st.caption(
+                                with url_columnsst.caption(
                                         "URL encontrada en Innovid"
                                     )
                                     st.code(

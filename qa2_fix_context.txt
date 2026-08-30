@@ -1,0 +1,1889 @@
+]633;E;{   echo "===== BUILD EXPECTED ====="\x3b   grep -n -A 240 "^def build_expected" core/matching.py\x3b    echo\x3b   echo "===== MAIN MATCH FUNCTION ====="\x3b   grep -n -A 260 "^def match" core/matching.py\x3b    echo\x3b   echo "===== URL SOURCE USAGE ====="\x3b   grep -R -n -A 30 -B 15     "url_source\\|lp_ref\\|lp_url\\|creative_names"     core/matching.py parsers/ts_parser.py core/ts_schema.py\x3b    echo\x3b   echo "===== SITE NORMALIZATION ====="\x3b   grep -R -n -A 35 -B 10     "site.*match\\|match.*site\\|norm_compare\\|split_platform_id"     core/matching.py core/normalize.py rules\x3b    echo\x3b   echo "===== URL RULE ====="\x3b   cat rules/urls.py\x3b    echo\x3b   echo "===== NAMING RULE ====="\x3b   cat rules/naming.py\x3b    echo\x3b   echo "===== UI CREATIVE ROWS ====="\x3b   grep -n -A 120 -B 20     '"URL":\\|URLs y attribution\\|creative_rows'     ui/app_v2.py\x3b    echo\x3b   echo "===== TS LANDING PAGES ====="\x3b   grep -n -A 100 -B 20     "_build_lp_worked\\|landing_pages\\|lp_worked"     parsers/ts_parser.py\x3b } > qa2_fix_context.txt;e8a7512f-41b3-4d85-8c13-73250612d34b]633;C===== BUILD EXPECTED =====
+228:def build_expected(ts) -> dict[str, ExpectedPlacement]:
+229-    """
+230-    Expected Model, solo con los placements TRABAJADOS.
+231-
+232-    El export puede traer 1380 placements, pero si solo se trabajaron 48,
+233-    unicamente esos 48 se validan. Lo no trabajado no se revisa.
+234-
+235-    Creativos, URL y CGEN esperados:
+236-      Variante B  -> Placements: creative_names + cgen (nivel placement)
+237-      Variante A  -> Creative Rotations, via el grupo que declara el placement,
+238-                     filtrando por dimension (bug B39)
+239-    """
+240-    from parsers.ts_parser import REQ_NOT_WORKED
+241-
+242-    out: dict[str, ExpectedPlacement] = {}
+243-    if ts.placements is None:
+244-        return out
+245-
+246-    worked = {pid for pid, sc in ts.scope.items()
+247-              if sc.request_type != REQ_NOT_WORKED}
+248-
+249-    # --- creativos con intencion, indexados por grupo (Creative Rotations)
+250-    by_group: dict[str, list[ExpectedCreative]] = {}
+251-    if ts.rotations is not None:
+252-        for row in ts.rotations.rows:
+253-            if row.intent not in (GREEN, RED, "SWAP"):
+254-                continue
+255-            g = norm_compare(str(row.values.get("group_name") or ""))
+256-            if not g:
+257-                continue
+258-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+259-            by_group.setdefault(g, []).append(ExpectedCreative(
+260-                name=str(row.values.get("creative_name") or ""),
+261-                creative_id=str(row.values.get("creative_id") or ""),
+262-                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+263-                intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
+264-                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+265-                url=str(row.values.get("lp_url") or ""),
+266-                cgen=str(row.values.get("cgen") or ""),
+267-                dims=norm_dims(row.values.get("dims_or_duration")),
+268-            ))
+269-
+270-    # --- placements trabajados
+271-    for row in ts.placements.rows:
+272-        pid = str(row.values.get("placement_id") or "")
+273-        if not pid or pid not in worked:
+274-            continue
+275-
+276-        ep = out.get(pid)
+277-        if ep is None:
+278-            sc = ts.scope[pid]
+279-            ep = ExpectedPlacement(
+280-                placement_id=pid,
+281-                name=str(row.values.get("placement_name") or ""),
+282-                site=str(row.values.get("site") or ""),
+283-                dims=norm_dims(row.values.get("dimensions")),
+284-                start=row.values.get("start_date"),
+285-                end=row.values.get("end_date"),
+286-                cgen=str(row.values.get("cgen") or ""),
+287-                group_name=str(row.values.get("group_name") or ""),
+288-                impl_type=row.impl_type, fmt=row.fmt,
+289-                request_type=sc.request_type,
+290-                visual_review=sc.visual_review, source=sc.source,
+291-            )
+292-            out[pid] = ep
+293-        ep.ts_rows.append(row.row)
+294-
+295-        # el grupo o el cgen pueden venir en cualquiera de las filas
+296-        if not ep.group_name and row.values.get("group_name"):
+297-            ep.group_name = str(row.values.get("group_name"))
+298-        if not ep.cgen and row.values.get("cgen"):
+299-            ep.cgen = str(row.values.get("cgen"))
+300-
+301-        # creativos declarados a nivel placement (Variante B)
+302-        cname = str(row.values.get("creative_names") or "")
+303-        if cname and row.intent in (GREEN, RED, "SWAP"):
+304-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+305-            ep.creatives.append(ExpectedCreative(
+306-                name=cname, intent=intent,
+307-                ts_row=row.row, ts_sheet=ts.placements.sheet,
+308-                # en Variante B el CGEN es del placement y aplica a todos
+309-                cgen=str(row.values.get("cgen") or ""),
+310-                dims=norm_dims(row.values.get("dimensions")),
+311-            ))
+312-
+313-    # --- inyectar los creativos del grupo que el placement declara,
+314-    #     FILTRANDO por dimension.
+315-    #
+316-    # Un grupo de Adobe contiene los creativos de todos los tamanos
+317-    # (8 conceptos x 5 tamanos = 40). Un placement de 160x600 solo sirve
+318-    # los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
+319-    # generando 32 falsos "creativo faltante" por placement (bug B39).
+320-    for ep in out.values():
+321-        g = norm_compare(ep.group_name)
+322-        if not g:
+323-            continue
+324-        have = {c.key_norm for c in ep.creatives}
+325-        for c in by_group.get(g, []):
+326-            if not c.key_norm or c.key_norm in have:
+327-                continue
+328-            if ep.dims and c.dims and ep.dims != c.dims:
+329-                continue
+330-            ep.creatives.append(c)
+331-            have.add(c.key_norm)
+332-
+333-    return out
+334-# ------------------------------------------------------------------ Actual
+335-
+336-def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
+337-    """
+338-    Actual Model desde los exports de Innovid.
+339-      export_pc: Placement-Creative  (creativos, dtree, status por creativo)
+340-      export_pl: Placement           (URL de 1x1, integracion de pixel)
+341-    """
+342-    out: dict[str, ActualPlacement] = {}
+343-
+344-    if export_pc is not None:
+345-        for row in export_pc.rows:
+346-            pid = str(row.values.get("placement_id") or "")
+347-            if not pid:
+348-                continue
+349-            ap = out.get(pid)
+350-            if ap is None:
+351-                pname = str(row.values.get("placement_name") or "")
+352-                nname, _ = split_platform_id(pname)
+353-                ap = ActualPlacement(
+354-                    placement_id=pid, name=pname, name_norm=nname,
+355-                    site=str(row.values.get("site") or ""),
+356-                    dims=norm_dims(row.values.get("dimensions")),
+357-                    start=row.values.get("start_date"),
+358-                    end=row.values.get("end_date"),
+359-                    status=str(row.values.get("status") or ""),
+360-                    placement_type=str(row.values.get("placement_type") or ""),
+361-                )
+362-                out[pid] = ap
+363-            ap.export_rows.append(row.row)
+364-
+365-            gname = str(row.values.get("group_name_norm")
+366-                        or row.values.get("group_name") or "")
+367-            gid = str(row.values.get("group_id") or "")
+368-            if gname and not ap.group_name:
+369-                ap.group_name = gname
+370-                ap.group_id = gid
+371-
+372-            if row.row_type == "PLACEMENT_HEADER":
+373-                continue
+374-
+375-            ap.creatives.append(ActualCreative(
+376-                creative_id=str(row.values.get("creative_id") or ""),
+377-                filename=str(row.values.get("filename") or ""),
+378-                name=str(row.values.get("creative_name") or ""),
+379-                third_party_id=str(row.values.get("third_party_id") or ""),
+380-                creative_type=str(row.values.get("creative_type") or ""),
+381-                enabled=row.values.get("enabled"),
+382-                status=str(row.values.get("status") or ""),
+383-                group_name=gname, group_id=gid,
+384-                row_type=row.row_type,
+385-                clicktags=list(row.multi.get("clicktag", [])),
+386-                export_row=row.row,
+387-            ))
+388-
+389-    if export_pl is not None:
+390-        for row in export_pl.rows:
+391-            pid = str(row.values.get("placement_id") or "")
+392-            if not pid:
+393-                continue
+394-            ap = out.get(pid)
+395-            if ap is None:
+396-                ap = ActualPlacement(
+397-                    placement_id=pid,
+398-                    name=str(row.values.get("placement_name") or ""),
+399-                    site=str(row.values.get("site") or ""),
+400-                    dims=norm_dims(row.values.get("dimensions")),
+401-                    start=row.values.get("start_date"),
+402-                    end=row.values.get("end_date"),
+403-                    status=str(row.values.get("status") or ""),
+404-                    placement_type=str(row.values.get("placement_type") or ""),
+405-                    from_placement_level=True,
+406-                )
+407-                ap.name_norm, _ = split_platform_id(ap.name)
+408-                out[pid] = ap
+409-            ap.third_party_id = str(row.values.get("third_party_id") or "")
+410-            ap.clicktags = list(row.multi.get("clicktag", []))
+411-            ap.impressions = list(row.multi.get("third_party_impression", []))
+412-            if not ap.status:
+413-                ap.status = str(row.values.get("status") or "")
+414-
+415-    return out
+416-
+417-# ------------------------------------------------------------------ L3 grupo
+418-
+419-def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
+420-                 ts_declares_groups: bool = True) -> tuple[str, MatchTrace]:
+421-    """
+422-    ts_declares_groups: la TS de este perfil TIENE columna de grupo.
+423-    Si no la tiene (Adobe Variante B), la ausencia no es un hallazgo:
+424-    es que el formato no declara grupos. Corrige el bug B37.
+425-    """
+426-    t = MatchTrace(entity="group", left=ep.group_name, right=ap.group_name)
+427-
+428-    if not ts_declares_groups:
+429-        t.winner = "n/a"
+430-        t.note = ("el formato de TS no declara grupos: los dtrees del export "
+431-                  "no se validan contra la TS")
+432-        return "NOT_DECLARED", t
+433-
+434-    if not ep.group_name and not ap.group_name:
+435-        t.winner = "n/a"
+436-        t.note = "ninguno declara grupo (asignacion directa o 1x1)"
+437-        return "N/A", t
+438-
+439-    if ep.group_name and not ap.group_name:
+440-        t.winner = "none"
+441-        t.note = "la TS declara grupo y el export no lo tiene"
+442-        return "MISSING", t
+443-
+444-    if not ep.group_name and ap.group_name:
+445-        t.winner = "none"
+446-        t.note = "el export tiene grupo y la TS lo dejo vacio"
+447-        return "EXTRA", t
+448-
+449-    t.keys_tried.append("group_name_norm")
+450-    exp_name, exp_id = split_platform_id(ep.group_name)
+451-    if norm_compare(exp_name) == norm_compare(ap.group_name):
+452-        t.winner = "group_name_norm"
+453-        if exp_id and ap.group_id:
+454-            t.keys_tried.append("decision_tree_id")
+455-            if exp_id == ap.group_id:
+456-                t.note = f"nombre + Dtree_ID {ap.group_id} coinciden"
+457-                return "OK", t
+458-            t.note = f"nombre coincide pero Dtree_ID difiere ({exp_id} vs {ap.group_id})"
+459-            return "MISMATCH", t
+460-        t.note = f"nombre coincide, Dtree_ID no verificable (export: {ap.group_id or '-'})"
+461-        return "NAME_ONLY", t
+462-
+463-    t.discarded.append(f"'{ap.group_name}' != '{exp_name}'")
+464-    t.note = "nombre de grupo distinto (sin fuzzy por diseno)"
+465-    return "MISMATCH", t
+466-
+467-# ------------------------------------------------------------------ L4 creativo
+468-
+
+===== MAIN MATCH FUNCTION =====
+534:def match(ts, export_pc, export_pl=None) -> MatchResult:
+535-    res = MatchResult()
+536-
+537-    # ---- L0 Scope Guard
+538-    ts_cid = str(ts.campaign_info.get("campaignid") or "")
+539-    ex_cid = ""
+540-    for src in (export_pc, export_pl):
+541-        if src is not None and src.metadata.get("campaignid"):
+542-            ex_cid = str(src.metadata["campaignid"])
+543-            break
+544-    res.ts_campaign_id, res.export_campaign_id = ts_cid, ex_cid
+545-
+546-    if not ts_cid or not ex_cid:
+547-        res.scope_guard = "UNKNOWN"
+548-        res.scope_evidence = (f"TS campaign_id='{ts_cid or 'ausente'}' · "
+549-                              f"export='{ex_cid or 'ausente'}'")
+550-    elif ts_cid == ex_cid:
+551-        res.scope_guard = "OK"
+552-        res.scope_evidence = f"campaign_id {ts_cid} coincide"
+553-    else:
+554-        res.scope_guard = "MISMATCH"
+555-        res.scope_evidence = (f"TS declara {ts_cid} y el export {ex_cid}: "
+556-                              f"son campanas distintas")
+557-        return res
+558-
+559-    expected = build_expected(ts)
+560-    actual = build_actual(export_pc, export_pl)
+561-    res.expected_total = len(expected)
+562-    res.actual_total = len(actual)
+563-
+564-    # ¿el formato de esta TS declara grupos?
+565-    ts_declares_groups = bool(
+566-        ts.placements and ts.placements.cmap
+567-        and ts.placements.cmap.has("group_name")
+568-    ) or ts.rotations is not None
+569-
+570-    # ---- L1 Placement
+571-    for pid, ep in sorted(expected.items()):
+572-        ap = actual.get(pid)
+573-        t = MatchTrace(entity="placement", keys_tried=["campaign+placement_id"],
+574-                       left=pid, right=pid if ap else "")
+575-
+576-        if ap is None:
+577-            t.winner = "none"
+578-            t.note = "el placement esperado no esta en el export"
+579-            res.only_expected.append(ep)
+580-            res.confidence_counts[CONF_NONE] = \
+581-                res.confidence_counts.get(CONF_NONE, 0) + 1
+582-            continue
+583-
+584-        t.winner = "placement_id"
+585-        t.note = f"{len(ap.export_rows)} filas en el export"
+586-        pm = PlacementMatch(placement_id=pid, expected=ep, actual=ap,
+587-                            confidence=CONF_HIGH, trace=t)
+588-
+589-        gm, gt = _match_group(ep, ap, ts_declares_groups=ts_declares_groups)
+590-        pm.group_match, pm.group_trace = gm, gt
+591-        res.group_counts[gm] = res.group_counts.get(gm, 0) + 1
+592-
+593-        pm.creative_links, pm.actual_extra = _match_creatives(ep, ap)
+594-
+595-        # Contar extras una sola vez por placement.
+596-        res.extra_running_total += len(pm.extra_running)
+597-        res.extra_stopped_total += len(pm.extra_stopped)
+598-
+599-        # contar extras una sola vez por placement
+600-
+601-        for cl in pm.creative_links:
+602-
+603-            for cl in pm.creative_links:
+604-             res.creative_conf_counts[cl.confidence] = \
+605-                res.creative_conf_counts.get(cl.confidence, 0) + 1
+606-
+607-            # solo los VERDES deben tener URL y CGEN correctos.
+608-            # los rojos se van, no importa a donde apuntaban.
+609-            if cl.expected.intent != GREEN:
+610-                continue
+611-
+612-            # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
+613-            actual_tags = cl.actual.clicktags if cl.actual else []
+614-            # en 1x1 el ClickTag vive a nivel placement
+615-            if not actual_tags and ap.clicktags:
+616-                actual_tags = ap.clicktags
+617-            actual_url = actual_tags[0] if actual_tags else ""
+618-
+619-            cl.url = compare_urls(cl.expected.url, actual_url)
+620-            res.url_counts[cl.url.result] = \
+621-                res.url_counts.get(cl.url.result, 0) + 1
+622-
+623-            # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
+624-            exp_cgen = cl.expected.cgen or ep.cgen
+625-            act_tpid = (cl.actual.third_party_id if cl.actual else "") \
+626-                       or ap.third_party_id
+627-            cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
+628-            res.triangle_counts[cl.triangle.result] = \
+629-                res.triangle_counts.get(cl.triangle.result, 0) + 1
+630-            
+631-        res.matched.append(pm)
+632-        res.confidence_counts[CONF_HIGH] = \
+633-            res.confidence_counts.get(CONF_HIGH, 0) + 1
+634-
+635-    return res
+
+===== URL SOURCE USAGE =====
+core/matching.py-221-
+core/matching.py-222-    @property
+core/matching.py-223-    def blocked(self) -> bool:
+core/matching.py-224-        return self.scope_guard == "MISMATCH"
+core/matching.py-225-
+core/matching.py-226-# ------------------------------------------------------------------ Expected
+core/matching.py-227-
+core/matching.py-228-def build_expected(ts) -> dict[str, ExpectedPlacement]:
+core/matching.py-229-    """
+core/matching.py-230-    Expected Model, solo con los placements TRABAJADOS.
+core/matching.py-231-
+core/matching.py-232-    El export puede traer 1380 placements, pero si solo se trabajaron 48,
+core/matching.py-233-    unicamente esos 48 se validan. Lo no trabajado no se revisa.
+core/matching.py-234-
+core/matching.py-235-    Creativos, URL y CGEN esperados:
+core/matching.py:236:      Variante B  -> Placements: creative_names + cgen (nivel placement)
+core/matching.py-237-      Variante A  -> Creative Rotations, via el grupo que declara el placement,
+core/matching.py-238-                     filtrando por dimension (bug B39)
+core/matching.py-239-    """
+core/matching.py-240-    from parsers.ts_parser import REQ_NOT_WORKED
+core/matching.py-241-
+core/matching.py-242-    out: dict[str, ExpectedPlacement] = {}
+core/matching.py-243-    if ts.placements is None:
+core/matching.py-244-        return out
+core/matching.py-245-
+core/matching.py-246-    worked = {pid for pid, sc in ts.scope.items()
+core/matching.py-247-              if sc.request_type != REQ_NOT_WORKED}
+core/matching.py-248-
+core/matching.py-249-    # --- creativos con intencion, indexados por grupo (Creative Rotations)
+core/matching.py-250-    by_group: dict[str, list[ExpectedCreative]] = {}
+core/matching.py-251-    if ts.rotations is not None:
+core/matching.py-252-        for row in ts.rotations.rows:
+core/matching.py-253-            if row.intent not in (GREEN, RED, "SWAP"):
+core/matching.py-254-                continue
+core/matching.py-255-            g = norm_compare(str(row.values.get("group_name") or ""))
+core/matching.py-256-            if not g:
+core/matching.py-257-                continue
+core/matching.py-258-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+core/matching.py-259-            by_group.setdefault(g, []).append(ExpectedCreative(
+core/matching.py-260-                name=str(row.values.get("creative_name") or ""),
+core/matching.py-261-                creative_id=str(row.values.get("creative_id") or ""),
+core/matching.py-262-                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+core/matching.py-263-                intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
+core/matching.py-264-                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+core/matching.py:265:                url=str(row.values.get("lp_url") or ""),
+core/matching.py-266-                cgen=str(row.values.get("cgen") or ""),
+core/matching.py-267-                dims=norm_dims(row.values.get("dims_or_duration")),
+core/matching.py-268-            ))
+core/matching.py-269-
+core/matching.py-270-    # --- placements trabajados
+core/matching.py-271-    for row in ts.placements.rows:
+core/matching.py-272-        pid = str(row.values.get("placement_id") or "")
+core/matching.py-273-        if not pid or pid not in worked:
+core/matching.py-274-            continue
+core/matching.py-275-
+core/matching.py-276-        ep = out.get(pid)
+core/matching.py-277-        if ep is None:
+core/matching.py-278-            sc = ts.scope[pid]
+core/matching.py-279-            ep = ExpectedPlacement(
+core/matching.py-280-                placement_id=pid,
+core/matching.py-281-                name=str(row.values.get("placement_name") or ""),
+core/matching.py-282-                site=str(row.values.get("site") or ""),
+core/matching.py-283-                dims=norm_dims(row.values.get("dimensions")),
+core/matching.py-284-                start=row.values.get("start_date"),
+core/matching.py-285-                end=row.values.get("end_date"),
+core/matching.py-286-                cgen=str(row.values.get("cgen") or ""),
+core/matching.py-287-                group_name=str(row.values.get("group_name") or ""),
+core/matching.py-288-                impl_type=row.impl_type, fmt=row.fmt,
+core/matching.py-289-                request_type=sc.request_type,
+core/matching.py-290-                visual_review=sc.visual_review, source=sc.source,
+core/matching.py-291-            )
+core/matching.py-292-            out[pid] = ep
+core/matching.py-293-        ep.ts_rows.append(row.row)
+core/matching.py-294-
+core/matching.py-295-        # el grupo o el cgen pueden venir en cualquiera de las filas
+core/matching.py-296-        if not ep.group_name and row.values.get("group_name"):
+core/matching.py-297-            ep.group_name = str(row.values.get("group_name"))
+core/matching.py-298-        if not ep.cgen and row.values.get("cgen"):
+core/matching.py-299-            ep.cgen = str(row.values.get("cgen"))
+core/matching.py-300-
+core/matching.py-301-        # creativos declarados a nivel placement (Variante B)
+core/matching.py:302:        cname = str(row.values.get("creative_names") or "")
+core/matching.py-303-        if cname and row.intent in (GREEN, RED, "SWAP"):
+core/matching.py-304-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+core/matching.py-305-            ep.creatives.append(ExpectedCreative(
+core/matching.py-306-                name=cname, intent=intent,
+core/matching.py-307-                ts_row=row.row, ts_sheet=ts.placements.sheet,
+core/matching.py-308-                # en Variante B el CGEN es del placement y aplica a todos
+core/matching.py-309-                cgen=str(row.values.get("cgen") or ""),
+core/matching.py-310-                dims=norm_dims(row.values.get("dimensions")),
+core/matching.py-311-            ))
+core/matching.py-312-
+core/matching.py-313-    # --- inyectar los creativos del grupo que el placement declara,
+core/matching.py-314-    #     FILTRANDO por dimension.
+core/matching.py-315-    #
+core/matching.py-316-    # Un grupo de Adobe contiene los creativos de todos los tamanos
+core/matching.py-317-    # (8 conceptos x 5 tamanos = 40). Un placement de 160x600 solo sirve
+core/matching.py-318-    # los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
+core/matching.py-319-    # generando 32 falsos "creativo faltante" por placement (bug B39).
+core/matching.py-320-    for ep in out.values():
+core/matching.py-321-        g = norm_compare(ep.group_name)
+core/matching.py-322-        if not g:
+core/matching.py-323-            continue
+core/matching.py-324-        have = {c.key_norm for c in ep.creatives}
+core/matching.py-325-        for c in by_group.get(g, []):
+core/matching.py-326-            if not c.key_norm or c.key_norm in have:
+core/matching.py-327-                continue
+core/matching.py-328-            if ep.dims and c.dims and ep.dims != c.dims:
+core/matching.py-329-                continue
+core/matching.py-330-            ep.creatives.append(c)
+core/matching.py-331-            have.add(c.key_norm)
+core/matching.py-332-
+--
+parsers/ts_parser.py-401-        pid = str(row.values.get("placement_id") or "")
+parsers/ts_parser.py-402-        if not pid:
+parsers/ts_parser.py-403-            continue
+parsers/ts_parser.py-404-        sc = out.get(pid)
+parsers/ts_parser.py-405-        if sc is None:
+parsers/ts_parser.py-406-            sc = PlacementScope(
+parsers/ts_parser.py-407-                placement_id=pid, impl_type=row.impl_type, fmt=row.fmt,
+parsers/ts_parser.py-408-                sample_name=str(row.values.get("placement_name") or "")[:60])
+parsers/ts_parser.py-409-            out[pid] = sc
+parsers/ts_parser.py-410-        sc.rows.append(row.row)
+parsers/ts_parser.py-411-        sc.fields_touched |= set(row.intent_fields)
+parsers/ts_parser.py-412-
+parsers/ts_parser.py-413-        gname = norm_compare(str(row.values.get("group_name") or ""))
+parsers/ts_parser.py-414-        if gname:
+parsers/ts_parser.py-415-            sc.groups.add(gname)
+parsers/ts_parser.py:416:        lp = norm_compare(str(row.values.get("lp_ref") or ""))
+parsers/ts_parser.py-417-        if lp:
+parsers/ts_parser.py-418-            sc.groups.add("__lp__" + lp)
+parsers/ts_parser.py-419-
+parsers/ts_parser.py-420-        if row.intent == GREEN:
+parsers/ts_parser.py-421-            sc.green_rows += 1
+parsers/ts_parser.py-422-        elif row.intent == RED:
+parsers/ts_parser.py-423-            sc.red_rows += 1
+parsers/ts_parser.py-424-        elif row.intent == "SWAP":
+parsers/ts_parser.py-425-            sc.green_rows += 1
+parsers/ts_parser.py-426-            sc.red_rows += 1
+parsers/ts_parser.py-427-        elif row.intent == WHITE:
+parsers/ts_parser.py-428-            sc.white_rows += 1
+parsers/ts_parser.py-429-        elif row.intent == "REVIEW":
+parsers/ts_parser.py-430-            sc.request_type = REQ_REVIEW
+parsers/ts_parser.py-431-
+parsers/ts_parser.py-432-    # ---- clasificacion
+parsers/ts_parser.py-433-    for sc in out.values():
+parsers/ts_parser.py-434-        if sc.request_type == REQ_REVIEW:
+parsers/ts_parser.py-435-            sc.source = SRC_OWN
+parsers/ts_parser.py-436-            continue
+parsers/ts_parser.py-437-
+parsers/ts_parser.py-438-        own = bool(sc.green_rows or sc.red_rows)
+parsers/ts_parser.py-439-
+parsers/ts_parser.py-440-        # propagacion desde grupos (solo si el perfil lo permite)
+parsers/ts_parser.py-441-        prop_green = prop_red = 0
+parsers/ts_parser.py-442-        if propagate:
+parsers/ts_parser.py-443-            for g in sc.groups:
+parsers/ts_parser.py-444-                if g.startswith("__lp__"):
+parsers/ts_parser.py-445-                    continue
+parsers/ts_parser.py-446-                gs = groups.get(g)
+--
+core/ts_schema.py-53-    except (ValueError, ZeroDivisionError):
+core/ts_schema.py-54-        pass
+core/ts_schema.py-55-    return FMT_DISPLAY
+core/ts_schema.py-56-
+core/ts_schema.py-57-# ---------------------------------------------------------------- Placements
+core/ts_schema.py-58-
+core/ts_schema.py-59-_TS_PLACEMENT_FIELDS = [
+core/ts_schema.py-60-    FieldSpec("site", ["Site Name", "Site"], required=True),
+core/ts_schema.py-61-    FieldSpec("placement_id", ["Placement ID"], required=True, kind="id"),
+core/ts_schema.py-62-    FieldSpec("placement_name", ["Placement Name"], required=True),
+core/ts_schema.py-63-    FieldSpec("start_date", ["Start Date"], required=True, kind="date"),
+core/ts_schema.py-64-    FieldSpec("end_date", ["End Date"], required=True, kind="date"),
+core/ts_schema.py-65-    FieldSpec("dimensions", ["Dimensions"], required=True, kind="dims"),
+core/ts_schema.py-66-    FieldSpec("group_name", ["Creative Rotation", "Creative Rotation Name",
+core/ts_schema.py-67-                             "Decision Tree", "Dtree"]),
+core/ts_schema.py:68:    FieldSpec("creative_names", ["Creative Names"]),
+core/ts_schema.py:69:    FieldSpec("lp_ref", ["Landing Page"]),
+core/ts_schema.py-70-    FieldSpec("vendors", ["Vendors / Pixels", "Vendors/Pixels"]),
+core/ts_schema.py-71-    FieldSpec("rotation_weight", ["Creative Rotation %", "Rotation %"]),
+core/ts_schema.py-72-    FieldSpec("cgen", ["CGEN", "CGENS"], kind="id"),
+core/ts_schema.py-73-    FieldSpec("extra_requirements", ["Additional Requirements"]),
+core/ts_schema.py-74-]
+core/ts_schema.py-75-
+core/ts_schema.py-76-_PLACEMENT_INTENT = [
+core/ts_schema.py-77-    "placement_id", "placement_name", "start_date", "end_date",
+core/ts_schema.py:78:    "dimensions", "group_name", "creative_names", "lp_ref",
+core/ts_schema.py-79-    "rotation_weight", "cgen",
+core/ts_schema.py-80-]
+core/ts_schema.py-81-
+core/ts_schema.py-82-TS_PLACEMENTS = SheetSpec(
+core/ts_schema.py-83-    sheet_aliases=["Placements"],
+core/ts_schema.py-84-    header_mode="signature",
+core/ts_schema.py-85-    signature_scan_rows=15,
+core/ts_schema.py-86-    signature_min_matches=4,
+core/ts_schema.py-87-    fields=_TS_PLACEMENT_FIELDS,
+core/ts_schema.py-88-)
+core/ts_schema.py-89-
+core/ts_schema.py-90-# ---------------------------------------------------------------- Creative Rotations
+core/ts_schema.py-91-
+core/ts_schema.py-92-_TS_ROTATION_FIELDS = [
+core/ts_schema.py-93-    FieldSpec("group_name", ["Creative Rotation Name"], required=True),
+core/ts_schema.py-94-    FieldSpec("creative_name", ["Creative Name"], required=True),
+core/ts_schema.py-95-    FieldSpec("universal_ad_id", ["Universal Ad-ID (Video/Audio Only)",
+core/ts_schema.py-96-                                  "Universal Ad-ID"], kind="id"),
+core/ts_schema.py-97-    FieldSpec("creative_id", ["Creative ID"], kind="id"),
+core/ts_schema.py-98-    FieldSpec("creative_type", ["Creative Type"]),
+core/ts_schema.py-99-    FieldSpec("dims_or_duration", ["Dimensions / Durations",
+core/ts_schema.py-100-                                    "Dimensions/Durations"]),
+core/ts_schema.py-101-    FieldSpec("rotation_weight", ["Rotation (%) or Even"]),
+core/ts_schema.py-102-    FieldSpec("sequence", ["Sequential"]),
+core/ts_schema.py-103-    FieldSpec("start_date", ["Start Date"], kind="date"),
+core/ts_schema.py-104-    FieldSpec("end_date", ["End Date"], kind="date"),
+core/ts_schema.py:105:    FieldSpec("lp_url", ["Landing Page Name"], kind="url"),
+core/ts_schema.py-106-    FieldSpec("companion", ["Companion Banner (For Video Only)",
+core/ts_schema.py-107-                            "Companion Banner (Video/Audio Only)",
+core/ts_schema.py-108-                            "Companion Banner"]),
+core/ts_schema.py-109-    FieldSpec("companion_id", ["Companion Banner ID (For Video Only)",
+core/ts_schema.py-110-                               "Companion Banner ID (Video/Audio Only)",
+core/ts_schema.py-111-                               "Companion Banner ID"], kind="id"),
+core/ts_schema.py-112-    FieldSpec("creative_links", ["Creative Links / Sharepoint Folder"]),
+core/ts_schema.py-113-    FieldSpec("status_of_rotation", ["STATUS OF ROTATION (PBU)",
+core/ts_schema.py-114-                                     "STATUS OF ROTATION"]),
+core/ts_schema.py-115-    FieldSpec("cgen", ["CGENS", "CGEN"], kind="id"),
+core/ts_schema.py-116-    FieldSpec("as_campaign", ["CAMPAIGN"]),
+core/ts_schema.py-117-    FieldSpec("as_source", ["SOURCE"]),
+core/ts_schema.py-118-    FieldSpec("as_content", ["CONTENT"]),
+core/ts_schema.py-119-    FieldSpec("rich_media_click", ["Rich Media Click Out Event/s"]),
+core/ts_schema.py-120-]
+core/ts_schema.py-121-
+core/ts_schema.py-122-_ROTATION_INTENT = [
+core/ts_schema.py-123-    "group_name", "creative_name", "creative_id", "universal_ad_id",
+core/ts_schema.py:124:    "start_date", "end_date", "lp_url", "cgen", "rotation_weight",
+core/ts_schema.py-125-    "status_of_rotation",
+core/ts_schema.py-126-]
+core/ts_schema.py-127-
+core/ts_schema.py-128-TS_ROTATIONS = SheetSpec(
+core/ts_schema.py-129-    sheet_aliases=["Creative Rotations", "Creative Rotation"],
+core/ts_schema.py-130-    header_mode="signature",
+core/ts_schema.py-131-    signature_scan_rows=15,
+core/ts_schema.py-132-    signature_min_matches=4,
+core/ts_schema.py-133-    fields=_TS_ROTATION_FIELDS,
+core/ts_schema.py-134-    fill_down=["group_name"],
+core/ts_schema.py-135-    ignore_row_patterns=[
+core/ts_schema.py-136-        r"^\d{1,2}\.\d{1,2}\.\d{2,4}\s+UPDATE$",
+core/ts_schema.py-137-        r"^Options to denote",
+core/ts_schema.py-138-        r"^Example .* Rotation$",
+core/ts_schema.py-139-        r"Default .* Ad$",
+core/ts_schema.py-140-        r"^\[object Object\]$",
+core/ts_schema.py-141-    ],
+core/ts_schema.py-142-    entity_identity_any=["creative_name", "creative_id"],
+core/ts_schema.py-143-)
+core/ts_schema.py-144-
+core/ts_schema.py-145-# ---------------------------------------------------------------- Landing Pages
+core/ts_schema.py-146-
+core/ts_schema.py-147-_TS_LP_FIELDS = [
+core/ts_schema.py-148-    FieldSpec("lp_name", ["Landing Page Name"], required=True),
+core/ts_schema.py:149:    FieldSpec("lp_url", ["Landing Page URL"], required=True, kind="url"),
+core/ts_schema.py-150-    FieldSpec("as_content", ["as_content"]),
+core/ts_schema.py-151-    FieldSpec("io", ["IO"]),
+core/ts_schema.py-152-    FieldSpec("fmt", ["Format"]),
+core/ts_schema.py-153-]
+core/ts_schema.py-154-
+core/ts_schema.py:155:_LP_INTENT = ["lp_name", "lp_url"]
+core/ts_schema.py-156-
+core/ts_schema.py-157-TS_LANDING_PAGES = SheetSpec(
+core/ts_schema.py-158-    sheet_aliases=["Landing Pages", "Landing Page"],
+core/ts_schema.py-159-    header_mode="signature",
+core/ts_schema.py-160-    signature_scan_rows=15,
+core/ts_schema.py-161-    signature_min_matches=2,
+core/ts_schema.py-162-    fields=_TS_LP_FIELDS,
+core/ts_schema.py-163-    fill_down=["lp_name"],
+core/ts_schema.py-164-)
+core/ts_schema.py-165-
+core/ts_schema.py-166-# ---------------------------------------------------------------- Campaign Info
+core/ts_schema.py-167-
+core/ts_schema.py-168-# Solo lo que un revisor de QA2 necesita
+core/ts_schema.py-169-CAMPAIGN_INFO_LABELS = [
+core/ts_schema.py-170-    "campaignid", "campaignname", "campaignstart", "campaignend",
+core/ts_schema.py-171-]
+core/ts_schema.py-172-
+core/ts_schema.py-173-TS_CAMPAIGN_INFO = SheetSpec(
+core/ts_schema.py-174-    sheet_aliases=["Campaign Information", "Campaign Info"],
+core/ts_schema.py-175-    header_mode="labels",
+core/ts_schema.py-176-    metadata_labels=CAMPAIGN_INFO_LABELS,
+core/ts_schema.py-177-    metadata_scan_rows=45,
+core/ts_schema.py-178-)
+core/ts_schema.py-179-
+core/ts_schema.py-180-# Etiqueta que abre la tabla de sites y contactos
+core/ts_schema.py-181-SITE_TABLE_ANCHORS = ["sitename", "sitecontactemail"]
+core/ts_schema.py-182-
+core/ts_schema.py-183-# ---------------------------------------------------------------- perfil
+core/ts_schema.py-184-
+core/ts_schema.py-185-@dataclass
+core/ts_schema.py-186-class TSProfile:
+core/ts_schema.py-187-    name: str
+core/ts_schema.py-188-    placements: SheetSpec
+core/ts_schema.py-189-    rotations: SheetSpec | None
+core/ts_schema.py-190-    campaign_info: SheetSpec
+core/ts_schema.py-191-    intent_fields: dict[str, list[str]] = field(default_factory=dict)
+core/ts_schema.py:192:    url_source: str = "rotations"
+core/ts_schema.py-193-    creatives_in_placements: bool = False
+core/ts_schema.py-194-    landing_pages_in_scope: bool = False
+core/ts_schema.py-195-    propagate_from_rotations: bool = False     # <-- NUEVA
+core/ts_schema.py-196-    notes: str = ""
+core/ts_schema.py-197-
+core/ts_schema.py-198-ADOBE_A = TSProfile(
+core/ts_schema.py-199-    name="adobe_variante_a",
+core/ts_schema.py-200-    placements=TS_PLACEMENTS,
+core/ts_schema.py-201-    rotations=TS_ROTATIONS,
+core/ts_schema.py-202-    campaign_info=TS_CAMPAIGN_INFO,
+core/ts_schema.py-203-    intent_fields={"placements": _PLACEMENT_INTENT, "rotations": _ROTATION_INTENT},
+core/ts_schema.py:204:    url_source="rotations",
+core/ts_schema.py-205-    creatives_in_placements=False,
+core/ts_schema.py-206-    landing_pages_in_scope=False,
+core/ts_schema.py-207-    # Adobe declara el trabajo en Placements. Creative Rotations acumula
+core/ts_schema.py-208-    # color historico de solicitudes anteriores: propagar inflaria el scope.
+core/ts_schema.py-209-    propagate_from_rotations=False,
+core/ts_schema.py-210-    notes="3P con Decision Tree. Landing Pages NO es fuente de verdad.",
+core/ts_schema.py-211-)
+core/ts_schema.py-212-
+core/ts_schema.py-213-ADOBE_B = TSProfile(
+core/ts_schema.py-214-    name="adobe_variante_b",
+core/ts_schema.py-215-    placements=TS_PLACEMENTS,
+core/ts_schema.py-216-    rotations=None,
+core/ts_schema.py-217-    campaign_info=TS_CAMPAIGN_INFO,
+core/ts_schema.py-218-    intent_fields={"placements": _PLACEMENT_INTENT},
+core/ts_schema.py:219:    url_source="placements",
+core/ts_schema.py-220-    creatives_in_placements=True,
+core/ts_schema.py-221-    landing_pages_in_scope=False,
+core/ts_schema.py-222-    propagate_from_rotations=False,
+core/ts_schema.py-223-    notes="1x1 / 3P directo. TODO el trafficking vive en Placements.",
+core/ts_schema.py-224-)
+core/ts_schema.py-225-
+core/ts_schema.py-226-WPP_STANDARD = TSProfile(
+core/ts_schema.py-227-    name="wpp_standard",
+core/ts_schema.py-228-    placements=TS_PLACEMENTS,
+core/ts_schema.py-229-    rotations=TS_ROTATIONS,
+core/ts_schema.py-230-    campaign_info=TS_CAMPAIGN_INFO,
+core/ts_schema.py-231-    intent_fields={"placements": _PLACEMENT_INTENT,
+core/ts_schema.py-232-                   "rotations": _ROTATION_INTENT,
+core/ts_schema.py-233-                   "landing_pages": _LP_INTENT},
+core/ts_schema.py:234:    url_source="landing_pages",
+core/ts_schema.py-235-    creatives_in_placements=False,
+core/ts_schema.py-236-    landing_pages_in_scope=True,
+core/ts_schema.py-237-    # WPP declara los swaps en Creative Rotations y Landing Pages,
+core/ts_schema.py-238-    # con los placements en blanco. Aqui la propagacion es obligatoria.
+core/ts_schema.py-239-    propagate_from_rotations=True,
+core/ts_schema.py-240-    notes="Plantilla WPP. Landing Pages SI usa colores para swaps de URL.",
+core/ts_schema.py-241-)
+core/ts_schema.py-242-
+core/ts_schema.py-243-PROFILES = {p.name: p for p in (ADOBE_A, ADOBE_B, WPP_STANDARD)}
+
+===== SITE NORMALIZATION =====
+core/matching.py-10-  - Todo link guarda su MatchTrace: llaves intentadas, ganadora, descartados.
+core/matching.py-11-  - Sin match no es "mismatch": es only_expected / only_actual.
+core/matching.py-12-"""
+core/matching.py-13-from __future__ import annotations
+core/matching.py-14-
+core/matching.py-15-import re
+core/matching.py-16-from dataclasses import dataclass, field
+core/matching.py-17-from datetime import date
+core/matching.py-18-
+core/matching.py-19-from core.colors import GREEN, RED
+core/matching.py:20:from core.normalize import norm_compare, norm_dims, split_platform_id
+core/matching.py-21-from core.urls import (
+core/matching.py-22-    AttributionTriangle, URLComparison, check_triangle, compare_urls,
+core/matching.py-23-)
+core/matching.py-24-
+core/matching.py-25-CONF_HIGH = "HIGH"
+core/matching.py-26-CONF_MEDIUM = "MEDIUM"
+core/matching.py-27-CONF_LOW = "LOW"
+core/matching.py-28-CONF_NONE = "NONE"
+core/matching.py-29-
+core/matching.py-30-_EXT = re.compile(r"\.(jpg|jpeg|png|gif|mp4|mov|webm|html|htm|zip|svg)$", re.I)
+core/matching.py-31-
+core/matching.py-32-def norm_creative(value: object) -> str:
+core/matching.py-33-    """Forma canonica para comparar nombres de creativo y filenames."""
+core/matching.py:34:    s = norm_compare(str(value or ""))
+core/matching.py-35-    return _EXT.sub("", s).strip()
+core/matching.py-36-
+core/matching.py-37-# ------------------------------------------------------------------ modelo
+core/matching.py-38-
+core/matching.py-39-@dataclass
+core/matching.py-40-class ExpectedCreative:
+core/matching.py-41-    name: str = ""
+core/matching.py-42-    creative_id: str = ""
+core/matching.py-43-    universal_ad_id: str = ""
+core/matching.py-44-    intent: str = ""          # GREEN | RED
+core/matching.py-45-    ts_row: int = 0
+core/matching.py-46-    ts_sheet: str = ""
+core/matching.py-47-    url: str = ""             # URL completa declarada en la TS
+core/matching.py-48-    cgen: str = ""            # CGENS declarado en la TS
+core/matching.py-49-    dims: str = ""            # <-- NUEVA
+core/matching.py-50-
+core/matching.py-51-    @property
+core/matching.py-52-    def key_norm(self) -> str:
+core/matching.py-53-        return norm_creative(self.name)
+core/matching.py-54-
+core/matching.py-55-@dataclass
+core/matching.py-56-class ExpectedPlacement:
+core/matching.py-57-    placement_id: str
+core/matching.py-58-    name: str = ""
+core/matching.py-59-    site: str = ""
+core/matching.py-60-    dims: str = ""
+core/matching.py-61-    start: date | None = None
+core/matching.py-62-    end: date | None = None
+core/matching.py-63-    cgen: str = ""
+core/matching.py-64-    group_name: str = ""
+core/matching.py-65-    impl_type: str = ""
+core/matching.py-66-    fmt: str = ""
+core/matching.py-67-    request_type: str = ""
+core/matching.py-68-    visual_review: bool = False
+core/matching.py-69-    source: str = ""
+--
+core/matching.py-100-          Enabled = No
+core/matching.py-101-          Status  = Disabled / Inactive
+core/matching.py-102-          sin Decision_Tree_Name (no esta en ningun arbol)
+core/matching.py-103-
+core/matching.py-104-        En Adobe, al hacer CREATIVE_ADD los creativos previos quedan
+core/matching.py-105-        asignados al dtree pero con Status=Disabled: siguen en el export
+core/matching.py-106-        y no corren. Sin esta regla se leerian como activos (bug B40).
+core/matching.py-107-        """
+core/matching.py-108-        if self.enabled is False:
+core/matching.py-109-            return False
+core/matching.py:110:        if norm_compare(self.status) in ("disabled", "inactive", "paused"):
+core/matching.py-111-            return False
+core/matching.py-112-        return True
+core/matching.py-113-
+core/matching.py-114-    @property
+core/matching.py-115-    def state_label(self) -> str:
+core/matching.py-116-        if self.enabled is False:
+core/matching.py-117-            return "Enabled=No"
+core/matching.py:118:        s = norm_compare(self.status)
+core/matching.py-119-        if s in ("disabled", "inactive", "paused"):
+core/matching.py-120-            return f"Status={self.status}"
+core/matching.py-121-        if not self.group_name:
+core/matching.py-122-            return "sin arbol"
+core/matching.py-123-        return f"activo ({self.status or 'Active'})"
+core/matching.py-124-
+core/matching.py-125-    @property
+core/matching.py-126-    def clicktag_1(self) -> str:
+core/matching.py-127-        return self.clicktags[0] if self.clicktags else ""
+core/matching.py-128-
+core/matching.py-129-
+core/matching.py-130-    @property
+core/matching.py-131-    def keys_norm(self) -> set[str]:
+core/matching.py-132-        out = set()
+core/matching.py-133-        if self.filename:
+core/matching.py-134-            out.add(norm_creative(self.filename))
+core/matching.py-135-        if self.name:
+core/matching.py-136-            out.add(norm_creative(self.name))
+core/matching.py-137-        return out
+core/matching.py-138-
+core/matching.py-139-@dataclass
+core/matching.py-140-class ActualPlacement:
+core/matching.py-141-    placement_id: str
+core/matching.py-142-    name: str = ""
+core/matching.py-143-    name_norm: str = ""
+core/matching.py-144-    site: str = ""
+core/matching.py-145-    dims: str = ""
+core/matching.py-146-    start: date | None = None
+core/matching.py-147-    end: date | None = None
+core/matching.py-148-    status: str = ""
+core/matching.py-149-    placement_type: str = ""
+core/matching.py-150-    group_name: str = ""
+core/matching.py-151-    group_id: str = ""
+core/matching.py-152-    third_party_id: str = ""       # nivel placement
+core/matching.py-153-    clicktags: list[str] = field(default_factory=list)
+--
+core/matching.py-245-
+core/matching.py-246-    worked = {pid for pid, sc in ts.scope.items()
+core/matching.py-247-              if sc.request_type != REQ_NOT_WORKED}
+core/matching.py-248-
+core/matching.py-249-    # --- creativos con intencion, indexados por grupo (Creative Rotations)
+core/matching.py-250-    by_group: dict[str, list[ExpectedCreative]] = {}
+core/matching.py-251-    if ts.rotations is not None:
+core/matching.py-252-        for row in ts.rotations.rows:
+core/matching.py-253-            if row.intent not in (GREEN, RED, "SWAP"):
+core/matching.py-254-                continue
+core/matching.py:255:            g = norm_compare(str(row.values.get("group_name") or ""))
+core/matching.py-256-            if not g:
+core/matching.py-257-                continue
+core/matching.py-258-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+core/matching.py-259-            by_group.setdefault(g, []).append(ExpectedCreative(
+core/matching.py-260-                name=str(row.values.get("creative_name") or ""),
+core/matching.py-261-                creative_id=str(row.values.get("creative_id") or ""),
+core/matching.py-262-                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+core/matching.py-263-                intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
+core/matching.py-264-                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+core/matching.py-265-                url=str(row.values.get("lp_url") or ""),
+core/matching.py-266-                cgen=str(row.values.get("cgen") or ""),
+core/matching.py-267-                dims=norm_dims(row.values.get("dims_or_duration")),
+core/matching.py-268-            ))
+core/matching.py-269-
+core/matching.py-270-    # --- placements trabajados
+core/matching.py-271-    for row in ts.placements.rows:
+core/matching.py-272-        pid = str(row.values.get("placement_id") or "")
+core/matching.py-273-        if not pid or pid not in worked:
+core/matching.py-274-            continue
+core/matching.py-275-
+core/matching.py-276-        ep = out.get(pid)
+core/matching.py-277-        if ep is None:
+core/matching.py-278-            sc = ts.scope[pid]
+core/matching.py-279-            ep = ExpectedPlacement(
+core/matching.py-280-                placement_id=pid,
+core/matching.py-281-                name=str(row.values.get("placement_name") or ""),
+core/matching.py-282-                site=str(row.values.get("site") or ""),
+core/matching.py-283-                dims=norm_dims(row.values.get("dimensions")),
+core/matching.py-284-                start=row.values.get("start_date"),
+core/matching.py-285-                end=row.values.get("end_date"),
+core/matching.py-286-                cgen=str(row.values.get("cgen") or ""),
+core/matching.py-287-                group_name=str(row.values.get("group_name") or ""),
+core/matching.py-288-                impl_type=row.impl_type, fmt=row.fmt,
+core/matching.py-289-                request_type=sc.request_type,
+core/matching.py-290-                visual_review=sc.visual_review, source=sc.source,
+--
+core/matching.py-311-            ))
+core/matching.py-312-
+core/matching.py-313-    # --- inyectar los creativos del grupo que el placement declara,
+core/matching.py-314-    #     FILTRANDO por dimension.
+core/matching.py-315-    #
+core/matching.py-316-    # Un grupo de Adobe contiene los creativos de todos los tamanos
+core/matching.py-317-    # (8 conceptos x 5 tamanos = 40). Un placement de 160x600 solo sirve
+core/matching.py-318-    # los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
+core/matching.py-319-    # generando 32 falsos "creativo faltante" por placement (bug B39).
+core/matching.py-320-    for ep in out.values():
+core/matching.py:321:        g = norm_compare(ep.group_name)
+core/matching.py-322-        if not g:
+core/matching.py-323-            continue
+core/matching.py-324-        have = {c.key_norm for c in ep.creatives}
+core/matching.py-325-        for c in by_group.get(g, []):
+core/matching.py-326-            if not c.key_norm or c.key_norm in have:
+core/matching.py-327-                continue
+core/matching.py-328-            if ep.dims and c.dims and ep.dims != c.dims:
+core/matching.py-329-                continue
+core/matching.py-330-            ep.creatives.append(c)
+core/matching.py-331-            have.add(c.key_norm)
+core/matching.py-332-
+core/matching.py-333-    return out
+core/matching.py-334-# ------------------------------------------------------------------ Actual
+core/matching.py-335-
+core/matching.py-336-def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
+core/matching.py-337-    """
+core/matching.py-338-    Actual Model desde los exports de Innovid.
+core/matching.py-339-      export_pc: Placement-Creative  (creativos, dtree, status por creativo)
+core/matching.py-340-      export_pl: Placement           (URL de 1x1, integracion de pixel)
+core/matching.py-341-    """
+core/matching.py-342-    out: dict[str, ActualPlacement] = {}
+core/matching.py-343-
+core/matching.py-344-    if export_pc is not None:
+core/matching.py-345-        for row in export_pc.rows:
+core/matching.py-346-            pid = str(row.values.get("placement_id") or "")
+core/matching.py-347-            if not pid:
+core/matching.py-348-                continue
+core/matching.py-349-            ap = out.get(pid)
+core/matching.py-350-            if ap is None:
+core/matching.py-351-                pname = str(row.values.get("placement_name") or "")
+core/matching.py:352:                nname, _ = split_platform_id(pname)
+core/matching.py-353-                ap = ActualPlacement(
+core/matching.py-354-                    placement_id=pid, name=pname, name_norm=nname,
+core/matching.py-355-                    site=str(row.values.get("site") or ""),
+core/matching.py-356-                    dims=norm_dims(row.values.get("dimensions")),
+core/matching.py-357-                    start=row.values.get("start_date"),
+core/matching.py-358-                    end=row.values.get("end_date"),
+core/matching.py-359-                    status=str(row.values.get("status") or ""),
+core/matching.py-360-                    placement_type=str(row.values.get("placement_type") or ""),
+core/matching.py-361-                )
+core/matching.py-362-                out[pid] = ap
+core/matching.py-363-            ap.export_rows.append(row.row)
+core/matching.py-364-
+core/matching.py-365-            gname = str(row.values.get("group_name_norm")
+core/matching.py-366-                        or row.values.get("group_name") or "")
+core/matching.py-367-            gid = str(row.values.get("group_id") or "")
+core/matching.py-368-            if gname and not ap.group_name:
+core/matching.py-369-                ap.group_name = gname
+core/matching.py-370-                ap.group_id = gid
+core/matching.py-371-
+core/matching.py-372-            if row.row_type == "PLACEMENT_HEADER":
+core/matching.py-373-                continue
+core/matching.py-374-
+core/matching.py-375-            ap.creatives.append(ActualCreative(
+core/matching.py-376-                creative_id=str(row.values.get("creative_id") or ""),
+core/matching.py-377-                filename=str(row.values.get("filename") or ""),
+core/matching.py-378-                name=str(row.values.get("creative_name") or ""),
+core/matching.py-379-                third_party_id=str(row.values.get("third_party_id") or ""),
+core/matching.py-380-                creative_type=str(row.values.get("creative_type") or ""),
+core/matching.py-381-                enabled=row.values.get("enabled"),
+core/matching.py-382-                status=str(row.values.get("status") or ""),
+core/matching.py-383-                group_name=gname, group_id=gid,
+core/matching.py-384-                row_type=row.row_type,
+core/matching.py-385-                clicktags=list(row.multi.get("clicktag", [])),
+core/matching.py-386-                export_row=row.row,
+core/matching.py-387-            ))
+--
+core/matching.py-397-                    placement_id=pid,
+core/matching.py-398-                    name=str(row.values.get("placement_name") or ""),
+core/matching.py-399-                    site=str(row.values.get("site") or ""),
+core/matching.py-400-                    dims=norm_dims(row.values.get("dimensions")),
+core/matching.py-401-                    start=row.values.get("start_date"),
+core/matching.py-402-                    end=row.values.get("end_date"),
+core/matching.py-403-                    status=str(row.values.get("status") or ""),
+core/matching.py-404-                    placement_type=str(row.values.get("placement_type") or ""),
+core/matching.py-405-                    from_placement_level=True,
+core/matching.py-406-                )
+core/matching.py:407:                ap.name_norm, _ = split_platform_id(ap.name)
+core/matching.py-408-                out[pid] = ap
+core/matching.py-409-            ap.third_party_id = str(row.values.get("third_party_id") or "")
+core/matching.py-410-            ap.clicktags = list(row.multi.get("clicktag", []))
+core/matching.py-411-            ap.impressions = list(row.multi.get("third_party_impression", []))
+core/matching.py-412-            if not ap.status:
+core/matching.py-413-                ap.status = str(row.values.get("status") or "")
+core/matching.py-414-
+core/matching.py-415-    return out
+core/matching.py-416-
+core/matching.py-417-# ------------------------------------------------------------------ L3 grupo
+core/matching.py-418-
+core/matching.py-419-def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
+core/matching.py-420-                 ts_declares_groups: bool = True) -> tuple[str, MatchTrace]:
+core/matching.py-421-    """
+core/matching.py-422-    ts_declares_groups: la TS de este perfil TIENE columna de grupo.
+core/matching.py-423-    Si no la tiene (Adobe Variante B), la ausencia no es un hallazgo:
+core/matching.py-424-    es que el formato no declara grupos. Corrige el bug B37.
+core/matching.py-425-    """
+core/matching.py-426-    t = MatchTrace(entity="group", left=ep.group_name, right=ap.group_name)
+core/matching.py-427-
+core/matching.py-428-    if not ts_declares_groups:
+core/matching.py-429-        t.winner = "n/a"
+core/matching.py-430-        t.note = ("el formato de TS no declara grupos: los dtrees del export "
+core/matching.py-431-                  "no se validan contra la TS")
+core/matching.py-432-        return "NOT_DECLARED", t
+core/matching.py-433-
+core/matching.py-434-    if not ep.group_name and not ap.group_name:
+core/matching.py-435-        t.winner = "n/a"
+core/matching.py-436-        t.note = "ninguno declara grupo (asignacion directa o 1x1)"
+core/matching.py-437-        return "N/A", t
+core/matching.py-438-
+core/matching.py-439-    if ep.group_name and not ap.group_name:
+core/matching.py-440-        t.winner = "none"
+core/matching.py-441-        t.note = "la TS declara grupo y el export no lo tiene"
+core/matching.py-442-        return "MISSING", t
+core/matching.py-443-
+core/matching.py-444-    if not ep.group_name and ap.group_name:
+core/matching.py-445-        t.winner = "none"
+core/matching.py-446-        t.note = "el export tiene grupo y la TS lo dejo vacio"
+core/matching.py-447-        return "EXTRA", t
+core/matching.py-448-
+core/matching.py-449-    t.keys_tried.append("group_name_norm")
+core/matching.py:450:    exp_name, exp_id = split_platform_id(ep.group_name)
+core/matching.py:451:    if norm_compare(exp_name) == norm_compare(ap.group_name):
+core/matching.py-452-        t.winner = "group_name_norm"
+core/matching.py-453-        if exp_id and ap.group_id:
+core/matching.py-454-            t.keys_tried.append("decision_tree_id")
+core/matching.py-455-            if exp_id == ap.group_id:
+core/matching.py-456-                t.note = f"nombre + Dtree_ID {ap.group_id} coinciden"
+core/matching.py-457-                return "OK", t
+core/matching.py-458-            t.note = f"nombre coincide pero Dtree_ID difiere ({exp_id} vs {ap.group_id})"
+core/matching.py-459-            return "MISMATCH", t
+core/matching.py-460-        t.note = f"nombre coincide, Dtree_ID no verificable (export: {ap.group_id or '-'})"
+core/matching.py-461-        return "NAME_ONLY", t
+core/matching.py-462-
+core/matching.py-463-    t.discarded.append(f"'{ap.group_name}' != '{exp_name}'")
+core/matching.py-464-    t.note = "nombre de grupo distinto (sin fuzzy por diseno)"
+core/matching.py-465-    return "MISMATCH", t
+core/matching.py-466-
+core/matching.py-467-# ------------------------------------------------------------------ L4 creativo
+core/matching.py-468-
+core/matching.py-469-def _match_creatives(ep: ExpectedPlacement,
+core/matching.py-470-                     ap: ActualPlacement) -> tuple[list[CreativeLink], list[ActualCreative]]:
+core/matching.py-471-    links: list[CreativeLink] = []
+core/matching.py-472-    pool = list(ap.creatives)
+core/matching.py-473-    used: set[int] = set()
+core/matching.py-474-
+core/matching.py-475-    # indices
+core/matching.py-476-    by_id = {c.creative_id: i for i, c in enumerate(pool) if c.creative_id}
+core/matching.py-477-    by_norm: dict[str, list[int]] = {}
+core/matching.py-478-    for i, c in enumerate(pool):
+core/matching.py-479-        for k in c.keys_norm:
+core/matching.py-480-            by_norm.setdefault(k, []).append(i)
+core/matching.py-481-
+core/matching.py-482-    for ec in ep.creatives:
+core/matching.py-483-        t = MatchTrace(entity="creative", left=ec.name or ec.creative_id)
+core/matching.py-484-        hit = None
+core/matching.py-485-        conf = CONF_NONE
+core/matching.py-486-
+--
+core/normalize.py-8-_WS = re.compile(r"\s+")
+core/normalize.py-9-_PLATFORM_ID_SUFFIX = re.compile(r"\s*\((\d+)\)\s*$")
+core/normalize.py-10-_DIMS = re.compile(r"(\d{1,5})\s*[xX\u00d7]\s*(\d{1,5})")
+core/normalize.py-11-
+core/normalize.py-12-def norm_text(value: str | None) -> str:
+core/normalize.py-13-    """Trim + colapso de espacios. Preserva mayusculas."""
+core/normalize.py-14-    if value is None:
+core/normalize.py-15-        return ""
+core/normalize.py-16-    return _WS.sub(" ", str(value).replace("\u00a0", " ")).strip()
+core/normalize.py-17-
+core/normalize.py:18:def norm_compare(value: str | None) -> str:
+core/normalize.py-19-    """Forma canonica para comparar: sin case, sin espacios sobrantes."""
+core/normalize.py-20-    return norm_text(value).casefold()
+core/normalize.py-21-
+core/normalize.py-22-def norm_key(value: str | None) -> str:
+core/normalize.py-23-    """
+core/normalize.py-24-    Llave para matchear nombres de columna.
+core/normalize.py-25-    'Third_Party_ID' / 'Third Party ID' -> 'thirdpartyid'
+core/normalize.py-26-    'Base_File_Size (KB)' -> 'basefilesizekb'
+core/normalize.py-27-
+core/normalize.py-28-    El '%' se preserva como 'pct' porque distingue headers reales:
+core/normalize.py-29-      'Creative Rotation'    -> 'creativerotation'
+core/normalize.py-30-      'Creative Rotation %'  -> 'creativerotationpct'
+core/normalize.py-31-    Sin esto ambos colapsaban a la misma llave (bug B38).
+core/normalize.py-32-    """
+core/normalize.py-33-    if value is None:
+core/normalize.py-34-        return ""
+core/normalize.py-35-    s = str(value).casefold().replace("%", "pct")
+core/normalize.py-36-    return re.sub(r"[^a-z0-9]", "", s)
+core/normalize.py-37-
+core/normalize.py-38-def clean_id(value: object) -> str:
+core/normalize.py-39-    """
+core/normalize.py-40-    IDs siempre como string. Nunca float.
+core/normalize.py-41-    Innovid/Excel pueden devolver 10139964.0 -> '10139964'
+core/normalize.py-42-    """
+core/normalize.py-43-    if value is None:
+core/normalize.py-44-        return ""
+core/normalize.py-45-    if isinstance(value, float) and value.is_integer():
+core/normalize.py-46-        return str(int(value))
+core/normalize.py-47-    s = str(value)
+core/normalize.py-48-    for ch in ("\n", "\r", "\t", '"', "'"):
+core/normalize.py-49-        s = s.replace(ch, "")
+core/normalize.py-50-    return s.strip()
+core/normalize.py-51-
+core/normalize.py:52:def split_platform_id(value: str | None) -> tuple[str, str | None]:
+core/normalize.py-53-    """
+core/normalize.py-54-    'FY26_Stock_AU_Display_DV360_C1_V3 (288292)' -> ('FY26_..._V3', '288292')
+core/normalize.py-55-
+core/normalize.py-56-    Resuelve el bug B11: Innovid inyecta el ID entre parentesis y la TS no lo tiene.
+core/normalize.py-57-    """
+core/normalize.py-58-    text = norm_text(value)
+core/normalize.py-59-    if not text:
+core/normalize.py-60-        return "", None
+core/normalize.py-61-    m = _PLATFORM_ID_SUFFIX.search(text)
+core/normalize.py-62-    if m:
+core/normalize.py-63-        return text[: m.start()].strip(), m.group(1)
+core/normalize.py-64-    return text, None
+core/normalize.py-65-
+core/normalize.py-66-def norm_dims(value: object) -> str:
+core/normalize.py-67-    """'160 x 600' / '160X600' / '160\u00d7600' -> '160x600'"""
+core/normalize.py-68-    text = norm_text(str(value) if value is not None else "")
+core/normalize.py-69-    if not text:
+core/normalize.py-70-        return ""
+core/normalize.py-71-    m = _DIMS.search(text)
+core/normalize.py-72-    if m:
+core/normalize.py-73-        return f"{int(m.group(1))}x{int(m.group(2))}"
+core/normalize.py-74-    return text.replace(" ", "").casefold()
+core/normalize.py-75-
+core/normalize.py-76-def dims_from_name(name: str | None) -> str | None:
+core/normalize.py-77-    """
+core/normalize.py-78-    Ultimo recurso: extraer dimensiones del nombre del placement.
+core/normalize.py-79-    'DV360_..._BAN_160x600_NA_...' -> '160x600'
+core/normalize.py-80-    Confianza MEDIUM (regla DIM-002).
+core/normalize.py-81-    """
+core/normalize.py-82-    text = norm_text(name)
+core/normalize.py-83-    if not text:
+core/normalize.py-84-        return None
+core/normalize.py-85-    found = _DIMS.findall(text)
+core/normalize.py-86-    if len(found) == 1:
+core/normalize.py-87-        return f"{int(found[0][0])}x{int(found[0][1])}"
+core/normalize.py-88-    return None
+core/normalize.py-89-
+core/normalize.py-90-def to_bool(value: object) -> bool | None:
+core/normalize.py-91-    """'Yes'/'No' de Innovid. None si no es interpretable."""
+core/normalize.py:92:    text = norm_compare(str(value) if value is not None else "")
+core/normalize.py-93-    if text in ("yes", "y", "true", "1", "si", "s\u00ed"):
+core/normalize.py-94-        return True
+core/normalize.py-95-    if text in ("no", "n", "false", "0"):
+core/normalize.py-96-        return False
+core/normalize.py-97-    return None
+--
+rules/tags.py-18-
+rules/tags.py-19-from datetime import date, datetime
+rules/tags.py-20-
+rules/tags.py-21-from core.findings import (
+rules/tags.py-22-    Confidence,
+rules/tags.py-23-    Domain,
+rules/tags.py-24-    EntityType,
+rules/tags.py-25-    FindingsBuffer,
+rules/tags.py-26-    Severity,
+rules/tags.py-27-)
+rules/tags.py:28:from core.normalize import norm_compare, norm_dims
+rules/tags.py-29-from core.tag_matching import TagMatchResult
+rules/tags.py-30-
+rules/tags.py-31-
+rules/tags.py-32-AUXILIARY_PIXEL_TYPES = {
+rules/tags.py-33-    "PIXEL",
+rules/tags.py-34-    "PIXEL_HTML",
+rules/tags.py-35-    "1X1_IMPRESSION",
+rules/tags.py-36-}
+rules/tags.py-37-
+rules/tags.py-38-
+rules/tags.py-39-def _date_text(value: object) -> str:
+rules/tags.py-40-    if isinstance(value, datetime):
+rules/tags.py-41-        return value.date().isoformat()
+rules/tags.py-42-
+rules/tags.py-43-    if isinstance(value, date):
+rules/tags.py-44-        return value.isoformat()
+rules/tags.py-45-
+rules/tags.py-46-    return str(value or "").strip()
+rules/tags.py-47-
+rules/tags.py-48-
+rules/tags.py-49-def evaluate(
+rules/tags.py-50-    tag_match: TagMatchResult,
+rules/tags.py-51-    buffer: FindingsBuffer,
+rules/tags.py-52-) -> None:
+rules/tags.py-53-    # ------------------------------------------------ TAG-001 Campaign ID
+rules/tags.py-54-
+rules/tags.py-55-    expected_campaign = (
+rules/tags.py-56-        tag_match.campaign_id_innovid
+rules/tags.py-57-        or tag_match.campaign_id_ts
+rules/tags.py-58-    )
+rules/tags.py-59-
+rules/tags.py-60-    if not tag_match.campaign_id_tags:
+rules/tags.py-61-        buffer.not_verified(
+rules/tags.py-62-            rule_id="TAG-001",
+rules/tags.py-63-            domain=Domain.TAG,
+--
+rules/tags.py-211-                message=(
+rules/tags.py-212-                    "Placement Name no verificable en archivo de tags."
+rules/tags.py-213-                ),
+rules/tags.py-214-                entity_type=EntityType.PLACEMENT,
+rules/tags.py-215-                placement_id=row.placement_id,
+rules/tags.py-216-                expected=expected_name,
+rules/tags.py-217-                actual=row.placement_name,
+rules/tags.py-218-            )
+rules/tags.py-219-
+rules/tags.py-220-        elif (
+rules/tags.py:221:            norm_compare(expected_name)
+rules/tags.py:222:            == norm_compare(row.placement_name)
+rules/tags.py-223-        ):
+rules/tags.py-224-            buffer.pass_(
+rules/tags.py-225-                rule_id="TAG-004",
+rules/tags.py-226-                domain=Domain.IDENTITY,
+rules/tags.py-227-                message="Placement Name del tag correcto.",
+rules/tags.py-228-                entity_type=EntityType.PLACEMENT,
+rules/tags.py-229-                placement_id=row.placement_id,
+rules/tags.py-230-                placement_name=row.placement_name,
+rules/tags.py-231-                expected=expected_name,
+rules/tags.py-232-                actual=row.placement_name,
+rules/tags.py-233-            )
+rules/tags.py-234-
+rules/tags.py-235-        else:
+rules/tags.py-236-            buffer.fail(
+rules/tags.py-237-                rule_id="TAG-004",
+rules/tags.py-238-                domain=Domain.IDENTITY,
+rules/tags.py-239-                message="Placement Name del tag no coincide.",
+rules/tags.py-240-                entity_type=EntityType.PLACEMENT,
+rules/tags.py-241-                placement_id=row.placement_id,
+rules/tags.py-242-                placement_name=row.placement_name,
+rules/tags.py-243-                expected=expected_name,
+rules/tags.py-244-                actual=row.placement_name,
+rules/tags.py-245-                recommended_action=(
+rules/tags.py-246-                    "Regenerar los tags usando el placement correcto."
+rules/tags.py-247-                ),
+rules/tags.py-248-            )
+rules/tags.py-249-
+rules/tags.py-250-        # TAG-005: dimensiones.
+rules/tags.py-251-
+rules/tags.py-252-        expected_dimensions = ""
+rules/tags.py-253-
+rules/tags.py-254-        if link.actual is not None:
+rules/tags.py-255-            expected_dimensions = link.actual.dims
+rules/tags.py-256-        elif link.expected is not None:
+rules/tags.py-257-            expected_dimensions = link.expected.dims
+Binary file rules/__pycache__/tags.cpython-314.pyc matches
+
+===== URL RULE =====
+from core.findings import Domain
+
+
+def evaluate(match_result, buffer):
+
+    for pm in match_result.matched:
+
+        for cl in pm.creative_links:
+
+            if cl.url is None:
+                continue
+
+            if cl.url.is_ok:
+
+                buffer.pass_(
+                    rule_id="URL-001",
+                    domain=Domain.URL,
+                    message="URL correcta",
+                    placement_id=pm.placement_id,
+                )
+
+            else:
+
+                buffer.fail(
+                    rule_id="URL-001",
+                    domain=Domain.URL,
+                    message=cl.url.note,
+                    placement_id=pm.placement_id,
+                    expected=cl.url.expected.raw,
+                    actual=cl.url.actual.raw,
+                )
+===== NAMING RULE =====
+from core.findings import Domain
+
+
+def evaluate(match_result, buffer):
+
+    for pm in match_result.matched:
+
+        if not pm.actual:
+            continue
+
+        expected = (pm.expected.name or "").strip()
+        actual = (pm.actual.name_norm or pm.actual.name or "").strip()
+
+        if not expected:
+            continue
+
+        if expected == actual:
+
+            buffer.pass_(
+                rule_id="PLC-006",
+                domain=Domain.IDENTITY,
+                message="Placement Name correcto",
+                placement_id=pm.placement_id,
+            )
+
+        else:
+
+            buffer.fail(
+                rule_id="PLC-006",
+                domain=Domain.IDENTITY,
+                message="Placement Name mismatch",
+                placement_id=pm.placement_id,
+                expected=expected,
+                actual=actual,
+            )
+===== UI CREATIVE ROWS =====
+1367-                            ),
+1368-                        ),
+1369-                    ]
+1370-
+1371-                    st.dataframe(
+1372-                        pd.DataFrame(
+1373-                            placement_comparisons
+1374-                        ),
+1375-                        use_container_width=True,
+1376-                        hide_index=True,
+1377-                    )
+1378-
+1379-                    # ----------------------------------------
+1380-                    # Creativos
+1381-                    # ----------------------------------------
+1382-
+1383-                    st.markdown(
+1384-                        "#### 2. Creativos y asignación"
+1385-                    )
+1386-
+1387:                    creative_rows = []
+1388-
+1389-                    if placement_match is not None:
+1390-                        for creative_link in creative_links:
+1391-                            expected_creative = (
+1392-                                creative_link.expected
+1393-                            )
+1394-
+1395-                            actual_creative = (
+1396-                                creative_link.actual
+1397-                            )
+1398-
+1399:                            creative_rows.append(
+1400-                                {
+1401-                                    "Intent": (
+1402-                                        expected_creative.intent
+1403-                                    ),
+1404-                                    "Creative esperado": (
+1405-                                        expected_creative.name
+1406-                                    ),
+1407-                                    "Creative encontrado": (
+1408-                                        (
+1409-                                            actual_creative.filename
+1410-                                            or actual_creative.name
+1411-                                        )
+1412-                                        if actual_creative
+1413-                                        else ""
+1414-                                    ),
+1415-                                    "Creative ID": (
+1416-                                        actual_creative.creative_id
+1417-                                        if actual_creative
+1418-                                        else (
+1419-                                            expected_creative.creative_id
+1420-                                        )
+1421-                                    ),
+1422-                                    "Match key": (
+1423-                                        creative_link.trace.winner
+1424-                                        or "-"
+1425-                                    ),
+1426-                                    "Confianza": (
+1427-                                        creative_link.confidence
+1428-                                    ),
+1429-                                    "Estado": (
+1430-                                        actual_creative.state_label
+1431-                                        if actual_creative
+1432-                                        else "MISSING"
+1433-                                    ),
+1434:                                    "URL": (
+1435-                                        creative_link.url.result
+1436-                                        if creative_link.url
+1437-                                        else "NOT_VERIFIED"
+1438-                                    ),
+1439-                                    "Attribution": (
+1440-                                        creative_link.triangle.result
+1441-                                        if creative_link.triangle
+1442-                                        else "NOT_VERIFIED"
+1443-                                    ),
+1444-                                }
+1445-                            )
+1446-
+1447:                    if creative_rows:
+1448-                        st.dataframe(
+1449:                            pd.DataFrame(creative_rows),
+1450-                            use_container_width=True,
+1451-                            hide_index=True,
+1452-                        )
+1453-                    else:
+1454-                        st.info(
+1455-                            "No existen creativos individuales "
+1456-                            "esperados para este placement."
+1457-                        )
+1458-
+1459-                    # ----------------------------------------
+1460-                    # URL y attribution
+1461-                    # ----------------------------------------
+1462-
+1463-                    st.markdown(
+1464:                        "#### 3. URLs y attribution"
+1465-                    )
+1466-
+1467-                    url_links = [
+1468-                        creative_link
+1469-                        for creative_link in creative_links
+1470-                        if (
+1471-                            creative_link.url is not None
+1472-                            or creative_link.triangle is not None
+1473-                        )
+1474-                    ]
+1475-
+1476-                    if not url_links:
+1477-                        st.info(
+1478-                            "No se ejecutaron validaciones "
+1479-                            "URL o attribution para este placement."
+1480-                        )
+1481-
+1482-                    for creative_index, creative_link in enumerate(
+1483-                        url_links,
+1484-                        start=1,
+1485-                    ):
+1486-                        creative_title = (
+1487-                            creative_link.expected.name
+1488-                            or (
+1489-                                creative_link.actual.filename
+1490-                                if creative_link.actual
+1491-                                else ""
+1492-                            )
+1493-                            or f"Creative {creative_index}"
+1494-                        )
+1495-
+1496-                        url_result = (
+1497-                            creative_link.url.result
+1498-                            if creative_link.url
+1499-                            else "NOT_VERIFIED"
+1500-                        )
+1501-
+1502-                        triangle_result = (
+1503-                            creative_link.triangle.result
+1504-                            if creative_link.triangle
+1505-                            else "NOT_VERIFIED"
+1506-                        )
+1507-
+1508-                        with st.expander(
+1509-                            f"{STATUS_ICON.get('PASS' if url_result == 'MATCH' else 'REVIEW', '')} "
+1510-                            f"{creative_title[:120]}  |  "
+1511-                            f"URL: {url_result}  |  "
+1512-                            f"Attribution: {triangle_result}"
+1513-                        ):
+1514-                            if creative_link.url is not None:
+1515-                                st.write(
+1516-                                    "**Resultado de URL:**",
+1517-                                    creative_link.url.result,
+1518-                                )
+1519-
+1520-                                url_columns = st.columns(2)
+1521-
+1522-                                with url_columns[0]:
+1523-                                    st.caption(
+1524-                                        "URL esperada en Traffic Sheet"
+1525-                                    )
+1526-                                    st.code(
+1527-                                        creative_link.url.expected.raw
+1528-                                        or "Pendiente de confirmar",
+1529-                                        language=None,
+1530-                                    )
+1531-
+1532-                                with url_columns[1]:
+1533-                                    st.caption(
+1534-                                        "URL encontrada en Innovid"
+1535-                                    )
+1536-                                    st.code(
+1537-                                        creative_link.url.actual.raw
+1538-                                        or "Pendiente de confirmar",
+1539-                                        language=None,
+1540-                                    )
+1541-
+1542-                                if creative_link.url.note:
+1543-                                    st.caption(
+1544-                                        creative_link.url.note
+1545-                                    )
+1546-
+1547-                            if creative_link.triangle is not None:
+1548-                                triangle = (
+1549-                                    creative_link.triangle
+1550-                                )
+1551-
+1552-                                st.write(
+1553-                                    "**Triángulo de attribution:**",
+1554-                                    triangle.result,
+1555-                                )
+1556-
+1557-                                triangle_columns = st.columns(3)
+1558-
+1559-                                triangle_columns[0].metric(
+1560-                                    "CGEN en TS",
+1561-                                    triangle.ts or "-",
+1562-                                )
+1563-
+1564-                                triangle_columns[1].metric(
+1565-                                    "Third Party ID",
+1566-                                    triangle.export or "-",
+1567-                                )
+1568-
+1569-                                triangle_columns[2].metric(
+1570-                                    "sdid en URL",
+1571-                                    triangle.url or "-",
+1572-                                )
+1573-
+1574-                                st.caption(
+1575-                                    triangle.note
+1576-                                    or "Sin detalle adicional."
+1577-                                )
+1578-
+1579-                    # ----------------------------------------
+1580-                    # Extras
+1581-                    # ----------------------------------------
+1582-
+1583-                    if (
+1584-                        placement_match is not None
+
+===== TS LANDING PAGES =====
+111-    fill_rates: dict[str, float] = field(default_factory=dict)
+112-    date_diagnostics: dict[str, dict] = field(default_factory=dict)
+113-    intent_counts: dict[str, int] = field(default_factory=dict)
+114-    impl_counts: dict[str, int] = field(default_factory=dict)
+115-    anomalies: list[Anomaly] = field(default_factory=list)
+116-    merged_applied: int = 0
+117-
+118-@dataclass
+119-class TSResult:
+120-    path: str = ""
+121-    profile: str = ""
+122-    profile_evidence: str = ""
+123-    all_sheets: list[str] = field(default_factory=list)
+124-    in_scope_sheets: list[str] = field(default_factory=list)
+125-    out_of_scope_sheets: list[str] = field(default_factory=list)
+126-    hidden_sheets: list[str] = field(default_factory=list)
+127-    campaign_info: dict[str, str] = field(default_factory=dict)
+128-    site_contacts: list[tuple[str, str]] = field(default_factory=list)
+129-    placements: TSSheetResult | None = None
+130-    rotations: TSSheetResult | None = None
+131:    landing_pages: TSSheetResult | None = None
+132-    groups: dict[str, GroupScope] = field(default_factory=dict)
+133:    lp_worked: set[str] = field(default_factory=set)
+134-    scope: dict[str, PlacementScope] = field(default_factory=dict)
+135-    request_counts: dict[str, int] = field(default_factory=dict)
+136-    format_counts: dict[str, int] = field(default_factory=dict)
+137-    format_by_request: dict[tuple[str, str], int] = field(default_factory=dict)
+138-    source_counts: dict[str, int] = field(default_factory=dict)
+139-    theme_colors: dict[int, str] = field(default_factory=dict)
+140-    region_palette: dict = field(default_factory=dict)
+141-    anomalies: list[Anomaly] = field(default_factory=list)
+142-
+143-    @property
+144-    def fatal(self) -> bool:
+145-        return any(a.severity == "FATAL" for a in self.anomalies)
+146-
+147-    @property
+148-    def worked(self) -> list[PlacementScope]:
+149-        return [s for s in self.scope.values() if s.request_type != REQ_NOT_WORKED]
+150-
+151-# ------------------------------------------------------------------ hojas
+152-
+153-def _split_sheets(path: Path) -> tuple[list[str], list[str], list[str]]:
+154-    states = sheet_states(path)
+155-    never = {norm_key(s) for s in NEVER_IN_SCOPE}
+156-    in_scope, out_scope, hidden = [], [], []
+157-    for name, st in states.items():
+158-        if st != "visible":
+159-            hidden.append(name)
+160-        elif norm_key(name) in never:
+161-            out_scope.append(name)
+162-        else:
+163-            in_scope.append(name)
+164-    return in_scope, out_scope, hidden
+165-
+166-# ------------------------------------------------------------------ deteccion
+167-
+168-def detect_profile(path: Path) -> tuple[str, str]:
+169-    """
+170-    Senal 1: columna CGEN/CGENS en Placements O en Creative Rotations -> Adobe.
+171-             Variante A lo tiene en Creative Rotations (header 'CGENS').
+172-             Variante B lo tiene en Placements (header 'CGEN').
+173-    Senal 2: Creative Rotations con datos -> A ; sin datos -> B.
+174-    """
+175-    in_scope, _o, _h = _split_sheets(path)
+176-    pl_sheet = resolve_sheet(in_scope, ["Placements"])
+177-    rot_sheet = resolve_sheet(in_scope, ["Creative Rotations", "Creative Rotation"])
+178-
+179-    cgen_where = ""
+180-
+181-    if pl_sheet:
+182-        try:
+183-            grid, _ = read_sheet(path, pl_sheet, capture_fill=False)
+184-            hres, _ = find_header_row(grid, TS_PLACEMENTS)
+185-            if hres.row:
+186-                keys = {norm_key(t) for t in grid.row_text(hres.row)}
+187-                if "cgen" in keys or "cgens" in keys:
+188-                    cgen_where = "Placements"
+189-        except Exception:
+190-            pass
+191-
+192-    rot_has_data = False
+193-    if rot_sheet:
+194-        try:
+195-            grid, _ = read_sheet(path, rot_sheet, capture_fill=False)
+196-            hres, _ = find_header_row(grid, TS_ROTATIONS)
+197-            if hres.row:
+198-                keys = {norm_key(t) for t in grid.row_text(hres.row)}
+199-                if not cgen_where and ("cgen" in keys or "cgens" in keys):
+200-                    cgen_where = "Creative Rotations"
+201-                if grid.max_row > hres.row:
+202-                    cmap, _ = map_columns(grid, hres.row, TS_ROTATIONS)
+203-                    col = cmap.col("creative_name") or cmap.col("group_name")
+204-                    if col:
+205-                        for r in range(hres.row + 1,
+206-                                       min(hres.row + 60, grid.max_row) + 1):
+207-                            c = grid.cell(r, col)
+208-                            if c is not None and c.has_value:
+209-                                rot_has_data = True
+210-                                break
+211-        except Exception:
+212-            pass
+213-
+214-    if not cgen_where:
+215-        return "wpp_standard", "sin columna CGEN en Placements ni en Creative Rotations"
+216-
+217-    if rot_has_data:
+218-        return "adobe_variante_a", f"CGEN en {cgen_where} + Creative Rotations con datos"
+219-    return "adobe_variante_b", f"CGEN en {cgen_where} + Creative Rotations vacia"
+220-
+221-def _impl_type(vals: dict[str, object]) -> str:
+222-    if norm_dims(vals.get("dimensions")) == "1x1":
+223-        return IMPL_SITE_SERVED_1X1
+224-    return IMPL_THIRD_PARTY if norm_dims(vals.get("dimensions")) else IMPL_UNKNOWN
+225-
+226-# ------------------------------------------------------------------ hoja
+227-
+228-def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
+229-                 intent_fields: list[str], resolver: ColorResolver,
+230-                 primary_key: str) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]:
+231-    res = TSSheetResult(sheet=sheet_name)
+232-    region: list[tuple[str, str, Cell]] = []
+233-
+--
+352-    for row in sr.rows:
+353-        gname = norm_compare(str(row.values.get("group_name") or ""))
+354-        if not gname:
+355-            continue
+356-        g = out.get(gname)
+357-        if g is None:
+358-            g = GroupScope(group_name=str(row.values.get("group_name")))
+359-            out[gname] = g
+360-        g.rows.append(row.row)
+361-        if row.intent == GREEN:
+362-            g.green_creatives += 1
+363-        elif row.intent == RED:
+364-            g.red_creatives += 1
+365-        elif row.intent == "SWAP":
+366-            g.green_creatives += 1
+367-            g.red_creatives += 1
+368-        elif row.intent == WHITE:
+369-            g.white_creatives += 1
+370-    return out
+371-
+372:def _build_lp_worked(sr: TSSheetResult | None) -> set[str]:
+373-    """Landing pages con color -> se trabajo su URL."""
+374-    out: set[str] = set()
+375-    if sr is None:
+376-        return out
+377-    for row in sr.rows:
+378-        if row.intent in (GREEN, RED, "SWAP"):
+379-            name = norm_compare(str(row.values.get("lp_name") or ""))
+380-            if name:
+381-                out.add(name)
+382-    return out
+383-
+384-# ------------------------------------------------------------------ scope
+385-
+386-def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
+387:                 lp_worked: set[str],
+388-                 propagate: bool = True) -> dict[str, PlacementScope]:
+389-    """
+390-    El scope de QA2 = placements con color propio
+391-                    U placements que apuntan a grupos con color
+392-                    U placements que apuntan a landing pages con color
+393-
+394-    Esta propagacion entre pestanas es lo que hace funcionar Unilever/Wendy's,
+395-    donde los placements van en blanco y los swaps se declaran en las
+396-    pestanas de rotaciones y landing pages.
+397-    """
+398-    out: dict[str, PlacementScope] = {}
+399-
+400-    for row in sr.rows:
+401-        pid = str(row.values.get("placement_id") or "")
+402-        if not pid:
+403-            continue
+404-        sc = out.get(pid)
+405-        if sc is None:
+406-            sc = PlacementScope(
+407-                placement_id=pid, impl_type=row.impl_type, fmt=row.fmt,
+408-                sample_name=str(row.values.get("placement_name") or "")[:60])
+409-            out[pid] = sc
+410-        sc.rows.append(row.row)
+411-        sc.fields_touched |= set(row.intent_fields)
+412-
+413-        gname = norm_compare(str(row.values.get("group_name") or ""))
+414-        if gname:
+415-            sc.groups.add(gname)
+416-        lp = norm_compare(str(row.values.get("lp_ref") or ""))
+417-        if lp:
+418-            sc.groups.add("__lp__" + lp)
+419-
+420-        if row.intent == GREEN:
+421-            sc.green_rows += 1
+422-        elif row.intent == RED:
+423-            sc.red_rows += 1
+424-        elif row.intent == "SWAP":
+425-            sc.green_rows += 1
+426-            sc.red_rows += 1
+427-        elif row.intent == WHITE:
+428-            sc.white_rows += 1
+429-        elif row.intent == "REVIEW":
+430-            sc.request_type = REQ_REVIEW
+431-
+432-    # ---- clasificacion
+433-    for sc in out.values():
+434-        if sc.request_type == REQ_REVIEW:
+435-            sc.source = SRC_OWN
+436-            continue
+437-
+438-        own = bool(sc.green_rows or sc.red_rows)
+439-
+440-        # propagacion desde grupos (solo si el perfil lo permite)
+441-        prop_green = prop_red = 0
+442-        if propagate:
+443-            for g in sc.groups:
+444-                if g.startswith("__lp__"):
+445-                    continue
+446-                gs = groups.get(g)
+447-                if gs and gs.worked:
+448-                    prop_green += gs.green_creatives
+449-                    prop_red += gs.red_creatives
+450-
+451-        # propagacion desde landing pages
+452-        prop_lp = (propagate and
+453:                   any(g[6:] in lp_worked for g in sc.groups
+454-                       if g.startswith("__lp__")))
+455-
+456-        # propagacion desde landing pages
+457:        prop_lp = any(g[6:] in lp_worked for g in sc.groups if g.startswith("__lp__"))
+458-
+459-        propagated = bool(prop_green or prop_red or prop_lp)
+460-
+461-        if own and propagated:
+462-            sc.source = SRC_BOTH
+463-        elif own:
+464-            sc.source = SRC_OWN
+465-        elif prop_lp and not (prop_green or prop_red):
+466-            sc.source = SRC_LANDING
+467-        elif propagated:
+468-            sc.source = SRC_ROTATION
+469-        else:
+470-            sc.source = ""
+471-
+472-        g_tot = sc.green_rows + prop_green
+473-        r_tot = sc.red_rows + prop_red
+474-
+475-        touched_placement_level = bool(
+476-            sc.fields_touched & {"placement_name", "start_date",
+477-                                 "end_date", "dimensions"})
+478-
+479-        if not g_tot and not r_tot:
+480-            if prop_lp:
+481-                sc.request_type = REQ_URL_SWAP
+482-            elif sc.fields_touched:
+483-                sc.request_type = REQ_FIELD_CHANGE
+484-            else:
+485-                sc.request_type = REQ_NOT_WORKED
+486-            continue
+487-
+488-        if g_tot and not r_tot and touched_placement_level and not sc.white_rows:
+489-            sc.request_type = REQ_NEW_PLACEMENT
+490-        elif g_tot and r_tot:
+491-            sc.request_type = REQ_CREATIVE_SWAP
+492-        elif g_tot:
+493-            sc.request_type = REQ_CREATIVE_ADD
+494-        else:
+495-            sc.request_type = REQ_CREATIVE_REMOVE
+496-            # AdOps no apaga placements ni los deja vacios: lo hace Digital.
+497-            # Solo revision visual, sin veredicto PASS/FAIL.
+498-            if sc.green_rows == 0 and prop_green == 0:
+499-                sc.visual_review = True
+500-                sc.note = ("todos los creativos en rojo · revision visual "
+501-                           "(desasignar/apagar lo ejecuta Digital)")
+502-
+503-    return out
+504-
+505-# ------------------------------------------------------------------ parser
+506-
+507-def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
+508-    res = TSResult(path=str(path))
+509-
+510-    in_scope, out_scope, hidden = _split_sheets(path)
+511-    res.all_sheets = in_scope + out_scope + hidden
+512-    res.in_scope_sheets = in_scope
+513-    res.out_of_scope_sheets = out_scope
+514-    res.hidden_sheets = hidden
+515-
+516-    detected, evidence = detect_profile(path)
+517-    res.profile = profile_name or detected
+518-    res.profile_evidence = evidence if not profile_name else "forzado por --profile"
+519-    profile: TSProfile = PROFILES[res.profile]
+520-
+521-    res.theme_colors = read_workbook_theme(path)
+522-    resolver = ColorResolver(res.theme_colors)
+523-
+524-    # ---- Campaign Information: 4 datos + sites
+525-    ci_sheet = resolve_sheet(in_scope, profile.campaign_info.sheet_aliases)
+526-    if ci_sheet:
+527-        grid, anomalies = read_sheet(path, ci_sheet, capture_fill=False)
+528-        res.anomalies += anomalies
+529-        wanted = set(profile.campaign_info.metadata_labels)
+530-        anchors = set(SITE_TABLE_ANCHORS)
+531-        site_start = None
+532-
+533-        for r in range(1, min(profile.campaign_info.metadata_scan_rows,
+534-                              grid.max_row) + 1):
+535-            cells = grid.row_cells(r)
+536-            for col in sorted(cells):
+537-                label = norm_key(cells[col].text.rstrip(":"))
+538-                if label in anchors and site_start is None:
+539-                    site_start = r + 1
+540-                if label in wanted and label not in res.campaign_info:
+541-                    for nxt in sorted(c for c in cells if c > col):
+542-                        if cells[nxt].has_value:
+543-                            raw = cells[nxt].raw
+544-                            if isinstance(raw, float) and raw.is_integer():
+545-                                res.campaign_info[label] = str(int(raw))
+546-                            else:
+547-                                res.campaign_info[label] = cells[nxt].text
+548-                            break
+549-
+550-        if site_start:
+551-            for r in range(site_start, min(site_start + 40, grid.max_row) + 1):
+552-                cells = grid.row_cells(r)
+553-                if not cells:
+554-                    break
+555-                fc = min(cells)
+556-                name = cells[fc].text if cells[fc].has_value else ""
+557-                if not name:
+--
+575-    res.placements, region = _parse_sheet(
+576-        path, pl_sheet, profile.placements,
+577-        profile.intent_fields.get("placements", []),
+578-        resolver, primary_key="placement_id")
+579-    all_region += region
+580-    res.anomalies += [a for a in res.placements.anomalies if a.severity == "FATAL"]
+581-
+582-    # ---- Creative Rotations
+583-    if profile.rotations is not None:
+584-        rot_sheet = resolve_sheet(in_scope, profile.rotations.sheet_aliases)
+585-        if rot_sheet:
+586-            res.rotations, region = _parse_sheet(
+587-                path, rot_sheet, profile.rotations,
+588-                profile.intent_fields.get("rotations", []),
+589-                resolver, primary_key="creative_name")
+590-            all_region += region
+591-            res.anomalies += [a for a in res.rotations.anomalies
+592-                              if a.severity == "FATAL"]
+593-
+594-    # ---- Landing Pages (solo WPP)
+595:    if profile.landing_pages_in_scope:
+596-        lp_sheet = resolve_sheet(in_scope, TS_LANDING_PAGES.sheet_aliases)
+597-        if lp_sheet:
+598:            res.landing_pages, region = _parse_sheet(
+599-                path, lp_sheet, TS_LANDING_PAGES,
+600:                profile.intent_fields.get("landing_pages", []),
+601-                resolver, primary_key="lp_name")
+602-            all_region += region
+603-
+604-    # ---- propagacion y scope
+605-    res.groups = _build_groups(res.rotations)
+606:    res.lp_worked = _build_lp_worked(res.landing_pages)
+607-
+608-    if res.placements:
+609:        res.scope = _build_scope(res.placements, res.groups, res.lp_worked,
+610-                                 propagate=profile.propagate_from_rotations)
+611-        for sc in res.scope.values():
+612-            res.request_counts[sc.request_type] = \
+613-                res.request_counts.get(sc.request_type, 0) + 1
+614-            if sc.request_type != REQ_NOT_WORKED:
+615-                res.format_counts[sc.fmt] = res.format_counts.get(sc.fmt, 0) + 1
+616-                k = (sc.request_type, sc.fmt)
+617-                res.format_by_request[k] = res.format_by_request.get(k, 0) + 1
+618-                if sc.source:
+619-                    res.source_counts[sc.source] = \
+620-                        res.source_counts.get(sc.source, 0) + 1
+621-
+622-    res.region_palette = inventory_region(all_region, resolver)
+623-    return res
