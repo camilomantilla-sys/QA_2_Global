@@ -248,16 +248,56 @@ def evaluate(
             )
 
         # TAG-005: dimensiones.
-        #
-        # DESACTIVADA:
-        # Las dimensiones embebidas en tags de tracking no representan
-        # las dimensiones del placement. Un pixel puede declarar 0x0 o 1x1
-        # aunque el placement sea 1920x1080, display o video.
-        #
-        # Las dimensiones reales se validan exclusivamente mediante:
-        # Traffic Sheet vs Export Innovid.
-        #
-        # Esta regla no emite PASS, FAIL, REVIEW ni NOT_VERIFIED.
+
+        expected_dimensions = ""
+
+        if link.actual is not None:
+            expected_dimensions = link.actual.dims
+        elif link.expected is not None:
+            expected_dimensions = link.expected.dims
+
+        tag_dimensions = norm_dims(row.dimensions)
+
+        if not expected_dimensions or not tag_dimensions:
+            buffer.not_verified(
+                rule_id="TAG-005",
+                domain=Domain.DIMENSIONS,
+                message="Dimensiones del tag no verificables.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                expected=expected_dimensions,
+                actual=tag_dimensions,
+            )
+
+        elif (
+            norm_dims(expected_dimensions)
+            == tag_dimensions
+        ):
+            buffer.pass_(
+                rule_id="TAG-005",
+                domain=Domain.DIMENSIONS,
+                message="Dimensiones del archivo de tags correctas.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                expected=norm_dims(expected_dimensions),
+                actual=tag_dimensions,
+            )
+
+        else:
+            buffer.fail(
+                rule_id="TAG-005",
+                domain=Domain.DIMENSIONS,
+                message=(
+                    "Dimensiones del archivo de tags no coinciden."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                expected=norm_dims(expected_dimensions),
+                actual=tag_dimensions,
+                recommended_action=(
+                    "Regenerar el tag con las dimensiones correctas."
+                ),
+            )
 
         # TAG-006: Third Party ID.
 

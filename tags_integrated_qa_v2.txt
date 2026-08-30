@@ -1,0 +1,101 @@
+Parseando Traffic Sheet...
+Parseando Placement-Creative export...
+Parseando Placement export...
+Parseando archivo de tags...
+Ejecutando matching...
+Ejecutando reglas...
+
+====================================================================================================
+QA2 INTEGRADO · TS + INNOVID + TAGS
+====================================================================================================
+
+Perfil TS              : adobe_variante_b
+Campaign ID TS         : 317052
+Campaign ID Innovid    : 317052
+Campaign ID Tags       : 326319
+
+Placements TS scope    : 67
+Placements en Tags     : 4
+Tags dentro del scope  : 0
+Tags fuera del scope   : 4
+Tags sin match Innovid : 4
+
+VERDICT                : BLOCKED
+TOTAL FINDINGS         : 464
+
+STATUS
+PASS                : 409
+FAIL                : 39
+REVIEW              : 4
+NOT_VERIFIED        : 8
+INFO                : 4
+
+RULE BREAKDOWN
+ATR-001      PASS            38
+CRE-001      PASS            288
+PLC-001      PASS            67
+TAG-001      FAIL            1
+TAG-002      REVIEW          4
+TAG-003      INFO            4
+TAG-004      NOT_VERIFIED    4
+TAG-006      NOT_VERIFIED    4
+TAG-007      PASS            4
+TAG-008      PASS            4
+TAG-009      PASS            4
+TAG-010      PASS            4
+URL-001      FAIL            38
+
+PROBLEMAS
+FAIL            | URL-001    | 10800919     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=C8K129QR&mv=display
+FAIL            | URL-001    | 10800920     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=BRLW2SNW&mv=display
+FAIL            | URL-001    | 10800933     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=FD1KZ686&mv=display
+FAIL            | URL-001    | 10800934     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=FHRLZ2J5&mv=display
+FAIL            | URL-001    | 10800935     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=FMHMYXS4&mv=display
+FAIL            | URL-001    | 10800936     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=F89JZ9Z7&mv=display
+FAIL            | URL-001    | 10800946     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=F4KHZFQ8&mv=display
+FAIL            | URL-001    | 10800947     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=FR7NYT23&mv=display
+FAIL            | URL-001    | 10800968     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CZY71KBK&mv=display
+FAIL            | URL-001    | 10800969     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=D4P81FLJ&mv=display
+FAIL            | URL-001    | 10800970     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=B8NR39M1&mv=display
+FAIL            | URL-001    | 10800971     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=BJ4T324Y&mv=display
+FAIL            | URL-001    | 10800972     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=B4XQ3FC2&mv=display
+FAIL            | URL-001    | 10800973     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=9DJJ45R8&mv=display
+FAIL            | URL-001    | 10800974     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=98SH49H9&mv=display
+FAIL            | URL-001    | 10800975     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=9WGN3NT4&mv=display
+FAIL            | URL-001    | 10800976     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=C12Y2K6T&mv=display
+FAIL            | URL-001    | 10800977     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=B16P3K33&mv=display
+FAIL            | URL-001    | 10800980     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=952G4F7B&mv=display
+FAIL            | URL-001    | 10800981     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=8WLD4NPD&mv=display
+FAIL            | URL-001    | 10800982     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=9J8K4217&mv=display
+FAIL            | URL-001    | 10800983     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=9RQM3SK5&mv=display
+FAIL            | URL-001    | 10800984     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=9MZL3X96&mv=display
+FAIL            | URL-001    | 10800985     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=91BF4JYC&mv=display
+FAIL            | URL-001    | 10807126     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CJ13228P&mv=display
+FAIL            | URL-001    | 10807127     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=BMVV2XDX&mv=display
+FAIL            | URL-001    | 10814146     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=BDDS35VZ&mv=display
+FAIL            | URL-001    | 10814147     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CW761P2L&mv=display
+FAIL            | URL-001    | 10814170     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=DD5B164G&mv=display
+FAIL            | URL-001    | 10814171     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CD9225ZQ&mv=display
+FAIL            | URL-001    | 10814172     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CRH51SSM&mv=display
+FAIL            | URL-001    | 10814174     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=C4SZ2FGS&mv=display
+FAIL            | URL-001    | 10814176     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=D8F919VH&mv=display
+FAIL            | URL-001    | 10814178     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=BWBX2NXV&mv=display
+FAIL            | URL-001    | 10814179     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=CMR41XJN&mv=display
+FAIL            | URL-001    | 10814180     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=DHWC12DF&mv=display
+FAIL            | URL-001    | 10902219     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=DRCDZSXC&mv=display
+FAIL            | URL-001    | 10902220     | la TS no declara URL para este creativo | expected= | actual=https://firefly.adobe.com/?sdid=DMMCZXND&mv=display
+FAIL            | TAG-001    |              | El archivo de tags corresponde a otra campaña. | expected=317052 | actual=326319
+REVIEW          | TAG-002    | 11058731     | Placement del archivo de tags no fue encontrado en el export Innovid cargado. | expected=Placement presente en Innovid | actual=No encontrado
+NOT_VERIFIED    | TAG-004    | 11058731     | Placement Name no verificable en archivo de tags. | expected= | actual=Learnverse_FY26EDU_BEH_InterstitialTakeover-3ps-NA-NA_US_DSK_BAN_300x250_Students_NA_Display_Student_ASY.CRE.202_P3JXRQ6
+NOT_VERIFIED    | TAG-006    | 11058731     | Third Party ID de Innovid no disponible para comparar con el archivo de tags. | expected=Third Party ID de Innovid | actual=P3JXRQ6
+REVIEW          | TAG-002    | 11058732     | Placement del archivo de tags no fue encontrado en el export Innovid cargado. | expected=Placement presente en Innovid | actual=No encontrado
+NOT_VERIFIED    | TAG-004    | 11058732     | Placement Name no verificable en archivo de tags. | expected= | actual=Learnverse_FY26EDU_BEH_InterstitialTakeover-3ps-NA-NA_US_DSK_BAN_300x600_Students_NA_Display_Student_ASY.CRE.202_P3JXTNV
+NOT_VERIFIED    | TAG-006    | 11058732     | Third Party ID de Innovid no disponible para comparar con el archivo de tags. | expected=Third Party ID de Innovid | actual=P3JXTNV
+REVIEW          | TAG-002    | 11058734     | Placement del archivo de tags no fue encontrado en el export Innovid cargado. | expected=Placement presente en Innovid | actual=No encontrado
+NOT_VERIFIED    | TAG-004    | 11058734     | Placement Name no verificable en archivo de tags. | expected= | actual=Learnverse_FY26EDU_BEH_RewardedVideo-3ps-NA-15s_US_DSK_VID_1920x1080_Students_NA_OLV_Student_ASY.CRE.202_P3JXRT0
+NOT_VERIFIED    | TAG-006    | 11058734     | Third Party ID de Innovid no disponible para comparar con el archivo de tags. | expected=Third Party ID de Innovid | actual=P3JXRT0
+REVIEW          | TAG-002    | 11058735     | Placement del archivo de tags no fue encontrado en el export Innovid cargado. | expected=Placement presente en Innovid | actual=No encontrado
+NOT_VERIFIED    | TAG-004    | 11058735     | Placement Name no verificable en archivo de tags. | expected= | actual=Learnverse_FY26EDU_BEH_RewardedVideo-3ps-NA-30s_US_DSK_VID_1920x1080_Students_NA_OLV_Student_ASY.CRE.202_P3JXTTG
+NOT_VERIFIED    | TAG-006    | 11058735     | Third Party ID de Innovid no disponible para comparar con el archivo de tags. | expected=Third Party ID de Innovid | actual=P3JXTTG
+
+====================================================================================================
