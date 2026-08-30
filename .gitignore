@@ -1,0 +1,11 @@
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.xlsx
+*.xlsm
+*.xls
+.DS_Store
+.vscode/

@@ -1,0 +1,884 @@
+===== NAMING =====
+from core.findings import Domain
+
+
+def evaluate(match_result, buffer):
+
+    for pm in match_result.matched:
+
+        if not pm.actual:
+            continue
+
+        expected = (pm.expected.name or "").strip()
+        actual = (pm.actual.name_norm or pm.actual.name or "").strip()
+
+        if not expected:
+            continue
+
+        if expected == actual:
+
+            buffer.pass_(
+                rule_id="PLC-006",
+                domain=Domain.IDENTITY,
+                message="Placement Name correcto",
+                placement_id=pm.placement_id,
+            )
+
+        else:
+
+            buffer.fail(
+                rule_id="PLC-006",
+                domain=Domain.IDENTITY,
+                message="Placement Name mismatch",
+                placement_id=pm.placement_id,
+                expected=expected,
+                actual=actual,
+            )
+===== MATCH DATACLASSES =====
+39:@dataclass
+40-class ExpectedCreative:
+41-    name: str = ""
+42-    creative_id: str = ""
+43-    universal_ad_id: str = ""
+44-    intent: str = ""          # GREEN | RED
+45-    ts_row: int = 0
+46-    ts_sheet: str = ""
+47-    url: str = ""             # URL completa declarada en la TS
+48-    cgen: str = ""            # CGENS declarado en la TS
+49-    dims: str = ""            # <-- NUEVA
+50-
+51-    @property
+52-    def key_norm(self) -> str:
+53-        return norm_creative(self.name)
+54-
+55:@dataclass
+56-class ExpectedPlacement:
+57-    placement_id: str
+58-    name: str = ""
+59-    site: str = ""
+60-    dims: str = ""
+61-    start: date | None = None
+62-    end: date | None = None
+63-    cgen: str = ""
+64-    group_name: str = ""
+65-    impl_type: str = ""
+66-    fmt: str = ""
+67-    request_type: str = ""
+68-    visual_review: bool = False
+69-    source: str = ""
+70-    creatives: list[ExpectedCreative] = field(default_factory=list)
+71-    ts_rows: list[int] = field(default_factory=list)
+72-
+73-    @property
+74-    def green(self) -> list[ExpectedCreative]:
+75-        return [c for c in self.creatives if c.intent == GREEN]
+76-
+77-    @property
+78-    def red(self) -> list[ExpectedCreative]:
+79-        return [c for c in self.creatives if c.intent == RED]
+80-
+81:@dataclass
+82-class ActualCreative:
+83-    creative_id: str = ""
+84-    filename: str = ""
+85-    name: str = ""
+86-    third_party_id: str = ""
+87-    creative_type: str = ""
+88-    enabled: bool | None = None
+89-    status: str = ""
+90-    group_name: str = ""
+91-    group_id: str = ""
+92-    row_type: str = ""
+93-    clicktags: list[str] = field(default_factory=list)
+94-    export_row: int = 0
+95-
+96-    @property
+97-    def running(self) -> bool:
+98-        """
+99-        Un creativo NO esta corriendo si se cumple cualquiera de las tres:
+100-          Enabled = No
+101-          Status  = Disabled / Inactive
+102-          sin Decision_Tree_Name (no esta en ningun arbol)
+103-
+104-        En Adobe, al hacer CREATIVE_ADD los creativos previos quedan
+105-        asignados al dtree pero con Status=Disabled: siguen en el export
+106-        y no corren. Sin esta regla se leerian como activos (bug B40).
+107-        """
+108-        if self.enabled is False:
+109-            return False
+110-        if norm_compare(self.status) in ("disabled", "inactive", "paused"):
+111-            return False
+112-        return True
+113-
+114-    @property
+115-    def state_label(self) -> str:
+116-        if self.enabled is False:
+117-            return "Enabled=No"
+118-        s = norm_compare(self.status)
+119-        if s in ("disabled", "inactive", "paused"):
+120-            return f"Status={self.status}"
+121-        if not self.group_name:
+122-            return "sin arbol"
+123-        return f"activo ({self.status or 'Active'})"
+124-
+125-    @property
+126-    def clicktag_1(self) -> str:
+127-        return self.clicktags[0] if self.clicktags else ""
+128-
+129-
+130-    @property
+131-    def keys_norm(self) -> set[str]:
+132-        out = set()
+133-        if self.filename:
+134-            out.add(norm_creative(self.filename))
+135-        if self.name:
+136-            out.add(norm_creative(self.name))
+137-        return out
+138-
+139:@dataclass
+140-class ActualPlacement:
+141-    placement_id: str
+142-    name: str = ""
+143-    name_norm: str = ""
+144-    site: str = ""
+145-    dims: str = ""
+146-    start: date | None = None
+147-    end: date | None = None
+148-    status: str = ""
+149-    placement_type: str = ""
+150-    group_name: str = ""
+151-    group_id: str = ""
+152-    third_party_id: str = ""       # nivel placement
+153-    clicktags: list[str] = field(default_factory=list)
+154-    impressions: list[str] = field(default_factory=list)
+155-    creatives: list[ActualCreative] = field(default_factory=list)
+156-    export_rows: list[int] = field(default_factory=list)
+157-    from_placement_level: bool = False
+158-
+159-# ------------------------------------------------------------------ trace
+160-
+161:@dataclass
+162-class MatchTrace:
+163-    entity: str = ""
+164-    keys_tried: list[str] = field(default_factory=list)
+165-    winner: str = ""
+166-    left: str = ""
+167-    right: str = ""
+168-    discarded: list[str] = field(default_factory=list)
+169-    note: str = ""
+170-
+171:@dataclass
+172-class CreativeLink:
+173-    expected: ExpectedCreative
+174-    actual: ActualCreative | None
+175-    confidence: str = CONF_NONE
+176-    trace: MatchTrace = field(default_factory=MatchTrace)
+177-    url: URLComparison | None = None
+178-    triangle: AttributionTriangle | None = None
+179-
+180:@dataclass
+181-class PlacementMatch:
+182-    placement_id: str
+183-    expected: ExpectedPlacement
+184-    actual: ActualPlacement | None
+185-    confidence: str = CONF_NONE
+186-    group_match: str = ""
+187-    group_trace: MatchTrace = field(default_factory=MatchTrace)
+188-    creative_links: list[CreativeLink] = field(default_factory=list)
+189-    actual_extra: list[ActualCreative] = field(default_factory=list)
+190-    trace: MatchTrace = field(default_factory=MatchTrace)
+191-
+192-    @property
+193-    def extra_running(self) -> list[ActualCreative]:
+194-        """Extras que SI estan corriendo: no declarados en la TS -> REVIEW."""
+195-        return [c for c in self.actual_extra if c.running]
+196-
+197-    @property
+198-    def extra_stopped(self) -> list[ActualCreative]:
+199-        """Extras desactivados: preexistentes normales -> INFO."""
+200-        return [c for c in self.actual_extra if not c.running]
+201-
+202:@dataclass
+203-class MatchResult:
+204-    scope_guard: str = ""            # OK | MISMATCH | UNKNOWN
+205-    scope_evidence: str = ""
+206-    ts_campaign_id: str = ""
+207-    export_campaign_id: str = ""
+208-    matched: list[PlacementMatch] = field(default_factory=list)
+209-    only_expected: list[ExpectedPlacement] = field(default_factory=list)
+210-    only_actual_in_scope: list[ActualPlacement] = field(default_factory=list)
+211-    ambiguous: list[str] = field(default_factory=list)
+212-    confidence_counts: dict[str, int] = field(default_factory=dict)
+213-    group_counts: dict[str, int] = field(default_factory=dict)
+214-    creative_conf_counts: dict[str, int] = field(default_factory=dict)
+215-    expected_total: int = 0
+216-    actual_total: int = 0
+217-    url_counts: dict[str, int] = field(default_factory=dict)
+218-    triangle_counts: dict[str, int] = field(default_factory=dict)
+219-    extra_running_total: int = 0
+220-    extra_stopped_total: int = 0
+221-
+222-    @property
+223-    def blocked(self) -> bool:
+224-        return self.scope_guard == "MISMATCH"
+225-
+226-# ------------------------------------------------------------------ Expected
+227-
+228-def build_expected(ts) -> dict[str, ExpectedPlacement]:
+229-    """
+230-    Expected Model, solo con los placements TRABAJADOS.
+231-
+232-    El export puede traer 1380 placements, pero si solo se trabajaron 48,
+233-    unicamente esos 48 se validan. Lo no trabajado no se revisa.
+234-
+235-    Creativos, URL y CGEN esperados:
+236-      Variante B  -> Placements: creative_names + cgen (nivel placement)
+237-      Variante A  -> Creative Rotations, via el grupo que declara el placement,
+238-                     filtrando por dimension (bug B39)
+239-    """
+240-    from parsers.ts_parser import REQ_NOT_WORKED
+241-
+242-    out: dict[str, ExpectedPlacement] = {}
+243-    if ts.placements is None:
+244-        return out
+245-
+246-    worked = {pid for pid, sc in ts.scope.items()
+247-              if sc.request_type != REQ_NOT_WORKED}
+248-
+249-    # --- creativos con intencion, indexados por grupo (Creative Rotations)
+250-    by_group: dict[str, list[ExpectedCreative]] = {}
+251-    if ts.rotations is not None:
+252-        for row in ts.rotations.rows:
+253-            if row.intent not in (GREEN, RED, "SWAP"):
+254-                continue
+255-            g = norm_compare(str(row.values.get("group_name") or ""))
+256-            if not g:
+257-                continue
+258-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+259-            by_group.setdefault(g, []).append(ExpectedCreative(
+260-                name=str(row.values.get("creative_name") or ""),
+261-                creative_id=str(row.values.get("creative_id") or ""),
+262-                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+263-                intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
+264-                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+265-                url=str(row.values.get("lp_url") or ""),
+266-                cgen=str(row.values.get("cgen") or ""),
+267-                dims=norm_dims(row.values.get("dims_or_duration")),
+268-            ))
+269-
+270-    # --- placements trabajados
+271-    for row in ts.placements.rows:
+272-        pid = str(row.values.get("placement_id") or "")
+273-        if not pid or pid not in worked:
+274-            continue
+275-
+276-        ep = out.get(pid)
+277-        if ep is None:
+278-            sc = ts.scope[pid]
+279-            ep = ExpectedPlacement(
+280-                placement_id=pid,
+281-                name=str(row.values.get("placement_name") or ""),
+282-                site=str(row.values.get("site") or ""),
+283-                dims=norm_dims(row.values.get("dimensions")),
+284-                start=row.values.get("start_date"),
+285-                end=row.values.get("end_date"),
+286-                cgen=str(row.values.get("cgen") or ""),
+287-                group_name=str(row.values.get("group_name") or ""),
+288-                impl_type=row.impl_type, fmt=row.fmt,
+289-                request_type=sc.request_type,
+290-                visual_review=sc.visual_review, source=sc.source,
+291-            )
+292-            out[pid] = ep
+293-        ep.ts_rows.append(row.row)
+294-
+295-        # el grupo o el cgen pueden venir en cualquiera de las filas
+296-        if not ep.group_name and row.values.get("group_name"):
+297-            ep.group_name = str(row.values.get("group_name"))
+298-        if not ep.cgen and row.values.get("cgen"):
+299-            ep.cgen = str(row.values.get("cgen"))
+300-
+301-        # creativos declarados a nivel placement (Variante B)
+302-        cname = str(row.values.get("creative_names") or "")
+
+===== MATCH RESULT BUILD =====
+161-@dataclass
+162-class MatchTrace:
+163-    entity: str = ""
+164-    keys_tried: list[str] = field(default_factory=list)
+165-    winner: str = ""
+166-    left: str = ""
+167-    right: str = ""
+168-    discarded: list[str] = field(default_factory=list)
+169-    note: str = ""
+170-
+171-@dataclass
+172-class CreativeLink:
+173-    expected: ExpectedCreative
+174-    actual: ActualCreative | None
+175-    confidence: str = CONF_NONE
+176-    trace: MatchTrace = field(default_factory=MatchTrace)
+177-    url: URLComparison | None = None
+178-    triangle: AttributionTriangle | None = None
+179-
+180-@dataclass
+181:class PlacementMatch:
+182-    placement_id: str
+183-    expected: ExpectedPlacement
+184-    actual: ActualPlacement | None
+185-    confidence: str = CONF_NONE
+186-    group_match: str = ""
+187-    group_trace: MatchTrace = field(default_factory=MatchTrace)
+188:    creative_links: list[CreativeLink] = field(default_factory=list)
+189-    actual_extra: list[ActualCreative] = field(default_factory=list)
+190-    trace: MatchTrace = field(default_factory=MatchTrace)
+191-
+192-    @property
+193-    def extra_running(self) -> list[ActualCreative]:
+194-        """Extras que SI estan corriendo: no declarados en la TS -> REVIEW."""
+195-        return [c for c in self.actual_extra if c.running]
+196-
+197-    @property
+198-    def extra_stopped(self) -> list[ActualCreative]:
+199-        """Extras desactivados: preexistentes normales -> INFO."""
+200-        return [c for c in self.actual_extra if not c.running]
+201-
+202-@dataclass
+203:class MatchResult:
+204-    scope_guard: str = ""            # OK | MISMATCH | UNKNOWN
+205-    scope_evidence: str = ""
+206-    ts_campaign_id: str = ""
+207-    export_campaign_id: str = ""
+208:    matched: list[PlacementMatch] = field(default_factory=list)
+209-    only_expected: list[ExpectedPlacement] = field(default_factory=list)
+210-    only_actual_in_scope: list[ActualPlacement] = field(default_factory=list)
+211-    ambiguous: list[str] = field(default_factory=list)
+212-    confidence_counts: dict[str, int] = field(default_factory=dict)
+213-    group_counts: dict[str, int] = field(default_factory=dict)
+214-    creative_conf_counts: dict[str, int] = field(default_factory=dict)
+215-    expected_total: int = 0
+216-    actual_total: int = 0
+217-    url_counts: dict[str, int] = field(default_factory=dict)
+218-    triangle_counts: dict[str, int] = field(default_factory=dict)
+219-    extra_running_total: int = 0
+220-    extra_stopped_total: int = 0
+221-
+222-    @property
+223-    def blocked(self) -> bool:
+224-        return self.scope_guard == "MISMATCH"
+225-
+226-# ------------------------------------------------------------------ Expected
+227-
+228-def build_expected(ts) -> dict[str, ExpectedPlacement]:
+229-    """
+230-    Expected Model, solo con los placements TRABAJADOS.
+231-
+232-    El export puede traer 1380 placements, pero si solo se trabajaron 48,
+233-    unicamente esos 48 se validan. Lo no trabajado no se revisa.
+234-
+235-    Creativos, URL y CGEN esperados:
+236-      Variante B  -> Placements: creative_names + cgen (nivel placement)
+237-      Variante A  -> Creative Rotations, via el grupo que declara el placement,
+238-                     filtrando por dimension (bug B39)
+239-    """
+240-    from parsers.ts_parser import REQ_NOT_WORKED
+241-
+242-    out: dict[str, ExpectedPlacement] = {}
+243-    if ts.placements is None:
+244-        return out
+245-
+246-    worked = {pid for pid, sc in ts.scope.items()
+247-              if sc.request_type != REQ_NOT_WORKED}
+248-
+249-    # --- creativos con intencion, indexados por grupo (Creative Rotations)
+250-    by_group: dict[str, list[ExpectedCreative]] = {}
+251-    if ts.rotations is not None:
+252-        for row in ts.rotations.rows:
+253-            if row.intent not in (GREEN, RED, "SWAP"):
+254-                continue
+255-            g = norm_compare(str(row.values.get("group_name") or ""))
+256-            if not g:
+257-                continue
+258-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+259-            by_group.setdefault(g, []).append(ExpectedCreative(
+260-                name=str(row.values.get("creative_name") or ""),
+261-                creative_id=str(row.values.get("creative_id") or ""),
+262-                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+263-                intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
+264-                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+265-                url=str(row.values.get("lp_url") or ""),
+266-                cgen=str(row.values.get("cgen") or ""),
+267-                dims=norm_dims(row.values.get("dims_or_duration")),
+268-            ))
+269-
+270-    # --- placements trabajados
+271-    for row in ts.placements.rows:
+272-        pid = str(row.values.get("placement_id") or "")
+273-        if not pid or pid not in worked:
+274-            continue
+275-
+276-        ep = out.get(pid)
+277-        if ep is None:
+278-            sc = ts.scope[pid]
+279-            ep = ExpectedPlacement(
+280-                placement_id=pid,
+281-                name=str(row.values.get("placement_name") or ""),
+282-                site=str(row.values.get("site") or ""),
+283-                dims=norm_dims(row.values.get("dimensions")),
+284-                start=row.values.get("start_date"),
+285-                end=row.values.get("end_date"),
+286-                cgen=str(row.values.get("cgen") or ""),
+287-                group_name=str(row.values.get("group_name") or ""),
+288-                impl_type=row.impl_type, fmt=row.fmt,
+--
+514-                hit, conf = cands[0], CONF_LOW
+515-                t.winner = "filename_or_name_norm (ambiguo)"
+516-                t.discarded = [f"{len(cands)} candidatos con el mismo nombre"]
+517-
+518-        if hit is not None:
+519-            used.add(hit)
+520-            ac = pool[hit]
+521-            t.right = ac.filename or ac.name or ac.creative_id
+522-            links.append(CreativeLink(expected=ec, actual=ac,
+523-                                      confidence=conf, trace=t))
+524-        else:
+525-            t.note = "sin match: no esta en el placement"
+526-            links.append(CreativeLink(expected=ec, actual=None,
+527-                                      confidence=CONF_NONE, trace=t))
+528-
+529-    extra = [c for i, c in enumerate(pool) if i not in used]
+530-    return links, extra
+531-
+532-# ------------------------------------------------------------------ orquestacion
+533-
+534:def match(ts, export_pc, export_pl=None) -> MatchResult:
+535:    res = MatchResult()
+536-
+537-    # ---- L0 Scope Guard
+538-    ts_cid = str(ts.campaign_info.get("campaignid") or "")
+539-    ex_cid = ""
+540-    for src in (export_pc, export_pl):
+541-        if src is not None and src.metadata.get("campaignid"):
+542-            ex_cid = str(src.metadata["campaignid"])
+543-            break
+544-    res.ts_campaign_id, res.export_campaign_id = ts_cid, ex_cid
+545-
+546-    if not ts_cid or not ex_cid:
+547-        res.scope_guard = "UNKNOWN"
+548-        res.scope_evidence = (f"TS campaign_id='{ts_cid or 'ausente'}' · "
+549-                              f"export='{ex_cid or 'ausente'}'")
+550-    elif ts_cid == ex_cid:
+551-        res.scope_guard = "OK"
+552-        res.scope_evidence = f"campaign_id {ts_cid} coincide"
+553-    else:
+554-        res.scope_guard = "MISMATCH"
+555-        res.scope_evidence = (f"TS declara {ts_cid} y el export {ex_cid}: "
+556-                              f"son campanas distintas")
+557-        return res
+558-
+559-    expected = build_expected(ts)
+560-    actual = build_actual(export_pc, export_pl)
+561-    res.expected_total = len(expected)
+562-    res.actual_total = len(actual)
+563-
+564-    # ¿el formato de esta TS declara grupos?
+565-    ts_declares_groups = bool(
+566-        ts.placements and ts.placements.cmap
+567-        and ts.placements.cmap.has("group_name")
+568-    ) or ts.rotations is not None
+569-
+570-    # ---- L1 Placement
+571-    for pid, ep in sorted(expected.items()):
+572-        ap = actual.get(pid)
+573-        t = MatchTrace(entity="placement", keys_tried=["campaign+placement_id"],
+574-                       left=pid, right=pid if ap else "")
+575-
+576-        if ap is None:
+577-            t.winner = "none"
+578-            t.note = "el placement esperado no esta en el export"
+579-            res.only_expected.append(ep)
+580-            res.confidence_counts[CONF_NONE] = \
+581-                res.confidence_counts.get(CONF_NONE, 0) + 1
+582-            continue
+583-
+584-        t.winner = "placement_id"
+585-        t.note = f"{len(ap.export_rows)} filas en el export"
+586:        pm = PlacementMatch(placement_id=pid, expected=ep, actual=ap,
+587-                            confidence=CONF_HIGH, trace=t)
+588-
+589-        gm, gt = _match_group(ep, ap, ts_declares_groups=ts_declares_groups)
+590-        pm.group_match, pm.group_trace = gm, gt
+591-        res.group_counts[gm] = res.group_counts.get(gm, 0) + 1
+592-
+593:        pm.creative_links, pm.actual_extra = _match_creatives(ep, ap)
+594-
+595-        # Contar extras una sola vez por placement.
+596-        res.extra_running_total += len(pm.extra_running)
+597-        res.extra_stopped_total += len(pm.extra_stopped)
+598-
+599-        # contar extras una sola vez por placement
+600-
+601:        for cl in pm.creative_links:
+602-
+603:            for cl in pm.creative_links:
+604-             res.creative_conf_counts[cl.confidence] = \
+605-                res.creative_conf_counts.get(cl.confidence, 0) + 1
+606-
+607-            # solo los VERDES deben tener URL y CGEN correctos.
+608-            # los rojos se van, no importa a donde apuntaban.
+609-            if cl.expected.intent != GREEN:
+610-                continue
+611-
+612-            # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
+613-            actual_tags = cl.actual.clicktags if cl.actual else []
+614-            # en 1x1 el ClickTag vive a nivel placement
+615-            if not actual_tags and ap.clicktags:
+616-                actual_tags = ap.clicktags
+617-            actual_url = actual_tags[0] if actual_tags else ""
+618-
+619-            cl.url = compare_urls(cl.expected.url, actual_url)
+620-            res.url_counts[cl.url.result] = \
+621-                res.url_counts.get(cl.url.result, 0) + 1
+622-
+623-            # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
+624-            exp_cgen = cl.expected.cgen or ep.cgen
+625-            act_tpid = (cl.actual.third_party_id if cl.actual else "") \
+626-                       or ap.third_party_id
+627-            cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
+628-            res.triangle_counts[cl.triangle.result] = \
+629-                res.triangle_counts.get(cl.triangle.result, 0) + 1
+630-            
+631-        res.matched.append(pm)
+632-        res.confidence_counts[CONF_HIGH] = \
+633-            res.confidence_counts.get(CONF_HIGH, 0) + 1
+634-
+635-    return res
+
+===== TRIANGLE =====
+core/matching.py-607-            # solo los VERDES deben tener URL y CGEN correctos.
+core/matching.py-608-            # los rojos se van, no importa a donde apuntaban.
+core/matching.py-609-            if cl.expected.intent != GREEN:
+core/matching.py-610-                continue
+core/matching.py-611-
+core/matching.py-612-            # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
+core/matching.py-613-            actual_tags = cl.actual.clicktags if cl.actual else []
+core/matching.py-614-            # en 1x1 el ClickTag vive a nivel placement
+core/matching.py-615-            if not actual_tags and ap.clicktags:
+core/matching.py-616-                actual_tags = ap.clicktags
+core/matching.py-617-            actual_url = actual_tags[0] if actual_tags else ""
+core/matching.py-618-
+core/matching.py-619-            cl.url = compare_urls(cl.expected.url, actual_url)
+core/matching.py-620-            res.url_counts[cl.url.result] = \
+core/matching.py-621-                res.url_counts.get(cl.url.result, 0) + 1
+core/matching.py-622-
+core/matching.py-623-            # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
+core/matching.py-624-            exp_cgen = cl.expected.cgen or ep.cgen
+core/matching.py-625-            act_tpid = (cl.actual.third_party_id if cl.actual else "") \
+core/matching.py-626-                       or ap.third_party_id
+core/matching.py:627:            cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
+core/matching.py-628-            res.triangle_counts[cl.triangle.result] = \
+core/matching.py-629-                res.triangle_counts.get(cl.triangle.result, 0) + 1
+core/matching.py-630-            
+core/matching.py-631-        res.matched.append(pm)
+core/matching.py-632-        res.confidence_counts[CONF_HIGH] = \
+core/matching.py-633-            res.confidence_counts.get(CONF_HIGH, 0) + 1
+core/matching.py-634-
+core/matching.py-635-    return res
+--
+core/urls.py-153-            bits.append(f"faltan: {', '.join(list(c.params_only_expected)[:3])}")
+core/urls.py-154-        if c.params_only_actual:
+core/urls.py-155-            bits.append(f"extra: {', '.join(list(c.params_only_actual)[:3])}")
+core/urls.py-156-        c.note = " · ".join(bits)
+core/urls.py-157-        return c
+core/urls.py-158-
+core/urls.py-159-    c.result = URL_MATCH
+core/urls.py-160-    c.note = "destino y parametros coinciden"
+core/urls.py-161-    return c
+core/urls.py-162-
+core/urls.py-163-# ------------------------------------------------------------------ triangulo
+core/urls.py-164-
+core/urls.py-165-TRI_OK = "OK"
+core/urls.py-166-TRI_URL_DESVIADO = "URL_DESVIADA"
+core/urls.py-167-TRI_EXPORT_DESVIADO = "EXPORT_DESVIADO"
+core/urls.py-168-TRI_TS_DESVIADO = "TS_DESVIADO"
+core/urls.py-169-TRI_TODOS_DISTINTOS = "TODOS_DISTINTOS"
+core/urls.py-170-TRI_INCOMPLETO = "INCOMPLETO"
+core/urls.py-171-
+core/urls.py-172-@dataclass
+core/urls.py:173:class AttributionTriangle:
+core/urls.py-174-    """
+core/urls.py-175-    Tres vertices que deben coincidir:
+core/urls.py-176-      ts       = CGENS declarado en la Traffic Sheet
+core/urls.py-177-      export   = Third_Party_ID de la fila en Innovid
+core/urls.py-178-      url      = parametro sdid extraido del ClickTag
+core/urls.py-179-    """
+core/urls.py-180-    ts: str = ""
+core/urls.py-181-    export: str = ""
+core/urls.py-182-    url: str = ""
+core/urls.py-183-    result: str = TRI_INCOMPLETO
+core/urls.py-184-    deviant: str = ""
+core/urls.py-185-    consensus: str = ""
+core/urls.py-186-    note: str = ""
+core/urls.py-187-    missing: list[str] = field(default_factory=list)
+core/urls.py-188-
+core/urls.py-189-    @property
+core/urls.py-190-    def is_ok(self) -> bool:
+core/urls.py-191-        return self.result == TRI_OK
+core/urls.py-192-
+core/urls.py-193-def check_triangle(ts_cgen: object, export_tpid: object,
+core/urls.py-194-                   url_value: object) -> AttributionTriangle:
+core/urls.py-195-    t = AttributionTriangle(
+core/urls.py-196-        ts=str(ts_cgen or "").strip(),
+core/urls.py-197-        export=str(export_tpid or "").strip(),
+core/urls.py-198-        url=parse_url(url_value).cgen,
+core/urls.py-199-    )
+core/urls.py-200-
+core/urls.py-201-    present = {k: v for k, v in
+core/urls.py-202-               (("TS", t.ts), ("Innovid", t.export), ("URL", t.url)) if v}
+core/urls.py-203-    t.missing = [k for k in ("TS", "Innovid", "URL")
+core/urls.py-204-                 if k not in present]
+core/urls.py-205-
+core/urls.py-206-    if len(present) < 2:
+core/urls.py-207-        t.result = TRI_INCOMPLETO
+core/urls.py-208-        t.note = ("no verificable: solo hay "
+core/urls.py-209-                  f"{', '.join(present) or 'ningun vertice'}")
+core/urls.py-210-        return t
+core/urls.py-211-
+core/urls.py-212-    vals = list(present.values())
+core/urls.py-213-    if len(set(vals)) == 1:
+core/urls.py-214-        t.consensus = vals[0]
+core/urls.py-215-        if len(present) == 3:
+core/urls.py-216-            t.result = TRI_OK
+core/urls.py-217-            t.note = f"los tres vertices coinciden en {t.consensus}"
+core/urls.py-218-        else:
+core/urls.py-219-            t.result = TRI_INCOMPLETO
+core/urls.py-220-            t.note = (f"{' y '.join(present)} coinciden en {t.consensus}, "
+core/urls.py-221-                      f"falta {', '.join(t.missing)}")
+core/urls.py-222-        return t
+core/urls.py-223-
+core/urls.py-224-    if len(present) == 2:
+core/urls.py-225-        a, b = list(present.items())
+core/urls.py-226-        t.result = TRI_TODOS_DISTINTOS
+core/urls.py-227-        t.note = f"{a[0]}={a[1]} vs {b[0]}={b[1]} (falta {', '.join(t.missing)})"
+core/urls.py-228-        return t
+core/urls.py-229-
+core/urls.py-230-    # tres vertices con desacuerdo: hallar la mayoria
+core/urls.py-231-    counts: dict[str, list[str]] = {}
+core/urls.py-232-    for src, val in present.items():
+core/urls.py-233-        counts.setdefault(val, []).append(src)
+core/urls.py-234-
+core/urls.py-235-    majority = max(counts.items(), key=lambda kv: len(kv[1]))
+core/urls.py-236-    if len(majority[1]) == 2:
+core/urls.py-237-        t.consensus = majority[0]
+core/urls.py-238-        odd_src = next(s for s in present if s not in majority[1])
+core/urls.py-239-        t.deviant = odd_src
+core/urls.py-240-        t.result = {"URL": TRI_URL_DESVIADO,
+core/urls.py-241-                    "Innovid": TRI_EXPORT_DESVIADO,
+core/urls.py-242-                    "TS": TRI_TS_DESVIADO}[odd_src]
+core/urls.py-243-        t.note = (f"{' y '.join(majority[1])} coinciden en {t.consensus}, "
+core/urls.py-244-                  f"pero {odd_src}={present[odd_src]}")
+core/urls.py-245-        return t
+core/urls.py-246-
+core/urls.py-247-    t.result = TRI_TODOS_DISTINTOS
+core/urls.py-248-    t.note = f"TS={t.ts} · Innovid={t.export} · URL={t.url}"
+core/urls.py-249-    return t
+
+===== EXPORT RECORDS =====
+52:@dataclass
+53-class ExportRow:
+54-    row: int
+55-    row_type: str
+56-    row_reason: str = ""
+57-    values: dict[str, object] = field(default_factory=dict)
+58-    multi: dict[str, list[str]] = field(default_factory=dict)
+59-
+60:@dataclass
+61-class ExportResult:
+62-    path: str = ""
+63-    sheet: str = ""
+64-    level: str = ""
+65-    metadata: dict[str, str] = field(default_factory=dict)
+66-    header_row: int | None = None
+67-    header_evidence: str = ""
+68-    cmap: ColumnMap | None = None
+69-    rows: list[ExportRow] = field(default_factory=list)
+70-    row_class_counts: dict[str, int] = field(default_factory=dict)
+71-    row_type_counts: dict[str, int] = field(default_factory=dict)
+72-    date_diagnostics: dict[str, dict] = field(default_factory=dict)
+73-    capabilities_on: dict[str, str] = field(default_factory=dict)
+74-    capabilities_off: dict[str, dict] = field(default_factory=dict)
+75-    fill_rates: dict[str, float] = field(default_factory=dict)
+76-    fill_rates_by_type: dict[str, dict[str, float]] = field(default_factory=dict)
+77-    unassigned_reasons: dict[str, int] = field(default_factory=dict)
+78-    direct_reasons: dict[str, int] = field(default_factory=dict)
+79-    separator_reasons: dict[str, int] = field(default_factory=dict)
+80-    placements_without_header: dict[str, int] = field(default_factory=dict)
+81-    group_visible: dict[str, bool] = field(default_factory=dict)
+82-    anomalies: list[Anomaly] = field(default_factory=list)
+83-    merged_applied: int = 0
+84-    total_sheets: list[str] = field(default_factory=list)
+85-
+86-    @property
+87-    def fatal(self) -> bool:
+88-        return any(a.severity == "FATAL" for a in self.anomalies)
+89-
+90-    @property
+91-    def distinct_placements(self) -> int:
+92-        return len({str(r.values.get("placement_id")) for r in self.rows
+93-                    if r.values.get("placement_id")})
+94-
+95-# ------------------------------------------------------------------ helpers
+96-
+97-def _detect_level(grid, header_row: int) -> str:
+98-    """Placement-Creative si existe la columna Creative_ID en el header."""
+99-    keys = {norm_key(t) for t in grid.row_text(header_row)}
+100-    return LEVEL_PLACEMENT_CREATIVE if "creativeid" in keys else LEVEL_PLACEMENT
+101-
+102-def _read_metadata(grid, spec: SheetSpec) -> dict[str, str]:
+103-    """
+104-    Metadata de las filas 1-9, por ETIQUETA (nunca por posicion).
+105-    El valor es la primera celda no vacia a la derecha de la etiqueta.
+106-    Los numericos enteros se emiten sin '.0' (bug B28).
+107-    """
+108-    wanted = set(spec.metadata_labels)
+109-    out: dict[str, str] = {}
+110-    for r in range(1, min(spec.metadata_scan_rows, grid.max_row) + 1):
+111-        cells = grid.row_cells(r)
+112-        for col in sorted(cells):
+113-            label = norm_key(cells[col].text.rstrip(":"))
+114-            if label in wanted and label not in out:
+115-                for nxt in sorted(c for c in cells if c > col):
+116-                    if cells[nxt].has_value:
+117-                        raw = cells[nxt].raw
+118-                        if isinstance(raw, float) and raw.is_integer():
+119-                            out[label] = str(int(raw))
+120-                        else:
+121-                            out[label] = cells[nxt].text
+122-                        break
+123-    return out
+124-
+125-def _row_type(vals: dict[str, object], level: str,
+126-              group_visible: dict[str, bool]) -> tuple[str, str]:
+127-    """
+128-    Devuelve (tipo, motivo).
+129-
+130-    group_visible: por Placement_Type, la columna de arbol existe Y tiene datos.
+131-    Se evalua por tipo porque Pixel nunca tiene arbol y HTML puede ir directo
+132-    mientras VAST usa dtree en el mismo export (bug B30).
+133-    """
+134-    if level == LEVEL_PLACEMENT:
+135-        return T_PLACEMENT, ""
+136-
+137-    creative_id = str(vals.get("creative_id") or "")
+138-    placement_name = str(vals.get("placement_name") or "")
+139-    group_name = str(vals.get("group_name") or "")
+140-    ptype_raw = str(vals.get("placement_type") or "?")
+141-    ptype = ptype_raw.casefold()
+142-    enabled = vals.get("enabled")
+143-
+144-    # fila de cabecera de placement: sin Creative_ID pero con nombre
+145-    if not creative_id and placement_name:
+146-        return T_PLACEMENT_HEADER, "sin Creative_ID"
+147-
+148-    # Enabled=No es evidencia directa e independiente del arbol
+149-    if enabled is False:
+150-        return T_UNASSIGNED, "Enabled=No" + ("" if group_name else " + sin arbol")
+151-
+152-    # site-served: el pixel ES el placement (hallazgo H22)
+153-    if ptype == "pixel":
+154-        return T_TRACKER, "Placement_Type=Pixel"
+155-
+156-    if group_name:
+157-        return T_ASSIGNED, ""
+158-
+159-    # sin arbol en esta fila: solo es desasignacion si el arbol ES visible
+160-    if not group_visible.get(ptype_raw, False):
+
+===== RUN RULES IMPORTS =====
+from collections import Counter
+from pathlib import Path
+
+from parsers.ts_parser import parse_ts
+from parsers.innovid_export import parse_innovid_export
+
+from core.matching import match
+from core.engine import run_rules
+
+
+TS = Path("data/ts/TS Adobe Variante 1.xlsx")
+
+EXPORT_PC = Path("data/exports/Export 3p con Dtree.xlsx")
+
+
+def main():
+
+    ts = parse_ts(TS)
+
+    pc = parse_innovid_export(EXPORT_PC)
+
+    result = match(ts, pc)
+
+    findings = run_rules(result)
+
+    scorecard = findings.scorecard()
+
+    print()
+    print("=" * 80)
+    print("QA2 REPORT")
+    print("=" * 80)
+
+    print()
+    print("PROFILE")
+    print(ts.profile)
+
+    print()
+    print("VERDICT")
+    print(scorecard.verdict)
+
+    print()
+    print("MATCH COVERAGE")
+    print(f"Placements trabajados : {result.expected_total}")
+    print(f"Placements encontrados: {len(result.matched)}")
+
+    print()
+    print("RULE RESULTS")
+
+    for k, v in scorecard.by_status.items():
+        print(f"{k:15} {v}")
+
+    print()
+    print("SEVERITY")
+
+    for k, v in scorecard.by_severity.items():
+        print(f"{k:15} {v}")
+
+    print()
+    print("DOMAINS")
+
+    if scorecard.by_domain:
+        for k, v in scorecard.by_domain.items():
+            print(f"{k:15} {v}")
+    else:
+        print("Sin hallazgos negativos")
+
+    print()
+    print("TOTAL FINDINGS")
+    print(scorecard.total_findings)
+
+    print()
+    print("RULE BREAKDOWN")
+
+    rule_counter = Counter()
+
+    for f in findings.findings:
+        rule_counter[f.rule_id] += 1
+
+    for rule, total in sorted(rule_counter.items()):
+        print(f"{rule:15} {total}")
+
+    print()
+    print("=" * 80)
+    print()
+
+
+if __name__ == "__main__":
+    main()
