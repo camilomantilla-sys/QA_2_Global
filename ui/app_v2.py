@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import warnings
@@ -253,6 +254,89 @@ def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
 # Helpers de comparación visual
 # ============================================================
 
+_SITE_ID_SUFFIX = re.compile(r"\s*\([^)]*\)\s*$")
+_SITE_TOKEN = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+
+_GENERIC_SITE_WORDS = {
+    "site",
+    "media",
+    "network",
+    "networks",
+    "group",
+    "digital",
+    "online",
+    "inc",
+    "llc",
+    "ltd",
+    "com",
+}
+
+
+def normalize_site(value) -> str:
+    """
+    Normaliza sites sin alterar el valor original mostrado.
+
+    Ejemplos:
+        Brainly (21817) -> brainly
+        Disney XD      -> disney xd
+    """
+    text_value = str(value or "").strip().casefold()
+    text_value = _SITE_ID_SUFFIX.sub("", text_value)
+
+    tokens = [
+        token
+        for token in _SITE_TOKEN.findall(text_value)
+        if token not in _GENERIC_SITE_WORDS
+    ]
+
+    return " ".join(tokens)
+
+
+def sites_match(expected, actual) -> bool:
+    """
+    Match operativo de sites.
+
+    Se considera match cuando:
+      - Los nombres normalizados son iguales.
+      - Un nombre contiene al otro.
+      - Comparten al menos una palabra significativa.
+
+    Ejemplos válidos:
+      Brainly (21817) vs Brainly
+      Disney XD vs Disney
+    """
+    expected_norm = normalize_site(expected)
+    actual_norm = normalize_site(actual)
+
+    if not expected_norm or not actual_norm:
+        return False
+
+    if expected_norm == actual_norm:
+        return True
+
+    if (
+        expected_norm in actual_norm
+        or actual_norm in expected_norm
+    ):
+        return True
+
+    expected_tokens = set(expected_norm.split())
+    actual_tokens = set(actual_norm.split())
+
+    return bool(expected_tokens & actual_tokens)
+
+
+def compare_site_value(expected, actual) -> str:
+    expected_text = str(expected or "").strip()
+    actual_text = str(actual or "").strip()
+
+    if not expected_text or not actual_text:
+        return "NOT_VERIFIED"
+
+    return "PASS" if sites_match(expected_text, actual_text) else "FAIL"
+
+
+
 def clean_value(value) -> str:
     if value is None:
         return ""
@@ -302,17 +386,23 @@ def comparison_row(
     *,
     normalizer=None,
     optional: bool = False,
+    comparator=None,
 ) -> dict:
-    return {
-        "Campo validado": field_name,
-        "Esperado en Traffic Sheet": clean_value(expected),
-        "Encontrado en Innovid": clean_value(actual),
-        "Resultado visual": compare_value(
+    if comparator is not None:
+        visual_result = comparator(expected, actual)
+    else:
+        visual_result = compare_value(
             expected,
             actual,
             normalizer=normalizer,
             optional=optional,
-        ),
+        )
+
+    return {
+        "Validated field": field_name,
+        "Expected from Traffic Sheet": clean_value(expected),
+        "Found in Innovid": clean_value(actual),
+        "Result": visual_result,
     }
 
 
@@ -1337,6 +1427,7 @@ with tempfile.TemporaryDirectory(
                             "Site",
                             expected.site,
                             actual.site if actual else "",
+                            comparator=compare_site_value,
                         ),
                         comparison_row(
                             "Dimensions",
@@ -1433,13 +1524,13 @@ with tempfile.TemporaryDirectory(
                                     ),
                                     "URL": (
                                         creative_link.url.result
-                                        if creative_link.url
-                                        else "NOT_VERIFIED"
+                                        if creative_link.url is not None
+                                        else "N/A"
                                     ),
                                     "Attribution": (
                                         creative_link.triangle.result
-                                        if creative_link.triangle
-                                        else "NOT_VERIFIED"
+                                        if creative_link.triangle is not None
+                                        else "N/A"
                                     ),
                                 }
                             )

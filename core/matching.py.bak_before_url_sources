@@ -246,21 +246,6 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     worked = {pid for pid, sc in ts.scope.items()
               if sc.request_type != REQ_NOT_WORKED}
 
-    # WPP / Unilever / Wendy's:
-    # Creative Rotations contiene el Landing Page Name, no la URL final.
-    # La URL autoritativa vive en la pestaña Landing Pages.
-    landing_page_urls: dict[str, str] = {}
-
-    if getattr(ts, "landing_pages", None) is not None:
-        for lp_row in ts.landing_pages.rows:
-            lp_name = norm_compare(
-                str(lp_row.values.get("lp_name") or "")
-            )
-            lp_url = str(lp_row.values.get("lp_url") or "").strip()
-
-            if lp_name and lp_url:
-                landing_page_urls[lp_name] = lp_url
-
     # --- creativos con intencion, indexados por grupo (Creative Rotations)
     by_group: dict[str, list[ExpectedCreative]] = {}
     if ts.rotations is not None:
@@ -276,22 +261,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 creative_id=str(row.values.get("creative_id") or ""),
                 universal_ad_id=str(row.values.get("universal_ad_id") or ""),
                 intent=intent, ts_row=row.row, ts_sheet=ts.rotations.sheet,
-                # Adobe Decision Tree:
-                # Landing Page Name contiene la URL completa.
-                #
-                # WPP / Unilever / Wendy's:
-                # Landing Page Name contiene una referencia que debe
-                # resolverse contra la pestaña Landing Pages.
-                url=(
-                    landing_page_urls.get(
-                        norm_compare(
-                            str(row.values.get("lp_url") or "")
-                        ),
-                        "",
-                    )
-                    if ts.profile == "wpp_standard"
-                    else str(row.values.get("lp_url") or "")
-                ),
+                # en Adobe 'Landing Page Name' trae la URL COMPLETA
+                url=str(row.values.get("lp_url") or ""),
                 cgen=str(row.values.get("cgen") or ""),
                 dims=norm_dims(row.values.get("dims_or_duration")),
             ))
@@ -334,9 +305,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             ep.creatives.append(ExpectedCreative(
                 name=cname, intent=intent,
                 ts_row=row.row, ts_sheet=ts.placements.sheet,
-                # Adobe Direct / Site-Served:
-                # CGEN y Landing Page viven a nivel placement.
-                url=str(row.values.get("lp_ref") or ""),
+                # en Variante B el CGEN es del placement y aplica a todos
                 cgen=str(row.values.get("cgen") or ""),
                 dims=norm_dims(row.values.get("dimensions")),
             ))

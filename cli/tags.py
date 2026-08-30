@@ -10,10 +10,30 @@ import warnings
 from collections import Counter
 from pathlib import Path
 
-import typer
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
+import typer  # type: ignore
+
+try:
+    from rich.console import Console  # pyright: ignore[reportMissingImports]
+    from rich.panel import Panel  # pyright: ignore[reportMissingImports]
+    from rich.table import Table  # pyright: ignore[reportMissingImports]
+except ImportError:  # pragma: no cover - fallback for environments without rich
+    class Console:  # type: ignore[no-redef]
+        def print(self, *args, **kwargs):
+            return None
+
+        def rule(self, *args, **kwargs):
+            return None
+
+    class Panel:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class Table:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_row(self, *args, **kwargs):
+            return None
 
 from parsers.innovid_tags import parse_innovid_tags
 
