@@ -1,0 +1,497 @@
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDisco…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             10                                                 |
+|   Tags materializados    20                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  1X1_CLICK       12                                                         |
+|  1X1_IMPRESSION  8                                                          |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 10 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038685      1x1  P3JPFS8         Brainly_FY26ED…  2     1X1_CLICK        |
+|  11038689      1x1  P3JPFS9         Brainly_FY26ED…  2     1X1_CLICK        |
+|  11038695      1x1  P3JPFS4         Brainly_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038696      1x1  P3JPFRZ         Brainly_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038697      1x1  P3JPFS2         Brainly_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creativ…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             16                                                 |
+|   Tags materializados    46                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  DISPLAY_ASYNC   10                                                         |
+|  DISPLAY_IFRAME  10                                                         |
+|  DISPLAY_INS     10                                                         |
+|  DISPLAY_JS      10                                                         |
+|  VIDEO_VAST      6                                                          |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 16 ------------------------+
+|  Placement ID  Dim        Third Party ID  Placement Name  Tags  Tipos       |
+|  11038692      1920x1080  P3JPFSQ         Brainly_FY26E…  1     VIDEO_VAST  |
+|  11038691      1920x1080  P3JPFSR         Brainly_FY26E…  1     VIDEO_VAST  |
+|  11038706      1920x1080  P3JPFVQ         Brainly_FY26E…  1     VIDEO_VAST  |
+|  11038707      1920x1080  P3JPFVS         Brainly_FY26E…  1     VIDEO_VAST  |
+|  11038708      1920x1080  P3JPFT1         Brainly_FY26E…  1     VIDEO_VAST  |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDis…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             12                                                 |
+|   Tags materializados    6                                                  |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag  Cantidad                                                      |
+|  VIDEO_VAST   6                                                             |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 18 ------------------------+
+|  Placement ID  Dim      Third Party ID  Placement Name    Tags  Tipos       |
+|  11038719      640x480  P3JS0VJ         Chegg_FY26EDU_B…  1     VIDEO_VAST  |
+|  11038722      640x480  P3JS0VK         Chegg_FY26EDU_B…  1     VIDEO_VAST  |
+|  11038723      640x480  P3JS0VL         Chegg_FY26EDU_B…  1     VIDEO_VAST  |
+|  11038725      640x480  P3JS0VQ         Chegg_FY26EDU_B…  1     VIDEO_VAST  |
+|  11038744      640x480  P3JPFV1         Chegg_FY26EDU_B…  1     VIDEO_VAST  |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDisc…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             24                                                 |
+|   Tags materializados    108                                                |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  PIXEL           36                                                         |
+|  1X1_CLICK       24                                                         |
+|  1X1_IMPRESSION  24                                                         |
+|  PIXEL_HTML      24                                                         |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 24 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038749      1x1  P3JPFS7         Chegg_FY26EDU_…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038724      1x1  P3JPNV3         Chegg_FY26EDU_…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038720      1x1  P3JPNTY         Chegg_FY26EDU_…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038743      1x1  P3JPFT9         Chegg_FY26EDU_…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038715      1x1  P3JPNTZ         Chegg_FY26EDU_…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
++-----------------------------------------------------------------------------+
++------------------- Inconsistencias internas en tags: 12 --------------------+
+|                    Campaign      Placement                                  |
+|  Placement  Tag    embebida      embebido       Dim embebida  Nota          |
+|  11038731   DISQO  -             11038731       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038736   DISQO  -             11038736       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038742   DISQO  -             11038742       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038732   DISQO  -             11038732       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038738   DISQO  -             11038738       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDisc…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             12                                                 |
+|   Tags materializados    84                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  PIXEL           36                                                         |
+|  PIXEL_HTML      24                                                         |
+|  1X1_CLICK       12                                                         |
+|  1X1_IMPRESSION  12                                                         |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 12 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038629      1x1  P3JPFWK         Duolingo_FY26E…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038630      1x1  P3JPFVD         Duolingo_FY26E…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038631      1x1  P3JPFTF         Duolingo_FY26E…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038632      1x1  P3JPXRH         Duolingo_FY26E…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038633      1x1  P3JPFTY         Duolingo_FY26E…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
++-----------------------------------------------------------------------------+
++------------------- Inconsistencias internas en tags: 12 --------------------+
+|                    Campaign      Placement                                  |
+|  Placement  Tag    embebida      embebido       Dim embebida  Nota          |
+|  11038629   disqo  -             11038629       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038630   disqo  -             11038630       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038631   disqo  -             11038631       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038632   disqo  -             11038632       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038633   disqo  -             11038633       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Crea…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             4                                                  |
+|   Tags materializados    10                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  DISPLAY_ASYNC   2                                                          |
+|  DISPLAY_IFRAME  2                                                          |
+|  DISPLAY_INS     2                                                          |
+|  DISPLAY_JS      2                                                          |
+|  VIDEO_VAST      2                                                          |
++-----------------------------------------------------------------------------+
++------------------------ Placements · muestra 4 de 4 ------------------------+
+|                           Third Party    Placement                          |
+|  Placement ID  Dim        ID             Name          Tags  Tipos          |
+|  11058731      300x250    P3JXRQ6        Learnverse_…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11058732      300x600    P3JXTNV        Learnverse_…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11058734      1920x1080  P3JXRT0        Learnverse_…  1     VIDEO_VAST     |
+|  11058735      1920x1080  P3JXTTG        Learnverse_…  1     VIDEO_VAST     |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDis…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             27                                                 |
+|   Tags materializados    54                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  1X1_CLICK       27                                                         |
+|  1X1_IMPRESSION  27                                                         |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 27 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038641      1x1  P3JPNWC         Unidays_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038642      1x1  P3JPNWD         Unidays_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038643      1x1  P3JSCJL         Unidays_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038644      1x1  P3JPFSD         Unidays_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038645      1x1  P3JPFSF         Unidays_FY26ED…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDisco…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             5                                                  |
+|   Tags materializados    35                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  PIXEL           15                                                         |
+|  PIXEL_HTML      10                                                         |
+|  1X1_CLICK       5                                                          |
+|  1X1_IMPRESSION  5                                                          |
++-----------------------------------------------------------------------------+
++------------------------ Placements · muestra 5 de 5 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038757      1x1  P3JPFTJ         Quizlet_FY26ED…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038758      1x1  P3JPFTM         Quizlet_FY26ED…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038759      1x1  P3JPFWG         Quizlet_FY26ED…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038760      1x1  P3JPFTN         Quizlet_FY26ED…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
+|  11038761      1x1  P3JPQM5         Quizlet_FY26ED…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
++-----------------------------------------------------------------------------+
++-------------------- Inconsistencias internas en tags: 5 --------------------+
+|                    Campaign      Placement                                  |
+|  Placement  Tag    embebida      embebido       Dim embebida  Nota          |
+|  11038757   DISQO  -             11038757       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038758   DISQO  -             11038758       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038759   DISQO  -             11038759       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038760   DISQO  -             11038760       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038761   DISQO  -             11038761       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STED…   |
+|   Hoja                   Tags                                               |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             6                                                  |
+|   Tags materializados    24                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  DISPLAY_ASYNC   6                                                          |
+|  DISPLAY_IFRAME  6                                                          |
+|  DISPLAY_INS     6                                                          |
+|  DISPLAY_JS      6                                                          |
++-----------------------------------------------------------------------------+
++------------------------ Placements · muestra 5 de 6 ------------------------+
+|                         Third Party                                         |
+|  Placement ID  Dim      ID             Placement Name  Tags  Tipos          |
+|  11038751      300x250  P3JPFTL        Quizlet_FY26E…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11038752      320x50   P3JPFTP        Quizlet_FY26E…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11038753      300x600  P3JPFTQ        Quizlet_FY26E…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11038754      300x600  P3JPFTH        Quizlet_FY26E…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
+|  11038755      320x50   P3JPFTR        Quizlet_FY26E…  4     DISPLAY_ASYN…  |
+|                                                              DISPLAY_IFRA…  |
+|                                                              DISPLAY_INS,   |
+|                                                              DISPLAY_JS     |
++-----------------------------------------------------------------------------+
++------------------------------ QA estructural -------------------------------+
+| No se detectaron inconsistencias internas entre las filas y el contenido de |
+| los tags.                                                                   |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+ARCHIVO: data/tags/TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+================================================================================
+
+------------------------ QA2 TAGS · EXTRACTION PREVIEW ------------------------
++--------------------------------- Documento ---------------------------------+
+|   Archivo                TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDisc…   |
+|   Hoja                   Import                                             |
+|   Header                 11                                                 |
+|   Campaign               FY26_Q4_AMER_Creative_STEDiscover_Awareness_Dis…   |
+|   Campaign ID            326319                                             |
+|   Placements             17                                                 |
+|   Tags materializados    99                                                 |
++-----------------------------------------------------------------------------+
++----------------------------- Tipos detectados ------------------------------+
+|  Tipo de tag     Cantidad                                                   |
+|  PIXEL           39                                                         |
+|  PIXEL_HTML      26                                                         |
+|  1X1_CLICK       17                                                         |
+|  1X1_IMPRESSION  17                                                         |
++-----------------------------------------------------------------------------+
++----------------------- Placements · muestra 5 de 17 ------------------------+
+|  Placement ID  Dim  Third Party ID  Placement Name   Tags  Tipos            |
+|  11038668      1x1  P3JPFVZ         SoundCloud_FY2…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038669      1x1  P3JPFVV         SoundCloud_FY2…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038670      1x1  P3JPFR8         SoundCloud_FY2…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038671      1x1  P3JPFWW         SoundCloud_FY2…  2     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION   |
+|  11038672      1x1  P3JPFRB         SoundCloud_FY2…  7     1X1_CLICK,       |
+|                                                            1X1_IMPRESSION,  |
+|                                                            PIXEL,           |
+|                                                            PIXEL_HTML       |
++-----------------------------------------------------------------------------+
++------------------- Inconsistencias internas en tags: 13 --------------------+
+|                    Campaign      Placement                                  |
+|  Placement  Tag    embebida      embebido       Dim embebida  Nota          |
+|  11038672   DISQO  -             11038672       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038673   DISQO  -             11038673       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038674   DISQO  -             11038674       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038675   DISQO  -             11038675       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
+|  11038676   DISQO  -             11038676       0x0           Width         |
+|                                                               distinto,     |
+|                                                               Height        |
+|                                                               distinto      |
++-----------------------------------------------------------------------------+
+

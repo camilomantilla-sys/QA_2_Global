@@ -23,34 +23,6 @@ from openpyxl import load_workbook
 from core.normalize import clean_id, norm_key, norm_text
 from core.provenance import Anomaly
 
-# ---------------------------------------------------------------------------
-# Issues que NO pertenecen al QA2 de tags.
-#
-# Los tracking pixels suelen declarar width="0" height="0" o width="1"
-# height="1". Esos valores no representan las dimensiones del placement.
-# Las dimensiones reales se validan exclusivamente con TS vs Export Innovid.
-# ---------------------------------------------------------------------------
-
-NON_ACTIONABLE_TAG_ISSUES = (
-    "WIDTH:",
-    "HEIGHT:",
-)
-
-
-def clean_tag_issues(issues: list[str]) -> list[str]:
-    """
-    Elimina falsos hallazgos generados por dimensiones embebidas    Ejemplos ignorados:
-        WIDTH: esperado=1 embebido=['0']
-        HEIGHT: esperado=1 embebido=['0']
-
-    No elimina errores funcionales de placement ID, tag vacío, vendor,
-    columnas esperadas ni estructura Adobe.
-    """
-    return [
-        issue
-        for issue in issues
-        if not issue.strip().upper().startswith(NON_ACTIONABLE_TAG_ISSUES)
-    ]
 
 warnings.filterwarnings(
     "ignore",
