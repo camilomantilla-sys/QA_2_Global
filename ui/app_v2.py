@@ -11,7 +11,7 @@ import streamlit as st  # type: ignore
 
 
 # ============================================================
-# Proyecto e imports
+# Project and imports
 # ============================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -45,11 +45,11 @@ warnings.filterwarnings(
 
 
 # ============================================================
-# Constantes visuales
+# Visual constants
 # ============================================================
 
 PROFILE_LABELS = {
-    "AUTO": "Detección automática",
+    "AUTO": "Auto-detect",
     "adobe_variante_a": (
         "Adobe · Decision Tree Implementation"
     ),
@@ -61,7 +61,7 @@ PROFILE_LABELS = {
     ),
 }
 def professional_profile_name(profile_name: str) -> str:
-    """Nombre corporativo visible sin exponer claves técnicas internas."""
+    """Corporate-facing name that avoids exposing internal technical keys."""
 
     return PROFILE_LABELS.get(
         profile_name,
@@ -88,11 +88,11 @@ STATUS_ICON = {
 
 
 STATUS_LABEL = {
-    "PASS": "Aprobado",
-    "FAIL": "Error",
-    "REVIEW": "Revisión",
-    "NOT_VERIFIED": "No verificable",
-    "INFO": "Información",
+    "PASS": "Passed",
+    "FAIL": "Failed",
+    "REVIEW": "Review",
+    "NOT_VERIFIED": "Not Verified",
+    "INFO": "Info",
 }
 
 
@@ -106,11 +106,11 @@ STATUS_COLOR = {
 
 
 VERDICT_LABELS = {
-    "PASSED": "APROBADO",
-    "FAILED": "REQUIERE CORRECCIÓN",
-    "BLOCKED": "BLOQUEADO",
-    "NEEDS_REVIEW": "REVISIÓN REQUERIDA",
-    "NO_CHECKS": "SIN VALIDACIONES",
+    "PASSED": "PASSED",
+    "FAILED": "REQUIRES CORRECTION",
+    "BLOCKED": "BLOCKED",
+    "NEEDS_REVIEW": "REVIEW REQUIRED",
+    "NO_CHECKS": "NO CHECKS RUN",
 }
 
 
@@ -124,7 +124,7 @@ VERDICT_COLORS = {
 
 
 # ============================================================
-# Helpers de archivos
+# File helpers
 # ============================================================
 
 def save_upload(
@@ -133,9 +133,9 @@ def save_upload(
     prefix: str,
 ) -> Path:
     """
-    Guarda un UploadedFile en la carpeta temporal.
+    Saves an UploadedFile to the temporary folder.
 
-    El prefijo evita colisiones cuando dos archivos tienen el mismo nombre.
+    The prefix avoids collisions when two files share the same name.
     """
     safe_name = Path(uploaded_file.name).name
     destination = directory / f"{prefix}{safe_name}"
@@ -152,11 +152,11 @@ def anomaly_rows(
     for anomaly in getattr(result, "anomalies", []):
         rows.append(
             {
-                "Fuente": source_name,
-                "Severidad": anomaly.severity,
-                "Código": anomaly.code,
-                "Mensaje": anomaly.message,
-                "Referencia": (
+                "Source": source_name,
+                "Severity": anomaly.severity,
+                "Code": anomaly.code,
+                "Message": anomaly.message,
+                "Reference": (
                     str(anomaly.ref)
                     if getattr(anomaly, "ref", None)
                     else ""
@@ -175,7 +175,7 @@ def result_is_fatal(result) -> bool:
 
 
 # ============================================================
-# Helpers de findings
+# Findings helpers
 # ============================================================
 
 def placement_findings(
@@ -217,20 +217,20 @@ def findings_dataframe(findings) -> pd.DataFrame:
         rows.append(
             {
                 "Status": finding.status.value,
-                "Severidad": finding.severity.value,
-                "Regla": finding.rule_id,
-                "Dominio": finding.domain.value,
+                "Severity": finding.severity.value,
+                "Rule": finding.rule_id,
+                "Domain": finding.domain.value,
                 "Placement ID": finding.placement_id,
                 "Placement Name": finding.placement_name,
                 "Creative ID": finding.creative_id,
                 "Creative Name": finding.creative_name,
-                "Mensaje": finding.message,
-                "Esperado": finding.expected,
-                "Encontrado": finding.actual,
-                "Razón": finding.reason,
-                "Acción recomendada": finding.recommended_action,
-                "Confianza": finding.confidence.value,
-                "Cantidad": finding.count,
+                "Message": finding.message,
+                "Expected": finding.expected,
+                "Found": finding.actual,
+                "Reason": finding.reason,
+                "Recommended Action": finding.recommended_action,
+                "Confidence": finding.confidence.value,
+                "Count": finding.count,
             }
         )
 
@@ -253,7 +253,7 @@ def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
 
         rows.append(
             {
-                "Regla": rule_id,
+                "Rule": rule_id,
                 "PASS": counts.get("PASS", 0),
                 "FAIL": counts.get("FAIL", 0),
                 "REVIEW": counts.get("REVIEW", 0),
@@ -270,7 +270,7 @@ def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
 
 
 # ============================================================
-# Helpers de comparación visual
+# Visual comparison helpers
 # ============================================================
 
 def clean_value(value) -> str:
@@ -324,10 +324,10 @@ def comparison_row(
     optional: bool = False,
 ) -> dict:
     return {
-        "Campo validado": field_name,
-        "Esperado en Traffic Sheet": clean_value(expected),
-        "Encontrado en Innovid": clean_value(actual),
-        "Resultado visual": compare_value(
+        "Validated Field": field_name,
+        "Expected in Traffic Sheet": clean_value(expected),
+        "Found in Innovid": clean_value(actual),
+        "Visual Result": compare_value(
             expected,
             actual,
             normalizer=normalizer,
@@ -370,7 +370,7 @@ def show_verdict(verdict: str) -> None:
         <div class="verdict-card"
              style="border-left:10px solid {color};">
             <div class="verdict-caption">
-                RESULTADO GENERAL DEL QA2
+                OVERALL QA2 RESULT
             </div>
             <div class="verdict-value"
                  style="color:{color};">
@@ -383,7 +383,7 @@ def show_verdict(verdict: str) -> None:
 
 
 # ============================================================
-# Configuración Streamlit
+# Streamlit configuration
 # ============================================================
 
 st.set_page_config(
@@ -528,8 +528,8 @@ st.markdown(
     <div class="qa-header">
         <h1>INNOVID QA2 AUTOMATION</h1>
         <p>
-            Validación de Traffic Sheet, Placement-Creative View,
-            Placement View y archivos de Tags
+            Validation of Traffic Sheet, Placement-Creative View,
+            Placement View, and Tag files
         </p>
     </div>
     """,
@@ -542,10 +542,10 @@ st.markdown(
 # ============================================================
 
 with st.sidebar:
-    st.header("Archivos del QA2")
+    st.header("QA2 Files")
 
     uploaded_ts = st.file_uploader(
-        "1. Importar Traffic Sheet",
+        "1. Upload Traffic Sheet",
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_ts",
@@ -554,14 +554,14 @@ with st.sidebar:
     st.markdown(
         """
         <div class="upload-help">
-            Documento fuente del alcance, placements y cambios solicitados.
+            Source document for scope, placements, and requested changes.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     uploaded_pc = st.file_uploader(
-        "2. Importar Innovid Placement-Creative View",
+        "2. Upload Innovid Placement-Creative View",
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_pc",
@@ -570,15 +570,15 @@ with st.sidebar:
     st.markdown(
         """
         <div class="upload-help">
-            Export con Creative_ID, asociación, estado,
-            Decision Tree, Clicktag y Third Party ID.
+            Export with Creative_ID, association, status,
+            Decision Tree, Clicktag, and Third Party ID.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     uploaded_pl = st.file_uploader(
-        "3. Importar Innovid Placement View",
+        "3. Upload Innovid Placement View",
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_pl",
@@ -587,15 +587,15 @@ with st.sidebar:
     st.markdown(
         """
         <div class="upload-help">
-            Opcional. Recomendado para 1x1, píxeles
-            y validaciones de URL a nivel placement.
+            Optional. Recommended for 1x1s, pixels,
+            and placement-level URL validations.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     uploaded_tags = st.file_uploader(
-        "4. Importar archivos de Tags",
+        "4. Upload Tag files",
         type=["xlsx", "xlsm"],
         accept_multiple_files=True,
         key="qa2_tags",
@@ -604,8 +604,8 @@ with st.sidebar:
     st.markdown(
         """
         <div class="upload-help">
-            Permite seleccionar varios archivos al mismo tiempo.
-            En Windows usa Ctrl + clic o Shift + clic.
+            Allows selecting multiple files at once.
+            On Windows use Ctrl+click or Shift+click.
         </div>
         """,
         unsafe_allow_html=True,
@@ -614,30 +614,30 @@ with st.sidebar:
     st.divider()
 
     selected_profile = st.selectbox(
-        "Perfil de Traffic Sheet",
+        "Traffic Sheet Profile",
         options=list(PROFILE_LABELS),
         format_func=lambda value: PROFILE_LABELS[value],
         index=0,
     )
 
     analyze_button = st.button(
-        "Analizar QA2",
+        "Run QA2",
         type="primary",
         use_container_width=True,
     )
 
 
 # ============================================================
-# Pantalla inicial
+# Landing screen
 # ============================================================
 
 if not analyze_button:
     st.info(
-        "Carga como mínimo la Traffic Sheet y el "
+        "Upload at least the Traffic Sheet and the "
         "Innovid Placement-Creative View."
     )
 
-    st.subheader("Flujo del análisis")
+    st.subheader("Analysis Flow")
 
     flow_columns = st.columns(4)
 
@@ -645,7 +645,7 @@ if not analyze_button:
         """
         **1. Traffic Sheet**
 
-        Detecta cuenta, perfil, colores, scope y placements trabajados.
+        Detects account, profile, colors, scope, and worked placements.
         """
     )
 
@@ -653,7 +653,7 @@ if not analyze_button:
         """
         **2. Placement-Creative**
 
-        Valida creativos, asociación, status, DTree, URL y attribution.
+        Validates creatives, association, status, Decision Tree, URL, and attribution.
         """
     )
 
@@ -661,7 +661,7 @@ if not analyze_button:
         """
         **3. Placement View**
 
-        Complementa información de placements 1x1, URLs y píxeles.
+        Adds supporting info for 1x1 placements, URLs, and pixels.
         """
     )
 
@@ -669,7 +669,7 @@ if not analyze_button:
         """
         **4. Tags**
 
-        Valida IDs, dimensiones, Campaign ID y contenido entregado.
+        Validates IDs, dimensions, Campaign ID, and delivered content.
         """
     )
 
@@ -678,14 +678,14 @@ if not analyze_button:
 
 if uploaded_ts is None or uploaded_pc is None:
     st.error(
-        "Debes cargar la Traffic Sheet y el "
+        "You must upload the Traffic Sheet and the "
         "Innovid Placement-Creative View."
     )
     st.stop()
 
 
 # ============================================================
-# Procesamiento
+# Processing
 # ============================================================
 
 with tempfile.TemporaryDirectory(
@@ -738,7 +738,7 @@ with tempfile.TemporaryDirectory(
         # ----------------------------------------------------
 
         with st.spinner(
-            "Leyendo y comprendiendo la Traffic Sheet..."
+            "Reading and parsing the Traffic Sheet..."
         ):
             detected_profile, detection_evidence = (
                 detect_profile(ts_path)
@@ -760,7 +760,7 @@ with tempfile.TemporaryDirectory(
         # ----------------------------------------------------
 
         with st.spinner(
-            "Leyendo Innovid Placement-Creative View..."
+            "Reading Innovid Placement-Creative View..."
         ):
             pc_result = parse_innovid_export(pc_path)
 
@@ -772,7 +772,7 @@ with tempfile.TemporaryDirectory(
 
         if pl_path is not None:
             with st.spinner(
-                "Leyendo Innovid Placement View..."
+                "Reading Innovid Placement View..."
             ):
                 pl_result = parse_innovid_export(pl_path)
 
@@ -784,7 +784,7 @@ with tempfile.TemporaryDirectory(
 
         if tag_paths:
             with st.spinner(
-                f"Leyendo {len(tag_paths)} archivo(s) de Tags..."
+                f"Reading {len(tag_paths)} tag file(s)..."
             ):
                 for original_name, tag_path in tag_paths:
                     tags_results.append(
@@ -795,82 +795,82 @@ with tempfile.TemporaryDirectory(
                     )
 
         # ----------------------------------------------------
-        # Comprensión de archivos
+        # File understanding
         # ----------------------------------------------------
 
         file_rows = [
             {
-                "Archivo": uploaded_ts.name,
-                "Tipo esperado": "Traffic Sheet",
-                "Tipo detectado": ts_result.profile,
-                "Estado": (
+                "File": uploaded_ts.name,
+                "Expected Type": "Traffic Sheet",
+                "Detected Type": ts_result.profile,
+                "Status": (
                     "FATAL"
                     if result_is_fatal(ts_result)
                     else "OK"
                 ),
-                "Registros": (
+                "Records": (
                     len(ts_result.placements.rows)
                     if ts_result.placements
                     else 0
                 ),
             },
             {
-                "Archivo": uploaded_pc.name,
-                "Tipo esperado": "Placement-Creative View",
-                "Tipo detectado": (
+                "File": uploaded_pc.name,
+                "Expected Type": "Placement-Creative View",
+                "Detected Type": (
                     pc_result.level
-                    or "No reconocido"
+                    or "Not Recognized"
                 ),
-                "Estado": (
+                "Status": (
                     "FATAL"
                     if result_is_fatal(pc_result)
                     else "OK"
                 ),
-                "Registros": len(pc_result.rows),
+                "Records": len(pc_result.rows),
             },
         ]
 
         if pl_result is not None:
             file_rows.append(
                 {
-                    "Archivo": uploaded_pl.name,
-                    "Tipo esperado": "Placement View",
-                    "Tipo detectado": (
+                    "File": uploaded_pl.name,
+                    "Expected Type": "Placement View",
+                    "Detected Type": (
                         pl_result.level
-                        or "No reconocido"
+                        or "Not Recognized"
                     ),
-                    "Estado": (
+                    "Status": (
                         "FATAL"
                         if result_is_fatal(pl_result)
                         else "OK"
                     ),
-                    "Registros": len(pl_result.rows),
+                    "Records": len(pl_result.rows),
                 }
             )
 
         for file_name, tags_result in tags_results:
             file_rows.append(
                 {
-                    "Archivo": file_name,
-                    "Tipo esperado": "Tags",
-                    "Tipo detectado": (
-                        f"Tags | hoja {tags_result.sheet}"
+                    "File": file_name,
+                    "Expected Type": "Tags",
+                    "Detected Type": (
+                        f"Tags | sheet {tags_result.sheet}"
                         if tags_result.sheet
-                        else "No reconocido"
+                        else "Not Recognized"
                     ),
-                    "Estado": (
+                    "Status": (
                         "FATAL"
                         if result_is_fatal(tags_result)
                         else "OK"
                     ),
-                    "Registros": len(tags_result.rows),
+                    "Records": len(tags_result.rows),
                 }
             )
 
         files_dataframe = pd.DataFrame(file_rows)
 
         # ----------------------------------------------------
-        # Anomalías
+        # Anomalies
         # ----------------------------------------------------
 
         all_anomaly_rows = []
@@ -905,7 +905,7 @@ with tempfile.TemporaryDirectory(
                 )
             )
 
-        # Validaciones explícitas de tipo de archivo.
+        # Explicit file-type validations.
 
         if (
             not result_is_fatal(pc_result)
@@ -913,14 +913,14 @@ with tempfile.TemporaryDirectory(
         ):
             all_anomaly_rows.append(
                 {
-                    "Fuente": "Placement-Creative View",
-                    "Severidad": "FATAL",
-                    "Código": "UI-WRONG-PC-FILE",
-                    "Mensaje": (
-                        "El archivo cargado no fue reconocido como "
-                        "Placement-Creative View. Debe contener Creative_ID."
+                    "Source": "Placement-Creative View",
+                    "Severity": "FATAL",
+                    "Code": "UI-WRONG-PC-FILE",
+                    "Message": (
+                        "The uploaded file was not recognized as a "
+                        "Placement-Creative View. It must contain Creative_ID."
                     ),
-                    "Referencia": uploaded_pc.name,
+                    "Reference": uploaded_pc.name,
                 }
             )
 
@@ -931,30 +931,30 @@ with tempfile.TemporaryDirectory(
         ):
             all_anomaly_rows.append(
                 {
-                    "Fuente": "Placement View",
-                    "Severidad": "FATAL",
-                    "Código": "UI-WRONG-PL-FILE",
-                    "Mensaje": (
-                        "El archivo cargado no fue reconocido como "
-                        "Placement View. No cargues aquí un archivo TAGS."
+                    "Source": "Placement View",
+                    "Severity": "FATAL",
+                    "Code": "UI-WRONG-PL-FILE",
+                    "Message": (
+                        "The uploaded file was not recognized as a "
+                        "Placement View. Do not upload a TAGS file here."
                     ),
-                    "Referencia": uploaded_pl.name,
+                    "Reference": uploaded_pl.name,
                 }
             )
 
         fatal_rows = [
             row
             for row in all_anomaly_rows
-            if row["Severidad"] == "FATAL"
+            if row["Severity"] == "FATAL"
         ]
 
         if fatal_rows:
             st.error(
-                "El análisis fue bloqueado porque uno o más "
-                "documentos no corresponden al formato esperado."
+                "The analysis was blocked because one or more "
+                "documents don't match the expected format."
             )
 
-            st.subheader("Comprensión de archivos")
+            st.subheader("File Understanding")
 
             st.dataframe(
                 files_dataframe,
@@ -962,7 +962,7 @@ with tempfile.TemporaryDirectory(
                 hide_index=True,
             )
 
-            st.subheader("Problemas encontrados")
+            st.subheader("Issues Found")
 
             st.dataframe(
                 pd.DataFrame(fatal_rows),
@@ -973,11 +973,11 @@ with tempfile.TemporaryDirectory(
             st.stop()
 
         # ----------------------------------------------------
-        # Matching y reglas
+        # Matching and rules
         # ----------------------------------------------------
 
         with st.spinner(
-            "Ejecutando matching y validaciones QA2..."
+            "Running QA2 matching and validations..."
         ):
             match_result = match(
                 ts_result,
@@ -985,7 +985,7 @@ with tempfile.TemporaryDirectory(
                 pl_result,
             )
 
-            # Primero ejecutamos reglas TS vs Innovid.
+            # Run TS vs Innovid rules first.
             findings_buffer = run_rules(match_result)
 
             tag_matches = []
@@ -1049,7 +1049,7 @@ with tempfile.TemporaryDirectory(
             scorecard = findings_buffer.scorecard()
 
         # ----------------------------------------------------
-        # Header de resultados
+        # Results header
         # ----------------------------------------------------
 
         show_verdict(scorecard.verdict)
@@ -1057,11 +1057,11 @@ with tempfile.TemporaryDirectory(
         st.markdown(
             f"""
             <div class="profile-card">
-                <strong>Perfil usado:</strong>
+                <strong>Profile used:</strong>
                 {ts_result.profile}<br>
-                <strong>Perfil detectado:</strong>
+                <strong>Detected profile:</strong>
                 {detected_profile}<br>
-                <strong>Evidencia:</strong>
+                <strong>Evidence:</strong>
                 {detection_evidence}<br>
                 <strong>Scope Guard:</strong>
                 {match_result.scope_guard or "UNKNOWN"}
@@ -1210,42 +1210,42 @@ with tempfile.TemporaryDirectory(
         metric_columns = st.columns(7)
 
         metric_columns[0].metric(
-            "Placements trabajados",
+            "Worked Placements",
             match_result.expected_total,
         )
 
         metric_columns[1].metric(
-            "Encontrados",
+            "Found",
             len(match_result.matched),
         )
 
         metric_columns[2].metric(
-            "Faltantes",
+            "Missing",
             len(match_result.only_expected),
         )
 
         metric_columns[3].metric(
-            "Archivos de Tags",
+            "Tag Files",
             len(tags_results),
         )
 
         metric_columns[4].metric(
-            "Errores",
+            "Errors",
             scorecard.errors,
         )
 
         metric_columns[5].metric(
-            "Revisiones",
+            "Reviews",
             scorecard.reviews,
         )
 
         metric_columns[6].metric(
-            "No verificados",
+            "Not Verified",
             scorecard.not_verified,
         )
 
         # ----------------------------------------------------
-        # Preparar datos por placement
+        # Prepare per-placement data
         # ----------------------------------------------------
 
         matched_by_id = {
@@ -1281,7 +1281,7 @@ with tempfile.TemporaryDirectory(
                 if not tag_link.in_ts_scope:
                     outside_scope_tag_rows.append(
                         {
-                            "Archivo": file_name,
+                            "File": file_name,
                             "Placement ID": tag_link.placement_id,
                             "Placement Name": (
                                 tag_link.tag_row.placement_name
@@ -1292,8 +1292,8 @@ with tempfile.TemporaryDirectory(
                             "Third Party ID": (
                                 tag_link.tag_row.third_party_id
                             ),
-                            "Situación": (
-                                "Fuera del scope trabajado"
+                            "Status": (
+                                "Outside worked scope"
                             ),
                         }
                     )
@@ -1306,29 +1306,29 @@ with tempfile.TemporaryDirectory(
             tab_tags,
         ) = st.tabs(
             [
-                "Placements trabajados",
-                "Hallazgos",
-                "Reglas ejecutadas",
-                "Archivos y extracción",
-                "Cobertura de Tags",
+                "Worked Placements",
+                "Findings",
+                "Rules Executed",
+                "Files & Extraction",
+                "Tag Coverage",
             ]
         )
 
         # ====================================================
-        # TAB: Placements trabajados
+        # TAB: Worked Placements
         # ====================================================
 
         with tab_workspace:
             st.subheader(
-                "Placements trabajados en la solicitud"
+                "Worked Placements in the Request"
             )
 
             st.markdown(
                 """
                 <div class="section-note">
-                    Cada fila representa un placement del scope.
-                    Usa la flecha para desplegar creativos,
-                    URLs, attribution, tags y validaciones.
+                    Each row represents a placement in scope.
+                    Use the arrow to expand creatives,
+                    URLs, attribution, tags, and validations.
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1338,15 +1338,15 @@ with tempfile.TemporaryDirectory(
 
             with filter_columns[0]:
                 search_text = st.text_input(
-                    "Buscar Placement ID o nombre",
+                    "Search Placement ID or name",
                     placeholder=(
-                        "Escribe un ID o una parte del nombre"
+                        "Type an ID or part of the name"
                     ),
                 )
 
             with filter_columns[1]:
                 status_filter = st.multiselect(
-                    "Resultado",
+                    "Result",
                     options=[
                         "FAIL",
                         "REVIEW",
@@ -1386,7 +1386,7 @@ with tempfile.TemporaryDirectory(
                 ]
 
                 request_filter = st.multiselect(
-                    "Tipo de solicitud",
+                    "Request Type",
                     options=request_options,
                 )
 
@@ -1458,7 +1458,7 @@ with tempfile.TemporaryDirectory(
                     f"{expected.request_type}  |  "
                     f"{expected.dims or '-'}  |  "
                     f"{len(creative_links)} creative(s)  |  "
-                    f"{len(tag_records)} fila(s) de Tags  |  "
+                    f"{len(tag_records)} tag row(s)  |  "
                     f"{expected.name[:105]}"
                 )
 
@@ -1466,7 +1466,7 @@ with tempfile.TemporaryDirectory(
                     render_status_badge(status)
 
                     # ----------------------------------------
-                    # Resumen superior del placement
+                    # Placement summary header
                     # ----------------------------------------
 
                     placement_metrics = st.columns(5)
@@ -1477,27 +1477,27 @@ with tempfile.TemporaryDirectory(
                     )
 
                     placement_metrics[1].metric(
-                        "Solicitud",
+                        "Request",
                         expected.request_type or "-",
                     )
 
                     placement_metrics[2].metric(
-                        "Formato",
+                        "Format",
                         expected.fmt or "-",
                     )
 
                     placement_metrics[3].metric(
-                        "Creativos esperados",
+                        "Expected Creatives",
                         len(expected.creatives),
                     )
 
                     placement_metrics[4].metric(
-                        "Filas de Tags",
+                        "Tag Rows",
                         len(tag_records),
                     )
 
                     # ----------------------------------------
-                    # Placement TS vs Innovid
+                    # Placement: TS vs Innovid
                     # ----------------------------------------
 
                     st.markdown(
@@ -1570,11 +1570,11 @@ with tempfile.TemporaryDirectory(
                     )
 
                     # ----------------------------------------
-                    # Creativos
+                    # Creatives
                     # ----------------------------------------
 
                     st.markdown(
-                        "#### 2. Creativos y asignación"
+                        "#### 2. Creatives & Assignment"
                     )
 
                     creative_rows = []
@@ -1594,10 +1594,10 @@ with tempfile.TemporaryDirectory(
                                     "Intent": (
                                         expected_creative.intent
                                     ),
-                                    "Creative esperado": (
+                                    "Expected Creative": (
                                         expected_creative.name
                                     ),
-                                    "Creative encontrado": (
+                                    "Found Creative": (
                                         (
                                             actual_creative.filename
                                             or actual_creative.name
@@ -1616,10 +1616,10 @@ with tempfile.TemporaryDirectory(
                                         creative_link.trace.winner
                                         or "-"
                                     ),
-                                    "Confianza": (
+                                    "Confidence": (
                                         creative_link.confidence
                                     ),
-                                    "Estado": (
+                                    "Status": (
                                         actual_creative.state_label
                                         if actual_creative
                                         else "MISSING"
@@ -1645,16 +1645,16 @@ with tempfile.TemporaryDirectory(
                         )
                     else:
                         st.info(
-                            "No existen creativos individuales "
-                            "esperados para este placement."
+                            "No individual creatives are "
+                            "expected for this placement."
                         )
 
                     # ----------------------------------------
-                    # URL y attribution
+                    # URL and attribution
                     # ----------------------------------------
 
                     st.markdown(
-                        "#### 3. URLs y attribution"
+                        "#### 3. URLs & Attribution"
                     )
 
                     url_links = [
@@ -1668,8 +1668,8 @@ with tempfile.TemporaryDirectory(
 
                     if not url_links:
                         st.info(
-                            "No se ejecutaron validaciones "
-                            "URL o attribution para este placement."
+                            "No URL or attribution validations "
+                            "were run for this placement."
                         )
 
                     for creative_index, creative_link in enumerate(
@@ -1706,7 +1706,7 @@ with tempfile.TemporaryDirectory(
                         ):
                             if creative_link.url is not None:
                                 st.write(
-                                    "**Resultado de URL:**",
+                                    "**URL Result:**",
                                     creative_link.url.result,
                                 )
 
@@ -1714,21 +1714,21 @@ with tempfile.TemporaryDirectory(
 
                                 with url_columns[0]:
                                     st.caption(
-                                        "URL esperada en Traffic Sheet"
+                                        "URL expected in Traffic Sheet"
                                     )
                                     st.code(
                                         creative_link.url.expected.raw
-                                        or "Pendiente de confirmar",
+                                        or "Pending confirmation",
                                         language=None,
                                     )
 
                                 with url_columns[1]:
                                     st.caption(
-                                        "URL encontrada en Innovid"
+                                        "URL found in Innovid"
                                     )
                                     st.code(
                                         creative_link.url.actual.raw
-                                        or "Pendiente de confirmar",
+                                        or "Pending confirmation",
                                         language=None,
                                     )
 
@@ -1743,14 +1743,14 @@ with tempfile.TemporaryDirectory(
                                 )
 
                                 st.write(
-                                    "**Triángulo de attribution:**",
+                                    "**Attribution Triangle:**",
                                     triangle.result,
                                 )
 
                                 triangle_columns = st.columns(3)
 
                                 triangle_columns[0].metric(
-                                    "CGEN en TS",
+                                    "CGEN in TS",
                                     triangle.ts or "-",
                                 )
 
@@ -1760,13 +1760,13 @@ with tempfile.TemporaryDirectory(
                                 )
 
                                 triangle_columns[2].metric(
-                                    "sdid en URL",
+                                    "sdid in URL",
                                     triangle.url or "-",
                                 )
 
                                 st.caption(
                                     triangle.note
-                                    or "Sin detalle adicional."
+                                    or "No additional detail."
                                 )
 
                     # ----------------------------------------
@@ -1778,7 +1778,7 @@ with tempfile.TemporaryDirectory(
                         and placement_match.actual_extra
                     ):
                         st.markdown(
-                            "#### 4. Creativos extra en Innovid"
+                            "#### 4. Extra Creatives in Innovid"
                         )
 
                         extra_rows = []
@@ -1791,13 +1791,13 @@ with tempfile.TemporaryDirectory(
                                     "Creative ID": (
                                         extra.creative_id
                                     ),
-                                    "Nombre o filename": (
+                                    "Name or filename": (
                                         extra.filename
                                         or extra.name
                                     ),
-                                    "Estado": extra.state_label,
-                                    "Corriendo": (
-                                        "Sí"
+                                    "Status": extra.state_label,
+                                    "Running": (
+                                        "Yes"
                                         if extra.running
                                         else "No"
                                     ),
@@ -1817,17 +1817,17 @@ with tempfile.TemporaryDirectory(
                         )
 
                     # ----------------------------------------
-                    # Tags entregados
+                    # Delivered tags
                     # ----------------------------------------
 
                     st.markdown(
-                        "#### 5. Archivos de Tags"
+                        "#### 5. Tag Files"
                     )
 
                     if not tag_records:
                         st.info(
-                            "No se cargó ningún archivo de Tags "
-                            "que contenga este Placement ID."
+                            "No Tag file containing this "
+                            "Placement ID was uploaded."
                         )
                     else:
                         tag_summary_rows = []
@@ -1839,7 +1839,7 @@ with tempfile.TemporaryDirectory(
 
                             tag_summary_rows.append(
                                 {
-                                    "Archivo": (
+                                    "File": (
                                         tag_record["file_name"]
                                     ),
                                     "Placement ID": (
@@ -1857,10 +1857,10 @@ with tempfile.TemporaryDirectory(
                                     "Prisma ID": (
                                         tag_row.prisma_id
                                     ),
-                                    "Cantidad de tags": (
+                                    "Tag Count": (
                                         tag_row.tag_count
                                     ),
-                                    "Tipos detectados": ", ".join(
+                                    "Detected Types": ", ".join(
                                         sorted(
                                             {
                                                 tag.tag_type
@@ -1890,7 +1890,7 @@ with tempfile.TemporaryDirectory(
                             )
 
                             with st.expander(
-                                f"Ver Tags completos | {file_name}"
+                                f"View Full Tags | {file_name}"
                             ):
                                 tag_metadata_columns = (
                                     st.columns(4)
@@ -1928,42 +1928,42 @@ with tempfile.TemporaryDirectory(
                                     tag_information = pd.DataFrame(
                                         [
                                             {
-                                                "Dato": (
+                                                "Field": (
                                                     "Campaign IDs"
                                                 ),
-                                                "Valor": ", ".join(
+                                                "Value": ", ".join(
                                                     tag.campaign_ids
                                                 ),
                                             },
                                             {
-                                                "Dato": (
+                                                "Field": (
                                                     "Placement IDs"
                                                 ),
-                                                "Valor": ", ".join(
+                                                "Value": ", ".join(
                                                     tag.placement_ids
                                                 ),
                                             },
                                             {
-                                                "Dato": "Hosts",
-                                                "Valor": ", ".join(
+                                                "Field": "Hosts",
+                                                "Value": ", ".join(
                                                     tag.hosts
                                                 ),
                                             },
                                             {
-                                                "Dato": "Macros",
-                                                "Valor": ", ".join(
+                                                "Field": "Macros",
+                                                "Value": ", ".join(
                                                     tag.macros
                                                 ),
                                             },
                                             {
-                                                "Dato": "Widths",
-                                                "Valor": ", ".join(
+                                                "Field": "Widths",
+                                                "Value": ", ".join(
                                                     tag.widths
                                                 ),
                                             },
                                             {
-                                                "Dato": "Heights",
-                                                "Valor": ", ".join(
+                                                "Field": "Heights",
+                                                "Value": ", ".join(
                                                     tag.heights
                                                 ),
                                             },
@@ -1982,11 +1982,11 @@ with tempfile.TemporaryDirectory(
                                     )
 
                     # ----------------------------------------
-                    # Findings del placement
+                    # Placement findings
                     # ----------------------------------------
 
                     st.markdown(
-                        "#### 6. Validaciones ejecutadas"
+                        "#### 6. Validations Run"
                     )
 
                     current_findings = placement_findings(
@@ -2002,8 +2002,8 @@ with tempfile.TemporaryDirectory(
 
                     if current_findings_df.empty:
                         st.info(
-                            "No existen resultados de reglas "
-                            "asociados a este placement."
+                            "No rule results are associated "
+                            "with this placement."
                         )
                     else:
                         st.dataframe(
@@ -2024,21 +2024,21 @@ with tempfile.TemporaryDirectory(
 
             if visible_count == 0:
                 st.warning(
-                    "No hay placements que coincidan "
-                    "con los filtros seleccionados."
+                    "No placements match the "
+                    "selected filters."
                 )
             else:
                 st.caption(
-                    f"Placements visibles: {visible_count}"
+                    f"Visible placements: {visible_count}"
                 )
 
         # ====================================================
-        # TAB: Hallazgos
+        # TAB: Findings
         # ====================================================
 
         with tab_attention:
             st.subheader(
-                "Hallazgos que requieren atención"
+                "Findings That Require Attention"
             )
 
             attention_findings = [
@@ -2053,13 +2053,13 @@ with tempfile.TemporaryDirectory(
 
             if attention_df.empty:
                 st.success(
-                    "No se detectaron errores, revisiones "
-                    "o validaciones pendientes."
+                    "No errors, reviews, or pending "
+                    "validations were detected."
                 )
             else:
                 selected_attention_statuses = (
                     st.multiselect(
-                        "Filtrar status",
+                        "Filter status",
                         options=[
                             "FAIL",
                             "REVIEW",
@@ -2091,23 +2091,23 @@ with tempfile.TemporaryDirectory(
                 )
 
                 st.download_button(
-                    "Descargar hallazgos CSV",
+                    "Download Findings CSV",
                     data=filtered_attention_df.to_csv(
                         index=False,
                         encoding="utf-8-sig",
                     ),
-                    file_name="qa2_hallazgos.csv",
+                    file_name="qa2_findings.csv",
                     mime="text/csv",
                     use_container_width=True,
                 )
 
         # ====================================================
-        # TAB: Reglas ejecutadas
+        # TAB: Rules Executed
         # ====================================================
 
         with tab_rules:
             st.subheader(
-                "Cobertura de reglas ejecutadas"
+                "Rule Execution Coverage"
             )
 
             rules_dataframe = (
@@ -2118,7 +2118,7 @@ with tempfile.TemporaryDirectory(
 
             if rules_dataframe.empty:
                 st.warning(
-                    "El Rule Engine no emitió resultados."
+                    "The Rule Engine did not emit any results."
                 )
             else:
                 st.dataframe(
@@ -2128,12 +2128,12 @@ with tempfile.TemporaryDirectory(
                 )
 
         # ====================================================
-        # TAB: Archivos y extracción
+        # TAB: Files & Extraction
         # ====================================================
 
         with tab_files:
             st.subheader(
-                "Comprensión de documentos"
+                "Document Understanding"
             )
 
             st.dataframe(
@@ -2145,20 +2145,20 @@ with tempfile.TemporaryDirectory(
             st.markdown("#### Traffic Sheet")
 
             st.write(
-                f"**Perfil usado:** {ts_result.profile}"
+                f"**Profile used:** {ts_result.profile}"
             )
 
             st.write(
-                f"**Perfil detectado:** "
+                f"**Detected profile:** "
                 f"{detected_profile}"
             )
 
             st.write(
-                f"**Evidencia:** {detection_evidence}"
+                f"**Evidence:** {detection_evidence}"
             )
 
             st.write(
-                f"**Placements trabajados:** "
+                f"**Worked placements:** "
                 f"{len(ts_result.worked)}"
             )
 
@@ -2167,7 +2167,7 @@ with tempfile.TemporaryDirectory(
             scope_columns = st.columns(3)
 
             scope_columns[0].metric(
-                "Resultado",
+                "Result",
                 match_result.scope_guard or "UNKNOWN",
             )
 
@@ -2186,7 +2186,7 @@ with tempfile.TemporaryDirectory(
             )
 
             st.markdown(
-                "#### Anomalías de extracción"
+                "#### Extraction Anomalies"
             )
 
             if all_anomaly_rows:
@@ -2199,22 +2199,22 @@ with tempfile.TemporaryDirectory(
                 )
             else:
                 st.success(
-                    "No se detectaron anomalías "
-                    "de extracción."
+                    "No extraction anomalies "
+                    "were detected."
                 )
 
         # ====================================================
-        # TAB: Cobertura Tags
+        # TAB: Tag Coverage
         # ====================================================
 
         with tab_tags:
             st.subheader(
-                "Cobertura de archivos de Tags"
+                "Tag File Coverage"
             )
 
             if not tag_matches:
                 st.info(
-                    "No se cargaron archivos de Tags."
+                    "No Tag files were uploaded."
                 )
             else:
                 tag_file_summary = []
@@ -2226,30 +2226,30 @@ with tempfile.TemporaryDirectory(
                 ) in tag_matches:
                     tag_file_summary.append(
                         {
-                            "Archivo": file_name,
+                            "File": file_name,
                             "Campaign ID": (
                                 tags_result.campaign_id
                             ),
-                            "Hoja": tags_result.sheet,
+                            "Sheet": tags_result.sheet,
                             "Placements": (
                                 tags_result.distinct_placements
                             ),
-                            "Tags materializados": (
+                            "Materialized Tags": (
                                 tags_result.total_tags
                             ),
-                            "Filas dentro de scope": (
+                            "Rows In Scope": (
                                 len(
                                     tag_match_result
                                     .matched_to_scope
                                 )
                             ),
-                            "Filas fuera de scope": (
+                            "Rows Out of Scope": (
                                 len(
                                     tag_match_result
                                     .outside_scope
                                 )
                             ),
-                            "Sin match Innovid": (
+                            "No Innovid Match": (
                                 len(
                                     tag_match_result
                                     .missing_in_innovid
@@ -2267,8 +2267,8 @@ with tempfile.TemporaryDirectory(
                 )
 
                 st.markdown(
-                    "#### Placements de Tags "
-                    "fuera del scope trabajado"
+                    "#### Tag Placements "
+                    "Outside Worked Scope"
                 )
 
                 if outside_scope_tag_rows:
@@ -2282,13 +2282,13 @@ with tempfile.TemporaryDirectory(
                     )
                 else:
                     st.success(
-                        "Todos los placements encontrados "
-                        "en Tags pertenecen al scope trabajado."
+                        "All placements found in Tags "
+                        "belong to the worked scope."
                     )
 
     except Exception as error:
         st.error(
-            "QA2 no pudo completar el procesamiento."
+            "QA2 could not complete processing."
         )
 
         st.exception(error)
