@@ -695,6 +695,61 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    uploaded_evidence = st.file_uploader(
+        "5. Upload evidence screenshots",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="qa2_evidence",
+    )
+
+    st.markdown(
+        """
+        <div class="upload-help">
+            Optional. Included as an Implementation Evidence
+            section in the PDF report.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+    with st.expander("Implementation Record (optional)"):
+        st.caption(
+            "Included in the PDF report. Leave blank to fill by hand."
+        )
+
+        record_campaign = st.text_input(
+            "Campaign", key="qa2_record_campaign"
+        )
+        record_wrike_id = st.text_input(
+            "Wrike ID", key="qa2_record_wrike"
+        )
+        record_implemented_by = st.text_input(
+            "Implemented By", key="qa2_record_impl_by"
+        )
+        record_implementation_date = st.date_input(
+            "Implementation Date",
+            value=None,
+            key="qa2_record_impl_date",
+        )
+        record_qa2_by = st.text_input(
+            "QA2 By", key="qa2_record_qa2_by"
+        )
+        record_qa2_date = st.date_input(
+            "QA2 Date",
+            value=None,
+            key="qa2_record_qa2_date",
+        )
+        record_qa3_by = st.text_input(
+            "QA3 By", key="qa2_record_qa3_by"
+        )
+        record_qa3_date = st.date_input(
+            "QA3 Date",
+            value=None,
+            key="qa2_record_qa3_date",
+        )
+
     st.divider()
 
     selected_profile = st.selectbox(
@@ -1329,63 +1384,6 @@ with tempfile.TemporaryDirectory(
         )
 
         # ----------------------------------------------------
-        # Downloadable PDF report
-        # ----------------------------------------------------
-
-        pdf_report_bytes = build_pdf_report(
-            ReportMeta(
-                verdict=scorecard.verdict,
-                verdict_label=VERDICT_LABELS.get(
-                    scorecard.verdict, scorecard.verdict
-                ),
-                profile_used=ts_result.profile,
-                detected_profile=detected_profile,
-                detection_evidence=detection_evidence,
-                scope_guard=match_result.scope_guard or "UNKNOWN",
-                scope_evidence=match_result.scope_evidence,
-                ts_campaign_id=match_result.ts_campaign_id,
-                export_campaign_id=match_result.export_campaign_id,
-                metrics={
-                    "Worked Placements": match_result.expected_total,
-                    "Found": len(match_result.matched),
-                    "Missing": len(match_result.only_expected),
-                    "Tag Files": len(tags_results),
-                    "Errors": scorecard.errors,
-                    "Reviews": scorecard.reviews,
-                    "Not Verified": scorecard.not_verified,
-                },
-                source_files=[
-                    row["File"] for row in file_rows
-                ],
-            ),
-            findings_df=findings_dataframe(
-                [
-                    finding
-                    for finding in findings_buffer.findings
-                    if finding.status.value != "PASS"
-                ]
-            ),
-            rules_df=rule_summary_dataframe(findings_buffer),
-            files_df=files_dataframe,
-            logo_path=(
-                PROJECT_ROOT
-                / "ui"
-                / "assets"
-                / "wpp-media-logo.png.png"
-            ),
-        )
-
-        st.download_button(
-            "Download PDF Report",
-            data=pdf_report_bytes,
-            file_name=(
-                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-            ),
-            mime="application/pdf",
-            use_container_width=True,
-        )
-
-        # ----------------------------------------------------
         # Prepare per-placement data
         # ----------------------------------------------------
 
@@ -1438,6 +1436,124 @@ with tempfile.TemporaryDirectory(
                             ),
                         }
                     )
+
+        # ----------------------------------------------------
+        # Downloadable PDF report
+        # ----------------------------------------------------
+
+        placement_ids_for_pdf = sorted(
+            set(matched_by_id) | set(expected_missing_by_id)
+        )
+
+        placements_rows_for_pdf = []
+
+        for placement_id in placement_ids_for_pdf:
+            placement_match = matched_by_id.get(placement_id)
+
+            if placement_match is not None:
+                expected = placement_match.expected
+                actual = placement_match.actual
+            else:
+                expected = expected_missing_by_id[placement_id]
+                actual = None
+
+            status = placement_status(
+                placement_id,
+                findings_buffer,
+            )
+
+            creative_links = (
+                placement_match.creative_links
+                if placement_match
+                else []
+            )
+
+            tag_records = tags_by_placement.get(placement_id, [])
+
+            placements_rows_for_pdf.append(
+                {
+                    "Status": status,
+                    "Placement ID": placement_id,
+                    "Placement Name": expected.name,
+                    "Request Type": expected.request_type or "-",
+                    "Dimensions": expected.dims or "-",
+                    "Creatives": len(creative_links),
+                    "Tag Rows": len(tag_records),
+                    "Found in Innovid": (
+                        "Yes" if actual else "No"
+                    ),
+                }
+            )
+
+        evidence_images = []
+
+        for uploaded_image in uploaded_evidence or []:
+            evidence_images.append(
+                (uploaded_image.name, uploaded_image.getvalue())
+            )
+
+        pdf_report_bytes = build_pdf_report(
+            ReportMeta(
+                verdict=scorecard.verdict,
+                verdict_label=VERDICT_LABELS.get(
+                    scorecard.verdict, scorecard.verdict
+                ),
+                profile_used=ts_result.profile,
+                detected_profile=detected_profile,
+                detection_evidence=detection_evidence,
+                scope_guard=match_result.scope_guard or "UNKNOWN",
+                scope_evidence=match_result.scope_evidence,
+                ts_campaign_id=match_result.ts_campaign_id,
+                export_campaign_id=match_result.export_campaign_id,
+                metrics={
+                    "Worked Placements": match_result.expected_total,
+                    "Found": len(match_result.matched),
+                    "Missing": len(match_result.only_expected),
+                    "Tag Files": len(tags_results),
+                    "Errors": scorecard.errors,
+                    "Reviews": scorecard.reviews,
+                    "Not Verified": scorecard.not_verified,
+                },
+                source_files=[
+                    row["File"] for row in file_rows
+                ],
+                campaign=record_campaign,
+                wrike_id=record_wrike_id,
+                implemented_by=record_implemented_by,
+                implementation_date=record_implementation_date,
+                qa2_by=record_qa2_by,
+                qa2_date=record_qa2_date,
+                qa3_by=record_qa3_by,
+                qa3_date=record_qa3_date,
+            ),
+            findings_df=findings_dataframe(
+                [
+                    finding
+                    for finding in findings_buffer.findings
+                    if finding.status.value != "PASS"
+                ]
+            ),
+            rules_df=rule_summary_dataframe(findings_buffer),
+            files_df=files_dataframe,
+            placements_df=pd.DataFrame(placements_rows_for_pdf),
+            evidence_images=evidence_images,
+            logo_path=(
+                PROJECT_ROOT
+                / "ui"
+                / "assets"
+                / "wpp-media-logo.png.png"
+            ),
+        )
+
+        st.download_button(
+            "Download PDF Report",
+            data=pdf_report_bytes,
+            file_name=(
+                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
         (
             tab_workspace,

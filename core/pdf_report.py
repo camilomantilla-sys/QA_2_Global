@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd  # type: ignore
@@ -18,6 +18,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     Image,
     KeepTogether,
@@ -28,6 +29,8 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+PAGE_W, PAGE_H = letter
 
 WPP_INDIGO = HexColor("#4B5EEA")
 WPP_INDIGO_DARK = HexColor("#2C36A8")
@@ -71,6 +74,17 @@ class ReportMeta:
     metrics: dict[str, int] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
     source_files: list[str] = field(default_factory=list)
+
+    # Implementation record -- filled from the sidebar, or left blank
+    # for the reviewer to fill by hand on a printed copy.
+    campaign: str = ""
+    wrike_id: str = ""
+    implemented_by: str = ""
+    implementation_date: date | None = None
+    qa2_by: str = ""
+    qa2_date: date | None = None
+    qa3_by: str = ""
+    qa3_date: date | None = None
 
 
 def _styles():
@@ -204,6 +218,60 @@ def _info_flowable(meta: ReportMeta, styles):
     return t
 
 
+def _blank(value: str | None, width: int = 28) -> str:
+    """Render a filled value, or an underscored blank line to fill by hand."""
+    if value:
+        return str(value)
+    return "_" * width
+
+
+def _blank_date(value: date | None) -> str:
+    if value:
+        return value.strftime("%Y-%m-%d")
+    return "_" * 14
+
+
+def _record_flowable(meta: ReportMeta, styles):
+    left = [
+        f"<b>Campaign:</b> {_blank(meta.campaign, 34)}",
+        f"<b>Wrike ID:</b> {_blank(meta.wrike_id, 20)}",
+        f"<b>Implemented By:</b> {_blank(meta.implemented_by, 24)}",
+        f"<b>Implementation Date:</b> "
+        f"{_blank_date(meta.implementation_date)}",
+    ]
+    right = [
+        f"<b>QA2 By:</b> {_blank(meta.qa2_by, 24)}",
+        f"<b>QA2 Date:</b> {_blank_date(meta.qa2_date)}",
+        f"<b>QA3 By:</b> {_blank(meta.qa3_by, 24)}",
+        f"<b>QA3 Date:</b> {_blank_date(meta.qa3_date)}",
+    ]
+
+    left_para = Paragraph("<br/><br/>".join(left), styles["body"])
+    right_para = Paragraph("<br/><br/>".join(right), styles["body"])
+
+    t = Table([[left_para, right_para]], colWidths=[85 * mm, 85 * mm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.75, WPP_BORDER),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, WPP_BORDER),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                ("TOPPADDING", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+            ]
+        )
+    )
+
+    caption = Paragraph(
+        "IMPLEMENTATION RECORD &mdash; fill in the app or by hand",
+        styles["muted"],
+    )
+    return [caption, Spacer(1, 4), t]
+
+
 def _metrics_flowable(meta: ReportMeta, styles):
     items = list(meta.metrics.items())
     cells = []
@@ -294,11 +362,74 @@ def _df_to_table(df: pd.DataFrame, styles, col_widths=None,
     return flowables
 
 
+def _evidence_flowables(
+    evidence_images: list[tuple[str, bytes]], styles
+):
+    if not evidence_images:
+        return [
+            Paragraph(
+                "No evidence screenshots were attached to this run.",
+                styles["muted"],
+            )
+        ]
+
+    max_w, max_h = 170 * mm, 150 * mm
+    flowables = []
+
+    for name, raw_bytes in evidence_images:
+        try:
+            reader = ImageReader(io.BytesIO(raw_bytes))
+            iw, ih = reader.getSize()
+        except Exception:
+            continue
+
+        scale = min(max_w / iw, max_h / ih, 1.0) if iw and ih else 1.0
+        w, h = iw * scale, ih * scale
+
+        img = Image(io.BytesIO(raw_bytes), width=w, height=h)
+        caption = Paragraph(name, styles["muted"])
+        frame = Table(
+            [[img], [caption]],
+            colWidths=[170 * mm],
+        )
+        frame.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 0.75, WPP_BORDER),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        flowables.append(KeepTogether([frame, Spacer(1, 12)]))
+
+    return flowables
+
+
+def _footer(canvas, doc):
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(WPP_MUTED)
+    canvas.drawString(
+        20 * mm, 10 * mm, "WPP Media · Innovid QA2 Automation"
+    )
+    canvas.drawRightString(
+        PAGE_W - 20 * mm, 10 * mm, f"Page {doc.page}"
+    )
+    canvas.setStrokeColor(WPP_BORDER)
+    canvas.setLineWidth(0.5)
+    canvas.line(20 * mm, 13 * mm, PAGE_W - 20 * mm, 13 * mm)
+    canvas.restoreState()
+
+
 def build_pdf_report(
     meta: ReportMeta,
     findings_df: pd.DataFrame,
     rules_df: pd.DataFrame,
     files_df: pd.DataFrame,
+    placements_df: pd.DataFrame | None = None,
+    evidence_images: list[tuple[str, bytes]] | None = None,
     logo_path: Path | None = None,
 ) -> bytes:
     """Render the full branded QA2 report and return it as PDF bytes."""
@@ -322,10 +453,60 @@ def build_pdf_report(
     story.append(_info_flowable(meta, styles))
     story.append(Spacer(1, 10))
     story.append(_metrics_flowable(meta, styles))
+    story.append(Spacer(1, 14))
+    story += _record_flowable(meta, styles)
 
     story.append(Spacer(1, 6))
     story.append(PageBreak())
 
+    story.append(Paragraph("Worked Placements — Scope", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Every placement in the worked scope, with its match "
+            "status against Innovid. The app's collapsible detail "
+            "per placement (creatives, URLs, attribution, tags) is "
+            "in the Findings table below.",
+            styles["muted"],
+        )
+    )
+    story.append(Spacer(1, 6))
+    placements_df = (
+        placements_df if placements_df is not None else pd.DataFrame()
+    )
+    story.append(
+        Paragraph(
+            f"Total placements: {len(placements_df)}", styles["muted"]
+        )
+    )
+    story.append(Spacer(1, 4))
+    placements_cols = [
+        c for c in [
+            "Status", "Placement ID", "Placement Name", "Request Type",
+            "Dimensions", "Creatives", "Tag Rows", "Found in Innovid",
+        ]
+        if c in placements_df.columns
+    ]
+    placements_widths = None
+    if placements_cols:
+        weights = {
+            "Status": 0.08, "Placement ID": 0.10,
+            "Placement Name": 0.34, "Request Type": 0.13,
+            "Dimensions": 0.10, "Creatives": 0.08, "Tag Rows": 0.08,
+            "Found in Innovid": 0.09,
+        }
+        total = 170 * mm
+        placements_widths = [
+            total * weights.get(c, 1 / len(placements_cols))
+            for c in placements_cols
+        ]
+    result = _df_to_table(
+        placements_df[placements_cols]
+        if placements_cols else placements_df,
+        styles, col_widths=placements_widths, status_col="Status",
+    )
+    story += result if isinstance(result, list) else [result]
+
+    story.append(PageBreak())
     story.append(Paragraph("Findings", styles["h2"]))
     story.append(
         Paragraph(
@@ -374,5 +555,17 @@ def build_pdf_report(
     result = _df_to_table(files_df, styles, status_col="Status")
     story += result if isinstance(result, list) else [result]
 
-    doc.build(story)
+    story.append(PageBreak())
+    story.append(Paragraph("Implementation Evidence", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Screenshots attached in the app as evidence of the "
+            "Innovid implementation.",
+            styles["muted"],
+        )
+    )
+    story.append(Spacer(1, 8))
+    story += _evidence_flowables(evidence_images or [], styles)
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return buffer.getvalue()
