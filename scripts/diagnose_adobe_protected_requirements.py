@@ -1,12 +1,13 @@
 """
-Adobe Protected requirement diagnostic.
+Adobe Protected diagnostic.
+
+Protected is identified from Traffic Sheet Vendors / Pixels.
 
 Business rule:
-- Protected is identified from Traffic Sheet Vendors / Pixels.
-- Protected content is not validated by automated QA2.
-- Every worked placement requesting Protected receives N/A.
-- N/A does not affect the QA2 verdict.
-- Coverage is consolidated by Placement ID.
+- Protected is recognized for coverage and traceability.
+- Protected tag content is not evaluated by automated QA2.
+- Every worked placement requesting Protected returns N/A.
+- N/A does not affect the verdict.
 """
 from __future__ import annotations
 
@@ -14,36 +15,25 @@ from collections import Counter
 from pathlib import Path
 
 from core.tag_inventory import build_tag_inventory
-from parsers.ts_parser import (
-    REQ_NOT_WORKED,
-    parse_ts,
-)
+from parsers.ts_parser import REQ_NOT_WORKED, parse_ts
 
 
-CASE_DIR = Path(
-    "tests/test_adobe_1x1_3pd_direct"
-)
+CASE_DIR = Path("tests/test_adobe_1x1_3pd_direct")
 
-TS_PATH = (
-    CASE_DIR
-    / "TS_FY26_Q4_AMER_Creative_STEDiscover_"
-      "Awareness_Discover_ASY_C.xlsx"
+TS_PATH = CASE_DIR / (
+    "TS_FY26_Q4_AMER_Creative_STEDiscover_"
+    "Awareness_Discover_ASY_C.xlsx"
 )
 
 
 def get_tag_paths() -> list:
-    """
-    Find all delivered tag files recursively.
-
-    Temporary Excel lock files beginning with ~$ are excluded.
-    """
+    """Find all delivered tag files under the test case."""
     return sorted(
         (
             path
             for path in CASE_DIR.rglob("*")
             if path.is_file()
-            and path.suffix.casefold()
-            in {".xlsx", ".xlsm"}
+            and path.suffix.casefold() in {".xlsx", ".xlsm"}
             and path.name.casefold().startswith("tags")
             and not path.name.startswith("~$")
         ),
@@ -55,47 +45,30 @@ def get_tag_paths() -> list:
 
 
 def requires_protected(value: object) -> bool:
-    """
-    Detect Protected in Traffic Sheet Vendors / Pixels.
-
-    Examples:
-        ftrack, DISQO, Protected
-        fTrack, Protected, DISQO
-        Protected
-    """
-    return "protected" in str(
-        value or ""
-    ).casefold()
+    """Return True when Vendors / Pixels requests Protected."""
+    return "protected" in str(value or "").casefold()
 
 
-def worked_placement_ids(ts_result) -> set:
-    """
-    Return only placements worked in the current request.
-
-    ts.scope is the canonical source of QA2 scope.
-    """
+def get_worked_ids(ts_result) -> set:
+    """Use the canonical QA2 scope, excluding context placements."""
     return {
         str(placement_id).strip()
-        for placement_id, scope
-        in ts_result.scope.items()
+        for placement_id, scope in ts_result.scope.items()
         if str(placement_id).strip()
         and scope.request_type != REQ_NOT_WORKED
     }
 
 
-def protected_requirements(
+def build_protected_records(
     ts_result,
+    worked_ids: set[str],
 ) -> dict[str, dict]:
     """
     Consolidate Protected requirements by Placement ID.
 
-    A placement may occupy multiple Traffic Sheet rows but is evaluated
-    only once.
+    The same Placement ID may occupy multiple Traffic Sheet rows,
+    but is evaluated only once.
     """
-    worked_ids = worked_placement_ids(
-        ts_result
-    )
-
     records: dict[str, dict] = {}
 
     for row in ts_result.placements.rows:
@@ -124,116 +97,86 @@ def protected_requirements(
             },
         )
 
-        if vendor_raw:
-            record["vendors"].add(
-                vendor_raw
-            )
+        record["vendors"].add(vendor_raw)
 
         if not record["placement_name"]:
             record["placement_name"] = str(
-                row.values.get(
-                    "placement_name"
-                )
-                or ""
+                row.values.get("placement_name") or ""
             ).strip()
 
         if not record["site"]:
             record["site"] = str(
-                row.values.get("site")
-                or ""
+                row.values.get("site") or ""
             ).strip()
 
         if not record["dimensions"]:
             record["dimensions"] = str(
-                row.values.get(
-                    "dimensions"
-                )
-                or ""
+                row.values.get("dimensions") or ""
             ).strip()
 
-        scope = ts_result.scope.get(
-            placement_id
-        )
+        scope = ts_result.scope.get(placement_id)
 
         if scope is not None:
             record["request_type"] = str(
                 scope.request_type or ""
-            )
+            ).strip()
 
     return records
 
 
-def populated_protected_columns(
+def protected_tag_evidence(
     inventory,
     placement_id: str,
 ) -> tuple[list[str], list[str]]:
     """
-    Collect populated Protected columns as informational evidence only.
+    Return populated Protected columns as informational evidence.
 
-    Their presence or absence never changes the N/A result.
+    Presence or absence does not change the N/A result.
     """
     columns: set[str] = set()
-    evidence: list[str] = []
+    evidence: set[str] = set()
 
-    for source in inventory.by_placement.get(
-        placement_id,
-        [],
-    ):
+    for source in inventory.by_placement.get(placement_id, []):
         for tag in source.row.tags:
-            raw = str(
-                tag.raw or ""
-            ).strip()
-
-            column_name = str(
-                tag.column_name or ""
-            ).strip()
+            raw = str(tag.raw or "").strip()
+            column_name = str(tag.column_name or "").strip()
 
             if not raw:
                 continue
 
-            if "protected" not in (
+            searchable = (
                 column_name.casefold()
                 + " "
                 + raw.casefold()
-            ):
+            )
+
+            if "protected" not in searchable:
                 continue
 
             columns.add(column_name)
-
-            evidence.append(
+            evidence.add(
                 f"{source.file_name} | "
                 f"{source.sheet} | "
                 f"row {source.row.row} | "
                 f"{column_name}"
             )
 
-    return (
-        sorted(columns),
-        sorted(set(evidence)),
-    )
+    return sorted(columns), sorted(evidence)
 
 
 def main() -> None:
     if not TS_PATH.exists():
         raise SystemExit(
-            f"Traffic Sheet not found: "
-            f"{TS_PATH}"
+            f"Traffic Sheet not found: {TS_PATH}"
         )
-
-    tag_paths = get_tag_paths()
 
     ts_result = parse_ts(TS_PATH)
 
     if ts_result.fatal:
-        print(
-            "FATAL TRAFFIC SHEET ANOMALIES"
-        )
-
         for anomaly in ts_result.anomalies:
             if anomaly.severity == "FATAL":
                 print(
-                    f"{anomaly.code} | "
-                    f"{anomaly.message}"
+                    f"{anomaly.code} | {anomaly.message}"
                 )
 
         raise SystemExit(
@@ -245,103 +188,53 @@ def main() -> None:
             "Placements sheet was not parsed."
         )
 
-    inventory = build_tag_inventory(
-        tag_paths
+    tag_paths = get_tag_paths()
+    inventory = build_tag_inventory(tag_paths)
+
+    worked_ids = get_worked_ids(ts_result)
+
+    protected_records = build_protected_records(
+        ts_result,
+        worked_ids,
     )
 
-    worked_ids = worked_placement_ids(
-        ts_result
-    )
+    details: list[dict] = []
+    status_counts: Counter[str] = Counter()
 
-    requirements = protected_requirements(
-        ts_result
-    )
+    for placement_id in sorted(protected_records):
+        record = protected_records[placement_id]
 
-    status_counts: Counter[str] = (
-        Counter()
-    )
-
-    details = []
-
-    for placement_id in sorted(
-        requirements
-    ):
-        requirement = requirements[
-            placement_id
-        ]
-
-        columns, evidence = (
-            populated_protected_columns(
-                inventory,
-                placement_id,
-            )
+        columns, evidence = protected_tag_evidence(
+            inventory,
+            placement_id,
         )
 
-        status = "N/A"
-        status_counts[status] += 1
+        status_counts["N/A"] += 1
 
         details.append(
             {
-                "status": status,
-                "placement_id": (
-                    placement_id
-                ),
-                "placement_name": (
-                    requirement[
-                        "placement_name"
-                    ]
-                ),
-                "site": requirement["site"],
-                "dimensions": (
-                    requirement[
-                        "dimensions"
-                    ]
-                ),
-                "request_type": (
-                    requirement[
-                        "request_type"
-                    ]
-                ),
+                "status": "N/A",
+                "placement_id": placement_id,
+                "placement_name": record["placement_name"],
                 "vendor": " | ".join(
-                    sorted(
-                        requirement[
-                            "vendors"
-                        ]
-                    )
+                    sorted(record["vendors"])
                 ),
+                "site": record["site"],
+                "dimensions": record["dimensions"],
+                "request_type": record["request_type"],
                 "columns": columns,
-                "message": (
-                    "Protected is declared "
-                    "in the Traffic Sheet. "
-                    "Protected tag content "
-                    "is not evaluated by "
-                    "automated QA2."
-                ),
-                "action": (
-                    "No automated correction "
-                    "is required."
-                ),
                 "evidence": evidence,
             }
         )
 
     print("=" * 105)
-    print(
-        "PIX-A05 | ADOBE PROTECTED "
-        "DIAGNOSTIC"
-    )
+    print("PIX-A05 | ADOBE PROTECTED DIAGNOSTIC")
     print("=" * 105)
 
     print()
     print("INPUTS")
-    print(
-        f"Traffic Sheet        : "
-        f"{TS_PATH.name}"
-    )
-    print(
-        f"Tag files            : "
-        f"{len(tag_paths)}"
-    )
+    print(f"Traffic Sheet        : {TS_PATH.name}")
+    print(f"Tag files            : {len(tag_paths)}")
     print(
         f"Tag inventory rows   : "
         f"{inventory.distinct_placements}"
@@ -354,12 +247,11 @@ def main() -> None:
     print()
     print("COVERAGE")
     print(
-        f"Worked placements    : "
-        f"{len(worked_ids)}"
+        f"Worked placements    : {len(worked_ids)}"
     )
     print(
         f"Protected placements : "
-        f"{len(requirements)}"
+        f"{len(protected_records)}"
     )
 
     print()
@@ -383,8 +275,7 @@ def main() -> None:
     for item in details:
         print("-" * 105)
         print(
-            f"Result              : "
-            f"{item['status']}"
+            f"Result              : {item['status']}"
         )
         print(
             f"Placement ID        : "
@@ -395,12 +286,10 @@ def main() -> None:
             f"{item['placement_name']}"
         )
         print(
-            f"Vendor TS           : "
-            f"{item['vendor']}"
+            f"Vendor TS           : {item['vendor']}"
         )
         print(
-            f"Site                : "
-            f"{item['site']}"
+            f"Site                : {item['site']}"
         )
         print(
             f"Dimensions          : "
@@ -415,42 +304,21 @@ def main() -> None:
             f"{item['columns']}"
         )
         print(
-            f"Message             : "
-            f"{item['message']}"
+            "Message             : Protected is declared "
+            "in the Traffic Sheet. Protected tag content "
+            "is not evaluated by automated QA2."
         )
         print(
-            f"Recommended Action  : "
-            f"{item['action']}"
+            "Recommended Action  : "
+            "No automated correction is required."
         )
 
         for evidence in item["evidence"]:
-            print(
-                f"Evidence            : "
-                f"{evidence}"
-            )
+            print(f"Evidence            : {evidence}")
 
     print()
     print("ATTENTION REQUIRED")
-
-    attention = [
-        item
-        for item in details
-        if item["status"] in {
-            "FAIL",
-            "REVIEW",
-            "NOT_VERIFIED",
-        }
-    ]
-
-    if not attention:
-        print("None")
-    else:
-        for item in attention:
-            print(
-                f"{item['status']:8} | "
-                f"{item['placement_id']} | "
-                f"{item['message']}"
-            )
+    print("None")
 
     print()
     print("=" * 105)
