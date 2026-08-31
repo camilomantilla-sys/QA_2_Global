@@ -212,11 +212,11 @@ def detect_profile(path: Path) -> tuple[str, str]:
             pass
 
     if not cgen_where:
-        return "wpp_standard", "sin columna CGEN en Placements ni en Creative Rotations"
+        return "wpp_standard", "no CGEN column in Placements or Creative Rotations"
 
     if rot_has_data:
-        return "adobe_variante_a", f"CGEN en {cgen_where} + Creative Rotations con datos"
-    return "adobe_variante_b", f"CGEN en {cgen_where} + Creative Rotations vacia"
+        return "adobe_variante_a", f"CGEN in {cgen_where} + Creative Rotations has data"
+    return "adobe_variante_b", f"CGEN in {cgen_where} + Creative Rotations is empty"
 
 def _impl_type(vals: dict[str, object]) -> str:
     if norm_dims(vals.get("dimensions")) == "1x1":
@@ -366,7 +366,7 @@ def _repair_wpp_combined_rotation_header(
                 Anomaly(
                     "EXT-COLUMN-MISSING",
                     "FATAL",
-                    "Columnas requeridas ausentes: "
+                    "Missing required columns: "
                     + ", ".join(sorted(remaining)),
                     detail={"missing": sorted(remaining)},
                 )
@@ -379,11 +379,11 @@ def _repair_wpp_combined_rotation_header(
             "TS-WPP-COMBINED-ROTATION-HEADER",
             "WARNING",
             (
-                "La hoja Creative Rotations tiene una estructura "
-                "incompleta o un encabezado defectuoso. "
-                f"{repair_reason}. Se aplicó el mapeo controlado: "
-                f"columna {combined_col}=group_name y "
-                f"columna {cmap.col('creative_name')}=creative_name."
+                "The Creative Rotations sheet has an incomplete "
+                "structure or a malformed header. "
+                f"{repair_reason}. Applied the controlled mapping: "
+                f"column {combined_col}=group_name and "
+                f"column {cmap.col('creative_name')}=creative_name."
             ),
             detail={
                 "header_row": header_row,
@@ -751,7 +751,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     pl_sheet = resolve_sheet(in_scope, profile.placements.sheet_aliases)
     if pl_sheet is None:
         res.anomalies.append(Anomaly("TS-SHEET-MISSING", "FATAL",
-            f"No se encontro hoja de Placements. En scope: {in_scope}"))
+            f"Placements sheet not found. In scope: {in_scope}"))
         return res
 
     res.placements, region = _parse_sheet(

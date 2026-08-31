@@ -133,8 +133,8 @@ def read_sheet(path: Path, sheet_name: str,
     wb = load_workbook(path, data_only=True, keep_vba=False)
     if sheet_name not in wb.sheetnames:
         anomalies.append(Anomaly("EXT-SHEET-MISSING", "FATAL",
-                                 f"Hoja '{sheet_name}' no existe. "
-                                 f"Disponibles: {wb.sheetnames}"))
+                                 f"Sheet '{sheet_name}' doesn't exist. "
+                                 f"Available: {wb.sheetnames}"))
         return SheetGrid(doc=doc, sheet=sheet_name), anomalies
 
     ws = wb[sheet_name]
@@ -145,8 +145,8 @@ def read_sheet(path: Path, sheet_name: str,
     if declared_rows > max_rows_cap:
         anomalies.append(Anomaly(
             "EXT-MAXROW-INFLATED", "WARNING",
-            f"La hoja declara {declared_rows:,} filas (formato aplicado a "
-            f"columnas completas). Se leen las primeras {max_rows_cap:,}.",
+            f"The sheet declares {declared_rows:,} rows (formatting applied "
+            f"to full columns). Reading the first {max_rows_cap:,}.",
             detail={"declared": declared_rows, "read": max_rows_cap},
         ))
 
@@ -250,9 +250,9 @@ def find_header_row(grid: SheetGrid, spec: SheetSpec) -> tuple[HeaderResult, lis
         if hits < spec.signature_min_matches:
             anomalies.append(Anomaly(
                 "EXT-HEADER-FIXED-FAIL", "FATAL",
-                f"Se esperaba el header en la fila {row} pero solo coinciden {hits} "
-                f"campos conocidos (minimo {spec.signature_min_matches}). "
-                f"El archivo pudo ser modificado sobre la fila 10.",
+                f"Expected the header on row {row} but only {hits} known "
+                f"fields matched (minimum {spec.signature_min_matches}). "
+                f"The file may have been modified above row 10.",
                 detail={"row": row, "found": sorted(keys)[:15]},
             ))
             return HeaderResult(None, "fixed_row", hits), anomalies
@@ -270,8 +270,8 @@ def find_header_row(grid: SheetGrid, spec: SheetSpec) -> tuple[HeaderResult, lis
     if best_row is None or best_hits < spec.signature_min_matches:
         anomalies.append(Anomaly(
             "EXT-HEADER-NOT-FOUND", "FATAL",
-            f"No se encontro fila de header en las primeras {spec.signature_scan_rows} "
-            f"filas (mejor candidata: fila {best_row} con {best_hits} coincidencias).",
+            f"No header row was found in the first {spec.signature_scan_rows} "
+            f"rows (best candidate: row {best_row} with {best_hits} matches).",
         ))
         return HeaderResult(None, "signature", best_hits), anomalies
 
@@ -315,8 +315,8 @@ def map_columns(grid: SheetGrid, header_row: int,
     if collisions:
         anomalies.append(Anomaly(
             "EXT-ALIAS-COLLISION", "FATAL",
-            f"Dos campos canonicos comparten la misma llave normalizada: "
-            f"{'; '.join(collisions)}. El mapeo seria impredecible.",
+            f"Two canonical fields share the same normalized key: "
+            f"{'; '.join(collisions)}. The mapping would be unpredictable.",
             detail={"collisions": collisions},
         ))
 
@@ -352,7 +352,7 @@ def map_columns(grid: SheetGrid, header_row: int,
     if cmap.missing_required:
         anomalies.append(Anomaly(
             "EXT-COLUMN-MISSING", "FATAL",
-            f"Columnas requeridas ausentes: {', '.join(cmap.missing_required)}",
+            f"Missing required columns: {', '.join(cmap.missing_required)}",
             detail={"missing": cmap.missing_required},
         ))
 
@@ -381,8 +381,8 @@ def check_empty_required(grid: SheetGrid, cmap: ColumnMap, spec: SheetSpec,
         if filled == 0:
             out.append(Anomaly(
                 "EXT-001", "FATAL",
-                f"La columna requerida '{f.name}' existe pero esta 100% vacia. "
-                f"Probable error de lectura o de exportacion. Se aborta.",
+                f"Required column '{f.name}' exists but is 100% empty. "
+                f"Likely a read or export error. Aborting.",
                 detail={"field": f.name, "column": col},
             ))
     return out

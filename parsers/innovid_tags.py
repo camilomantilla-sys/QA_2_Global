@@ -425,7 +425,7 @@ def parse_innovid_tags(path: Path) -> TagsResult:
             Anomaly(
                 "TAG-LOAD-FAILED",
                 "FATAL",
-                f"No se pudo abrir el archivo de tags: {error}",
+                f"Could not open the tag file: {error}",
             )
         )
         return result
@@ -438,7 +438,7 @@ def parse_innovid_tags(path: Path) -> TagsResult:
                 Anomaly(
                     "TAG-HEADER-NOT-FOUND",
                     "FATAL",
-                    "No se encontró una hoja con headers de tags reconocibles.",
+                    "No sheet with recognizable tag headers was found.",
                 )
             )
             return result
@@ -482,7 +482,7 @@ def parse_innovid_tags(path: Path) -> TagsResult:
                 Anomaly(
                     "TAG-COLUMN-MISSING",
                     "FATAL",
-                    "Columnas requeridas ausentes: "
+                    "Missing required columns: "
                     + ", ".join(sorted(missing)),
                 )
             )
@@ -544,7 +544,7 @@ def parse_innovid_tags(path: Path) -> TagsResult:
                 Anomaly(
                     "TAG-NO-DATA",
                     "FATAL",
-                    "El archivo no contiene filas con Placement_ID.",
+                    "The file contains no rows with Placement_ID.",
                 )
             )
 

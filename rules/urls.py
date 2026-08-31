@@ -17,9 +17,9 @@ def evaluate(match_result, buffer):
 
     for pm in match_result.matched:
 
-        # Mismo criterio que CRE-001: una variante de Creative Rotations
-        # sin Clicktag en Innovid puede ser un swap normal si el grupo
-        # tiene otras variantes activas.
+        # Same criterion as CRE-001: a Creative Rotations variant
+        # without a Clicktag in Innovid can be a normal swap if the
+        # group has other active variants.
         rotation_links = [
             cl for cl in pm.creative_links
             if cl.expected.ts_sheet == ROTATION_SHEET
@@ -52,7 +52,7 @@ def evaluate(match_result, buffer):
 
             if result == URL_MATCH:
                 buffer.pass_(
-                    message="URL de Traffic Sheet e Innovid coinciden.",
+                    message="Traffic Sheet and Innovid URLs match.",
                     **common,
                 )
 
@@ -60,23 +60,23 @@ def evaluate(match_result, buffer):
                 if cl.expected.ts_sheet == ROTATION_SHEET and rotation_has_match:
                     buffer.review(
                         message=(
-                            "TS declara URL para esta variante de rotacion, "
-                            "pero el creativo no esta corriendo en Innovid "
-                            "(posible swap de rotacion)."
+                            "TS declares a URL for this rotation variant, "
+                            "but the creative isn't running in Innovid "
+                            "(possible rotation swap)."
                         ),
                         reason=cl.url.note,
                         recommended_action=(
-                            "Confirmar si esta variante fue swapeada "
-                            "intencionalmente en la rotacion."
+                            "Confirm whether this variant was swapped "
+                            "out of the rotation intentionally."
                         ),
                         **common,
                     )
                 else:
                     buffer.fail(
-                        message="TS declara URL, pero Innovid no tiene Clicktag.",
+                        message="TS declares a URL, but Innovid has no Clicktag.",
                         reason=cl.url.note,
                         recommended_action=(
-                            "Configurar el Clicktag solicitado y volver a exportar."
+                            "Configure the requested Clicktag and re-export."
                         ),
                         **common,
                     )
@@ -84,50 +84,50 @@ def evaluate(match_result, buffer):
             elif result == URL_MISSING_EXPECTED:
                 buffer.not_verified(
                     message=(
-                        "Innovid contiene URL, pero TS no declara "
-                        "una URL verificable para esta entidad."
+                        "Innovid has a URL, but the TS doesn't declare "
+                        "a verifiable URL for this entity."
                     ),
                     reason=cl.url.note,
                     recommended_action=(
-                        "Confirmar la fuente de URL aplicable para este "
-                        "perfil y tipo de solicitud."
+                        "Confirm the applicable URL source for this "
+                        "profile and request type."
                     ),
                     **common,
                 )
 
             elif result == URL_BOTH_MISSING:
                 buffer.not_verified(
-                    message="No existe URL declarada en TS ni en Innovid.",
+                    message="No URL is declared in the TS or in Innovid.",
                     reason=cl.url.note,
                     recommended_action=(
-                        "Confirmar si la URL aplica a esta implementación."
+                        "Confirm whether a URL applies to this implementation."
                     ),
                     **common,
                 )
 
             elif result in (URL_BASE_DIFF, URL_PARAMS_DIFF):
                 buffer.fail(
-                    message="La URL configurada en Innovid no coincide con la TS.",
+                    message="The URL configured in Innovid doesn't match the TS.",
                     reason=cl.url.note,
                     recommended_action=(
-                        "Corregir destino o parámetros del Clicktag en Innovid."
+                        "Correct the Clicktag destination or parameters in Innovid."
                     ),
                     **common,
                 )
 
             elif result == URL_MALFORMED:
                 buffer.review(
-                    message="No fue posible interpretar correctamente la URL.",
+                    message="The URL could not be parsed correctly.",
                     reason=cl.url.note,
                     recommended_action=(
-                        "Revisar manualmente la URL y corregir su formato."
+                        "Manually review the URL and correct its format."
                     ),
                     **common,
                 )
 
             else:
                 buffer.review(
-                    message=f"Resultado URL no clasificado: {result}.",
+                    message=f"Unclassified URL result: {result}.",
                     reason=cl.url.note,
                     **common,
                 )

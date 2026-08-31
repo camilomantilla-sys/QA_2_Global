@@ -15,7 +15,7 @@ def evaluate(match_result, buffer):
                 buffer.pass_(
                     rule_id="ATR-001",
                     domain=Domain.ATTRIBUTION,
-                    message="Attribution correcta",
+                    message="Attribution is correct",
                     placement_id=pm.placement_id,
                 )
 

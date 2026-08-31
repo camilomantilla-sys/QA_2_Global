@@ -1,18 +1,18 @@
 """
-Reglas QA2 para archivos de tags.
+QA2 rules for tag files.
 
-Validaciones iniciales:
-  TAG-001 Campaign ID del archivo.
-  TAG-002 Placement ID existe en Innovid.
-  TAG-003 Placement ID pertenece al scope trabajado.
+Initial validations:
+  TAG-001 File Campaign ID.
+  TAG-002 Placement ID exists in Innovid.
+  TAG-003 Placement ID belongs to the worked scope.
   TAG-004 Placement Name.
-  TAG-005 Dimensiones.
+  TAG-005 Dimensions.
   TAG-006 Third Party ID.
-  TAG-007 Placement ID embebido en el tag.
-  TAG-008 Campaign ID embebido en el tag.
-  TAG-009 Dimensiones embebidas.
-  TAG-010 Tag vacío.
-  TAG-011 Placement duplicado dentro del archivo.
+  TAG-007 Placement ID embedded in the tag.
+  TAG-008 Campaign ID embedded in the tag.
+  TAG-009 Embedded dimensions.
+  TAG-010 Empty tag.
+  TAG-011 Duplicate placement within the file.
 """
 from __future__ import annotations
 
@@ -61,12 +61,12 @@ def evaluate(
         buffer.not_verified(
             rule_id="TAG-001",
             domain=Domain.TAG,
-            message="El archivo de tags no declara Campaign ID.",
+            message="The tag file does not declare a Campaign ID.",
             entity_type=EntityType.FILE,
             expected=expected_campaign,
             actual="",
             recommended_action=(
-                "Reexportar los tags incluyendo Campaign ID."
+                "Re-export the tags including the Campaign ID."
             ),
         )
 
@@ -78,17 +78,17 @@ def evaluate(
             rule_id="TAG-001",
             domain=Domain.TAG,
             message=(
-                "El archivo de tags corresponde a otra campaña."
+                "The tag file belongs to a different campaign."
             ),
             entity_type=EntityType.FILE,
             expected=expected_campaign,
             actual=tag_match.campaign_id_tags,
             reason=(
-                "Campaign ID de tags diferente al Campaign ID "
-                "de Traffic Sheet o Innovid."
+                "Tag file Campaign ID differs from the Traffic "
+                "Sheet or Innovid Campaign ID."
             ),
             recommended_action=(
-                "Cargar el archivo de tags de la campaña correcta."
+                "Upload the tag file for the correct campaign."
             ),
         )
 
@@ -96,13 +96,13 @@ def evaluate(
         buffer.pass_(
             rule_id="TAG-001",
             domain=Domain.TAG,
-            message="Campaign ID del archivo de tags correcto.",
+            message="Tag file Campaign ID is correct.",
             entity_type=EntityType.FILE,
             expected=expected_campaign,
             actual=tag_match.campaign_id_tags,
         )
 
-    # ------------------------------------------------ TAG-011 duplicados
+    # ------------------------------------------------ TAG-011 duplicates
 
     for placement_id, count in (
         tag_match.duplicate_placement_ids.items()
@@ -111,16 +111,16 @@ def evaluate(
             rule_id="TAG-011",
             domain=Domain.CARDINALITY,
             message=(
-                "Placement ID repetido dentro del archivo de tags."
+                "Placement ID repeated within the tag file."
             ),
             entity_type=EntityType.PLACEMENT,
             placement_id=placement_id,
-            expected="1 fila",
-            actual=f"{count} filas",
+            expected="1 row",
+            actual=f"{count} rows",
             count=count,
             recommended_action=(
-                "Confirmar si las filas representan tags diferentes "
-                "o si existe una duplicación accidental."
+                "Confirm whether the rows represent different tags "
+                "or an accidental duplication."
             ),
         )
 
@@ -129,54 +129,54 @@ def evaluate(
     for link in tag_match.links:
         row = link.tag_row
 
-        # TAG-002: el placement debe existir en el export cargado.
+        # TAG-002: the placement must exist in the loaded export.
 
         if link.actual is None:
             buffer.review(
                 rule_id="TAG-002",
                 domain=Domain.TAG,
                 message=(
-                    "Placement del archivo de tags no fue encontrado "
-                    "en el export Innovid cargado."
+                    "Tag file placement was not found in the "
+                    "loaded Innovid export."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
-                expected="Placement presente en Innovid",
-                actual="No encontrado",
+                expected="Placement present in Innovid",
+                actual="Not found",
                 recommended_action=(
-                    "Confirmar que el export Innovid incluya este "
-                    "placement o cargar el export correcto."
+                    "Confirm the Innovid export includes this "
+                    "placement, or upload the correct export."
                 ),
             )
         else:
             buffer.pass_(
                 rule_id="TAG-002",
                 domain=Domain.TAG,
-                message="Placement del tag encontrado en Innovid.",
+                message="Tag placement found in Innovid.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
             )
 
-        # TAG-003: informar si el tag no pertenece al scope trabajado.
-        # No es FAIL porque un archivo de tags puede representar solo
-        # una parte de la campaña o incluir entregables adicionales.
+        # TAG-003: flag when the tag doesn't belong to the worked scope.
+        # Not a FAIL because a tag file may represent only part of the
+        # campaign or include additional deliverables.
 
         if link.expected is None:
             buffer.info(
                 rule_id="TAG-003",
                 domain=Domain.SCOPE,
                 message=(
-                    "Placement del archivo de tags fuera del scope "
-                    "trabajado detectado en la Traffic Sheet."
+                    "Tag file placement is outside the worked scope "
+                    "detected in the Traffic Sheet."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
                 recommended_action=(
-                    "Confirmar si el archivo de tags corresponde "
-                    "a otra solicitud o a contexto adicional."
+                    "Confirm whether the tag file belongs to a "
+                    "different request or additional context."
                 ),
             )
         else:
@@ -184,7 +184,7 @@ def evaluate(
                 rule_id="TAG-003",
                 domain=Domain.SCOPE,
                 message=(
-                    "Placement del tag pertenece al scope trabajado."
+                    "Tag placement belongs to the worked scope."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
@@ -192,7 +192,7 @@ def evaluate(
             )
 
         # TAG-004: Placement Name.
-        # Se compara primero contra Innovid y después contra TS.
+        # Compared against Innovid first, then against the TS.
 
         expected_name = ""
 
@@ -209,7 +209,7 @@ def evaluate(
                 rule_id="TAG-004",
                 domain=Domain.IDENTITY,
                 message=(
-                    "Placement Name no verificable en archivo de tags."
+                    "Placement Name is not verifiable in the tag file."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
@@ -224,7 +224,7 @@ def evaluate(
             buffer.pass_(
                 rule_id="TAG-004",
                 domain=Domain.IDENTITY,
-                message="Placement Name del tag correcto.",
+                message="Tag Placement Name is correct.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
@@ -236,31 +236,30 @@ def evaluate(
             buffer.fail(
                 rule_id="TAG-004",
                 domain=Domain.IDENTITY,
-                message="Placement Name del tag no coincide.",
+                message="Tag Placement Name doesn't match.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
                 expected=expected_name,
                 actual=row.placement_name,
                 recommended_action=(
-                    "Regenerar los tags usando el placement correcto."
+                    "Regenerate the tags using the correct placement."
                 ),
             )
 
-        # TAG-005: dimensiones.
+        # TAG-005: dimensions.
         #
-        # DESACTIVADA:
-        # Las dimensiones embebidas en tags de tracking no representan
-        # las dimensiones del placement. Un pixel puede declarar 0x0 o 1x1
-        # aunque el placement sea 1920x1080, display o video.
+        # DISABLED:
+        # Dimensions embedded in tracking tags don't represent the
+        # placement's actual dimensions. A pixel can declare 0x0 or 1x1
+        # even when the placement is 1920x1080, display, or video.
         #
-        # Las dimensiones reales se validan exclusivamente mediante:
-        # Traffic Sheet vs Export Innovid.
+        # Real dimensions are validated exclusively via:
+        # Traffic Sheet vs Innovid Export.
         #
-        # Esta regla no emite PASS, FAIL, REVIEW ni NOT_VERIFIED.
+        # This rule emits no PASS, FAIL, REVIEW, or NOT_VERIFIED.
 
         # TAG-006: Third Party ID.
-
         expected_third_party_id = ""
 
         if link.actual is not None:
@@ -288,12 +287,12 @@ def evaluate(
                 rule_id="TAG-006",
                 domain=Domain.ATTRIBUTION,
                 message=(
-                    "Third Party ID de Innovid no disponible "
-                    "para comparar con el archivo de tags."
+                    "Innovid Third Party ID is not available "
+                    "to compare against the tag file."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
-                expected="Third Party ID de Innovid",
+                expected="Innovid Third Party ID",
                 actual=row.third_party_id,
             )
 
@@ -302,7 +301,7 @@ def evaluate(
                 rule_id="TAG-006",
                 domain=Domain.ATTRIBUTION,
                 message=(
-                    "El archivo de tags no contiene Third Party ID."
+                    "The tag file doesn't contain a Third Party ID."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
@@ -317,7 +316,7 @@ def evaluate(
             buffer.pass_(
                 rule_id="TAG-006",
                 domain=Domain.ATTRIBUTION,
-                message="Third Party ID del tag correcto.",
+                message="Tag Third Party ID is correct.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 expected=expected_third_party_id,
@@ -328,36 +327,36 @@ def evaluate(
             buffer.fail(
                 rule_id="TAG-006",
                 domain=Domain.ATTRIBUTION,
-                message="Third Party ID del tag no coincide.",
+                message="Tag Third Party ID doesn't match.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 expected=expected_third_party_id,
                 actual=row.third_party_id,
                 recommended_action=(
-                    "Regenerar los tags desde el placement correcto."
+                    "Regenerate the tags from the correct placement."
                 ),
             )
 
-        # TAG-010: la fila debe contener al menos un tag.
+        # TAG-010: the row must contain at least one tag.
 
         if row.tag_count == 0:
             buffer.fail(
                 rule_id="TAG-010",
                 domain=Domain.TAG,
                 message=(
-                    "Placement sin ningún tag materializado."
+                    "Placement has no materialized tags."
                 ),
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 placement_name=row.placement_name,
-                expected="Al menos un tag",
+                expected="At least one tag",
                 actual="0 tags",
             )
         else:
             buffer.pass_(
                 rule_id="TAG-010",
                 domain=Domain.TAG,
-                message="Placement contiene tags.",
+                message="Placement contains tags.",
                 entity_type=EntityType.PLACEMENT,
                 placement_id=row.placement_id,
                 actual=f"{row.tag_count} tags",
@@ -370,7 +369,7 @@ def evaluate(
                 f"{row.placement_id} | {tag.column_name}"
             )
 
-            # TAG-007: Placement ID embebido.
+            # TAG-007: embedded Placement ID.
 
             if tag.placement_ids:
                 if row.placement_id in tag.placement_ids:
@@ -378,7 +377,7 @@ def evaluate(
                         rule_id="TAG-007",
                         domain=Domain.TAG,
                         message=(
-                            "Placement ID embebido en el tag correcto."
+                            "Embedded Placement ID in the tag is correct."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
@@ -391,8 +390,8 @@ def evaluate(
                         rule_id="TAG-007",
                         domain=Domain.TAG,
                         message=(
-                            "Placement ID embebido en el tag "
-                            "no corresponde con la fila."
+                            "Embedded Placement ID in the tag doesn't "
+                            "match the row."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
@@ -400,7 +399,7 @@ def evaluate(
                         actual=", ".join(tag.placement_ids),
                         reason=tag_source,
                         recommended_action=(
-                            "Regenerar el tag para este placement."
+                            "Regenerate the tag for this placement."
                         ),
                     )
             else:
@@ -408,8 +407,8 @@ def evaluate(
                     rule_id="TAG-007",
                     domain=Domain.TAG,
                     message=(
-                        "El tipo de tag no expone un Placement ID "
-                        "verificable."
+                        "This tag type doesn't expose a verifiable "
+                        "Placement ID."
                     ),
                     entity_type=EntityType.TAG,
                     placement_id=row.placement_id,
@@ -417,7 +416,7 @@ def evaluate(
                     confidence=Confidence.NONE,
                 )
 
-            # TAG-008: Campaign ID embebido.
+            # TAG-008: embedded Campaign ID.
 
             if tag.campaign_ids:
                 if (
@@ -428,7 +427,7 @@ def evaluate(
                         rule_id="TAG-008",
                         domain=Domain.TAG,
                         message=(
-                            "Campaign ID embebido en el tag correcto."
+                            "Embedded Campaign ID in the tag is correct."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
@@ -441,8 +440,8 @@ def evaluate(
                         rule_id="TAG-008",
                         domain=Domain.TAG,
                         message=(
-                            "Campaign ID embebido en el tag "
-                            "no corresponde con el archivo."
+                            "Embedded Campaign ID in the tag doesn't "
+                            "match the file."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
@@ -451,8 +450,8 @@ def evaluate(
                         reason=tag_source,
                     )
 
-            # TAG-009: dimensiones embebidas.
-            # Se omite para píxeles auxiliares porque pueden usar 0x0.
+            # TAG-009: embedded dimensions.
+            # Skipped for auxiliary pixels since they may use 0x0.
 
             if tag.tag_type not in AUXILIARY_PIXEL_TYPES:
                 width_mismatch = (
@@ -470,8 +469,8 @@ def evaluate(
                         rule_id="TAG-009",
                         domain=Domain.DIMENSIONS,
                         message=(
-                            "Dimensiones embebidas en el tag "
-                            "no corresponden con la fila."
+                            "Embedded dimensions in the tag don't "
+                            "match the row."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
@@ -487,7 +486,7 @@ def evaluate(
                         rule_id="TAG-009",
                         domain=Domain.DIMENSIONS,
                         message=(
-                            "Dimensiones embebidas en el tag correctas."
+                            "Embedded dimensions in the tag are correct."
                         ),
                         entity_type=EntityType.TAG,
                         placement_id=row.placement_id,
