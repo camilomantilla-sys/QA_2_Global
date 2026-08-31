@@ -1,0 +1,67 @@
+====================================================================================================
+QA2 MULTI-FILE TAG INVENTORY
+====================================================================================================
+Traffic Sheet              : TS_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_ASY_C.xlsx
+Placement-Creative View    : placement creative view.xlsm
+Placement View             : placement view.xlsm
+Tag files                  : 10
+
+CAMPAIGN IDS
+Traffic Sheet              : 326319
+Placement-Creative View  : 326319
+Placement View           : 326319
+Tag files                  : {'326319': 10}
+
+TAG INVENTORY
+Files processed            : 10
+Files with fatal errors    : 0
+Unique tag placements      : 133
+Tag rows                   : 139
+Materialized tags          : 486
+
+SCOPE COVERAGE
+Worked placements          : 127
+Worked placements with tag : 127
+Worked placements no tag   : 0
+Tag placements out of scope: 6
+Tags missing in PC View    : 0
+Tags missing in PL View    : 0
+
+TAG TYPES
+PIXEL                    : 126
+1X1_CLICK                : 97
+1X1_IMPRESSION           : 93
+PIXEL_HTML               : 84
+DISPLAY_JS               : 18
+DISPLAY_IFRAME           : 18
+DISPLAY_ASYNC            : 18
+DISPLAY_INS              : 18
+VIDEO_VAST               : 14
+
+FILES
+OK      | TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx | placements=10 | tags=20 | campaign=326319
+OK      | TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx | placements=16 | tags=46 | campaign=326319
+OK      | TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx | placements=24 | tags=108 | campaign=326319
+OK      | TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx | placements=12 | tags=6 | campaign=326319
+OK      | TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx | placements=12 | tags=84 | campaign=326319
+OK      | TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx | placements=4 | tags=10 | campaign=326319
+OK      | TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx | placements=27 | tags=54 | campaign=326319
+OK      | TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx | placements=5 | tags=35 | campaign=326319
+OK      | TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx | placements=6 | tags=24 | campaign=326319
+OK      | TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx | placements=17 | tags=99 | campaign=326319
+
+MISSING TAGS IN WORKED SCOPE
+None
+
+TAG PLACEMENTS OUTSIDE WORKED SCOPE
+11038716 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+11038717 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+11038718 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+11038728 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+11038746 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+11038748 | files=TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+
+PLACEMENTS PRESENT IN MULTIPLE TAG FILES
+None
+
+====================================================================================================
