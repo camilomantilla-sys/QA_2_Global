@@ -30,9 +30,18 @@ CONF_NONE = "NONE"
 _EXT = re.compile(r"\.(jpg|jpeg|png|gif|mp4|mov|webm|html|htm|zip|svg)$", re.I)
 
 def norm_creative(value: object) -> str:
-    """Forma canonica para comparar nombres de creativo y filenames."""
+    """
+    Forma canonica para comparar nombres de creativo y filenames.
+
+    Innovid elimina los espacios al generar el filename del creativo
+    ('4X5 TO 9X16' en la TS -> '4X5TO9X16' en el export), aunque el
+    resto del nombre sea identico. Sin colapsar los espacios aqui,
+    match_creatives fallaba y reportaba el creativo como faltante
+    (falso FAIL en CRE-001 / URL-001).
+    """
     s = norm_compare(str(value or ""))
-    return _EXT.sub("", s).strip()
+    s = _EXT.sub("", s).strip()
+    return re.sub(r"\s+", "", s)
 
 # ------------------------------------------------------------------ modelo
 

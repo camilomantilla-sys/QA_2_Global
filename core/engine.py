@@ -9,6 +9,7 @@ Devuelve:
   - FindingsBuffer con todos los resultados QA2.
 """
 from core.findings import FindingsBuffer
+from core.tag_matching import match_tags
 from rules import attribution
 from rules import creatives
 from rules import dset
@@ -16,7 +17,6 @@ from rules import dtree
 from rules import naming
 from rules import placements
 from rules import tags
-from rules.tags import match_tags
 from rules import urls
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
 
