@@ -112,3 +112,75 @@ def build_tag_inventory(paths: list[Path]) -> TagInventory:
 
     inventory.by_placement = dict(grouped)
     return inventory
+
+
+def build_tag_inventory_from_results(
+    named_results,
+) -> TagInventory:
+    """
+    Build one consolidated TagInventory from already parsed tag files.
+
+    named_results:
+        Iterable of tuples:
+            (file_name, TagsResult)
+
+    This is used by the Streamlit application, where uploaded files
+    have already been parsed and should not be opened a second time.
+    """
+    inventory = TagInventory()
+    grouped: dict[str, list[TagSourceRow]] = defaultdict(list)
+
+    for file_name, result in named_results:
+        inventory.files.append(str(file_name))
+        inventory.results.append(result)
+
+        fatal = [
+            anomaly
+            for anomaly in result.anomalies
+            if anomaly.severity == "FATAL"
+        ]
+
+        if fatal:
+            inventory.parse_failures.append(
+                {
+                    "file": str(file_name),
+                    "issues": [
+                        f"{item.code}: {item.message}"
+                        for item in fatal
+                    ],
+                }
+            )
+            continue
+
+        if result.campaign_id:
+            inventory.campaigns[
+                result.campaign_id
+            ] += 1
+
+        for row in result.rows:
+            placement_id = str(
+                row.placement_id or ""
+            ).strip()
+
+            if not placement_id:
+                continue
+
+            grouped[placement_id].append(
+                TagSourceRow(
+                    file_name=str(file_name),
+                    sheet=result.sheet,
+                    campaign_id=(
+                        result.campaign_id
+                    ),
+                    row=row,
+                )
+            )
+
+            for tag in row.tags:
+                inventory.tag_types[
+                    tag.tag_type
+                ] += 1
+
+    inventory.by_placement = dict(grouped)
+
+    return inventory

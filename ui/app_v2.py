@@ -21,6 +21,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from core.engine import run_rules
+from core.adobe_pixel_reconciliation import (
+    reconcile_adobe_pixels,
+)
+from core.tag_inventory import (
+    build_tag_inventory_from_results,
+)
 from core.matching import match
 from core.normalize import norm_compare, norm_dims
 from core.tag_matching import match_tags
@@ -28,6 +34,7 @@ from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
+from rules import adobe_pixels
 
 
 warnings.filterwarnings(
@@ -982,8 +989,10 @@ with tempfile.TemporaryDirectory(
             findings_buffer = run_rules(match_result)
 
             tag_matches = []
+            tag_inventory = None
+            adobe_pixel_result = None
 
-            # Cada archivo de tags se procesa de forma independiente.
+            # Every tag file keeps its independent structural checks.
             for file_name, tags_result in tags_results:
                 tag_match_result = match_tags(
                     match_result,
@@ -1001,6 +1010,40 @@ with tempfile.TemporaryDirectory(
                         tags_result,
                         tag_match_result,
                     )
+                )
+
+            # Consolidated multi-file Tag Inventory.
+            #
+            # Structural TAG rules run once per delivered file.
+            # Adobe business requirements run once against the
+            # consolidated inventory to avoid duplicate findings.
+            if tags_results:
+                tag_inventory = (
+                    build_tag_inventory_from_results(
+                        tags_results
+                    )
+                )
+
+            # PIX-A01 applies only to Adobe Direct & Site-Served.
+            #
+            # Traffic Sheet defines whether DISQO is required.
+            # Tags and Innovid Placement View provide evidence.
+            if (
+                ts_result.profile == "adobe_variante_b"
+                and tag_inventory is not None
+                and pl_result is not None
+            ):
+                adobe_pixel_result = (
+                    reconcile_adobe_pixels(
+                        ts_result,
+                        pl_result,
+                        tag_inventory,
+                    )
+                )
+
+                adobe_pixels.evaluate(
+                    adobe_pixel_result,
+                    findings_buffer,
                 )
 
             scorecard = findings_buffer.scorecard()
@@ -1026,6 +1069,143 @@ with tempfile.TemporaryDirectory(
             """,
             unsafe_allow_html=True,
         )
+
+        # ----------------------------------------------------
+        # Adobe Pixel & Tag Requirements
+        # ----------------------------------------------------
+
+        if (
+            ts_result.profile == "adobe_variante_b"
+            and adobe_pixel_result is not None
+        ):
+            st.subheader("Pixel & Tag Requirements")
+
+            disqo_checks = [
+                check
+                for check in adobe_pixel_result.checks
+                if check.disqo_required
+            ]
+
+            disqo_pass = sum(
+                check.result == "PASS"
+                for check in disqo_checks
+            )
+
+            disqo_fail = sum(
+                check.result == "FAIL"
+                for check in disqo_checks
+            )
+
+            disqo_review = sum(
+                check.result == "REVIEW"
+                for check in disqo_checks
+            )
+
+            tag_supported = sum(
+                check.result == "PASS"
+                and check.tags_disqo
+                for check in disqo_checks
+            )
+
+            innovid_supported = sum(
+                check.result == "PASS"
+                and not check.tags_disqo
+                and check.innovid_disqo
+                for check in disqo_checks
+            )
+
+            metric_columns = st.columns(5)
+
+            metric_columns[0].metric(
+                "DISQO required",
+                len(disqo_checks),
+            )
+
+            metric_columns[1].metric(
+                "Pass",
+                disqo_pass,
+            )
+
+            metric_columns[2].metric(
+                "Fail",
+                disqo_fail,
+            )
+
+            metric_columns[3].metric(
+                "Tag evidence",
+                tag_supported,
+            )
+
+            metric_columns[4].metric(
+                "Innovid evidence",
+                innovid_supported,
+            )
+
+            if disqo_fail:
+                st.error(
+                    f"{disqo_fail} placements require DISQO "
+                    "but no valid evidence was found."
+                )
+            elif disqo_review:
+                st.warning(
+                    f"{disqo_review} DISQO placements require review."
+                )
+            else:
+                st.success(
+                    "All DISQO requirements have valid implementation "
+                    "evidence in the delivered tag files or Innovid."
+                )
+
+            disqo_rows = []
+
+            for check in disqo_checks:
+                if check.tags_disqo:
+                    evidence_source = (
+                        "Delivered Tag File"
+                    )
+                elif check.innovid_disqo:
+                    evidence_source = (
+                        "Innovid Active Metering / "
+                        "Third Party Impression"
+                    )
+                else:
+                    evidence_source = (
+                        "No evidence found"
+                    )
+
+                disqo_rows.append(
+                    {
+                        "Placement ID": (
+                            check.placement_id
+                        ),
+                        "Placement Name": (
+                            check.placement_name
+                        ),
+                        "Site": check.site,
+                        "Requirement": "DISQO",
+                        "Result": check.result,
+                        "Evidence Source": (
+                            evidence_source
+                        ),
+                        "Message": check.message,
+                        "Recommended Action": (
+                            check.recommended_action
+                            or "No correction required."
+                        ),
+                    }
+                )
+
+            with st.expander(
+                "View DISQO placement details",
+                expanded=bool(
+                    disqo_fail or disqo_review
+                ),
+            ):
+                st.dataframe(
+                    pd.DataFrame(disqo_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
         metric_columns = st.columns(7)
 

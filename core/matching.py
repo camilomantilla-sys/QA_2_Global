@@ -627,12 +627,8 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
         res.extra_running_total += len(pm.extra_running)
         res.extra_stopped_total += len(pm.extra_stopped)
 
-        # contar extras una sola vez por placement
-
         for cl in pm.creative_links:
-
-            for cl in pm.creative_links:
-             res.creative_conf_counts[cl.confidence] = \
+            res.creative_conf_counts[cl.confidence] = \
                 res.creative_conf_counts.get(cl.confidence, 0) + 1
 
             # solo los VERDES deben tener URL y CGEN correctos.
@@ -658,7 +654,7 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
             cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
             res.triangle_counts[cl.triangle.result] = \
                 res.triangle_counts.get(cl.triangle.result, 0) + 1
-            
+
         res.matched.append(pm)
         res.confidence_counts[CONF_HIGH] = \
             res.confidence_counts.get(CONF_HIGH, 0) + 1
