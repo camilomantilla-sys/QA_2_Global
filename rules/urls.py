@@ -10,9 +10,23 @@ from core.urls import (
 )
 
 
+ROTATION_SHEET = "Creative Rotations"
+
+
 def evaluate(match_result, buffer):
 
     for pm in match_result.matched:
+
+        # Mismo criterio que CRE-001: una variante de Creative Rotations
+        # sin Clicktag en Innovid puede ser un swap normal si el grupo
+        # tiene otras variantes activas.
+        rotation_links = [
+            cl for cl in pm.creative_links
+            if cl.expected.ts_sheet == ROTATION_SHEET
+        ]
+        rotation_has_match = any(
+            cl.actual is not None for cl in rotation_links
+        )
 
         for cl in pm.creative_links:
 
@@ -43,14 +57,29 @@ def evaluate(match_result, buffer):
                 )
 
             elif result == URL_MISSING_ACTUAL:
-                buffer.fail(
-                    message="TS declara URL, pero Innovid no tiene Clicktag.",
-                    reason=cl.url.note,
-                    recommended_action=(
-                        "Configurar el Clicktag solicitado y volver a exportar."
-                    ),
-                    **common,
-                )
+                if cl.expected.ts_sheet == ROTATION_SHEET and rotation_has_match:
+                    buffer.review(
+                        message=(
+                            "TS declara URL para esta variante de rotacion, "
+                            "pero el creativo no esta corriendo en Innovid "
+                            "(posible swap de rotacion)."
+                        ),
+                        reason=cl.url.note,
+                        recommended_action=(
+                            "Confirmar si esta variante fue swapeada "
+                            "intencionalmente en la rotacion."
+                        ),
+                        **common,
+                    )
+                else:
+                    buffer.fail(
+                        message="TS declara URL, pero Innovid no tiene Clicktag.",
+                        reason=cl.url.note,
+                        recommended_action=(
+                            "Configurar el Clicktag solicitado y volver a exportar."
+                        ),
+                        **common,
+                    )
 
             elif result == URL_MISSING_EXPECTED:
                 buffer.not_verified(
