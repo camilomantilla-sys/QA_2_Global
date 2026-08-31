@@ -5,6 +5,7 @@ import sys
 import tempfile
 import warnings
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd  # type: ignore
@@ -31,6 +32,7 @@ from core.tag_inventory import (
 from core.matching import match
 from core.normalize import norm_compare, norm_dims
 from core.tag_matching import match_tags
+from core.pdf_report import ReportMeta, build_pdf_report
 from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
@@ -1324,6 +1326,63 @@ with tempfile.TemporaryDirectory(
         metric_columns[6].metric(
             "Not Verified",
             scorecard.not_verified,
+        )
+
+        # ----------------------------------------------------
+        # Downloadable PDF report
+        # ----------------------------------------------------
+
+        pdf_report_bytes = build_pdf_report(
+            ReportMeta(
+                verdict=scorecard.verdict,
+                verdict_label=VERDICT_LABELS.get(
+                    scorecard.verdict, scorecard.verdict
+                ),
+                profile_used=ts_result.profile,
+                detected_profile=detected_profile,
+                detection_evidence=detection_evidence,
+                scope_guard=match_result.scope_guard or "UNKNOWN",
+                scope_evidence=match_result.scope_evidence,
+                ts_campaign_id=match_result.ts_campaign_id,
+                export_campaign_id=match_result.export_campaign_id,
+                metrics={
+                    "Worked Placements": match_result.expected_total,
+                    "Found": len(match_result.matched),
+                    "Missing": len(match_result.only_expected),
+                    "Tag Files": len(tags_results),
+                    "Errors": scorecard.errors,
+                    "Reviews": scorecard.reviews,
+                    "Not Verified": scorecard.not_verified,
+                },
+                source_files=[
+                    row["File"] for row in file_rows
+                ],
+            ),
+            findings_df=findings_dataframe(
+                [
+                    finding
+                    for finding in findings_buffer.findings
+                    if finding.status.value != "PASS"
+                ]
+            ),
+            rules_df=rule_summary_dataframe(findings_buffer),
+            files_df=files_dataframe,
+            logo_path=(
+                PROJECT_ROOT
+                / "ui"
+                / "assets"
+                / "wpp-media-logo.png.png"
+            ),
+        )
+
+        st.download_button(
+            "Download PDF Report",
+            data=pdf_report_bytes,
+            file_name=(
+                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
         )
 
         # ----------------------------------------------------
