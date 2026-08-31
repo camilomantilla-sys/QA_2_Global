@@ -28,8 +28,8 @@ from parsers.innovid_export import parse_innovid_export
 from parsers.ts_parser import parse_ts
 from core.matching import CONF_HIGH, CONF_LOW, CONF_MEDIUM, CONF_NONE, match
 from core.urls import (
-    TRI_EXPORT_DESVIADO, TRI_INCOMPLETO, TRI_OK, TRI_TODOS_DISTINTOS,
-    TRI_TS_DESVIADO, TRI_URL_DESVIADO, URL_BASE_DIFF, URL_BOTH_MISSING,
+    TRI_EXPORT_MISMATCH, TRI_INCOMPLETE, TRI_OK, TRI_ALL_DIFFERENT,
+    TRI_TS_MISMATCH, TRI_URL_MISMATCH, URL_BASE_DIFF, URL_BOTH_MISSING,
     URL_MALFORMED, URL_MATCH, URL_MISSING_ACTUAL, URL_MISSING_EXPECTED,
     URL_PARAMS_DIFF,
 )
@@ -48,26 +48,26 @@ URL_STYLE = {
     URL_MALFORMED: "red", URL_BOTH_MISSING: "dim",
 }
 URL_MEAN = {
-    URL_MATCH: "destino y parametros coinciden",
-    URL_PARAMS_DIFF: "mismo destino, parametros distintos -> revisar sdid/as_*",
-    URL_BASE_DIFF: "destino distinto -> URL equivocada",
-    URL_MISSING_ACTUAL: "el creativo no tiene ClickTag en Innovid",
-    URL_MISSING_EXPECTED: "la TS no declara URL para este creativo",
-    URL_MALFORMED: "URL mal formada en alguno de los dos lados",
-    URL_BOTH_MISSING: "ninguno declara URL",
+    URL_MATCH: "destination and params match",
+    URL_PARAMS_DIFF: "same destination, different params -> check sdid/as_*",
+    URL_BASE_DIFF: "different destination -> wrong URL",
+    URL_MISSING_ACTUAL: "the creative has no ClickTag in Innovid",
+    URL_MISSING_EXPECTED: "the TS doesn't declare a URL for this creative",
+    URL_MALFORMED: "malformed URL on one side or the other",
+    URL_BOTH_MISSING: "neither side declares a URL",
 }
 TRI_STYLE = {
-    TRI_OK: "green", TRI_URL_DESVIADO: "bold red",
-    TRI_EXPORT_DESVIADO: "bold red", TRI_TS_DESVIADO: "yellow",
-    TRI_TODOS_DISTINTOS: "bold red", TRI_INCOMPLETO: "dim",
+    TRI_OK: "green", TRI_URL_MISMATCH: "bold red",
+    TRI_EXPORT_MISMATCH: "bold red", TRI_TS_MISMATCH: "yellow",
+    TRI_ALL_DIFFERENT: "bold red", TRI_INCOMPLETE: "dim",
 }
 TRI_MEAN = {
-    TRI_OK: "TS = Innovid = sdid de la URL",
-    TRI_URL_DESVIADO: "TS e Innovid coinciden, la URL lleva otro sdid",
-    TRI_EXPORT_DESVIADO: "TS y URL coinciden, Third_Party_ID en Innovid difiere",
-    TRI_TS_DESVIADO: "Innovid y URL coinciden, la TS declara otro CGEN",
-    TRI_TODOS_DISTINTOS: "los tres vertices difieren",
-    TRI_INCOMPLETO: "faltan vertices -> NOT_VERIFIED",
+    TRI_OK: "TS = Innovid = URL sdid",
+    TRI_URL_MISMATCH: "TS and Innovid match, the URL carries a different sdid",
+    TRI_EXPORT_MISMATCH: "TS and URL match, Third_Party_ID in Innovid differs",
+    TRI_TS_MISMATCH: "Innovid and URL match, the TS declares a different CGEN",
+    TRI_ALL_DIFFERENT: "all three vertices differ",
+    TRI_INCOMPLETE: "missing vertices -> NOT_VERIFIED",
 }
 
 @app.command()
@@ -208,8 +208,8 @@ def main(
     # ---------------- L7 ATTRIBUTION
     if res.triangle_counts:
         tt2 = Table("Resultado", "Creativos verdes", "Significado", box=None)
-        for k in (TRI_OK, TRI_URL_DESVIADO, TRI_EXPORT_DESVIADO,
-                  TRI_TS_DESVIADO, TRI_TODOS_DISTINTOS, TRI_INCOMPLETO):
+        for k in (TRI_OK, TRI_URL_MISMATCH, TRI_EXPORT_MISMATCH,
+                  TRI_TS_MISMATCH, TRI_ALL_DIFFERENT, TRI_INCOMPLETE):
             if k in res.triangle_counts:
                 s = TRI_STYLE[k]
                 tt2.add_row(f"[{s}]{k}[/]", str(res.triangle_counts[k]),
@@ -219,7 +219,7 @@ def main(
             border_style="magenta"))
 
         bad_tri = [(pm, cl) for pm in res.matched for cl in pm.creative_links
-                   if cl.triangle and cl.triangle.result not in (TRI_OK, TRI_INCOMPLETO)]
+                   if cl.triangle and cl.triangle.result not in (TRI_OK, TRI_INCOMPLETE)]
         if bad_tri:
             at2 = Table("placement", "creativo", "TS", "Innovid", "URL",
                         "desviado", box=None)

@@ -19,7 +19,7 @@ def evaluate(match_result, buffer):
             buffer.pass_(
                 rule_id="PLC-006",
                 domain=Domain.IDENTITY,
-                message="Placement Name correcto",
+                message="Placement Name is correct",
                 placement_id=pm.placement_id,
             )
 

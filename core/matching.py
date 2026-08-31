@@ -478,12 +478,12 @@ def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
 
     if ep.group_name and not ap.group_name:
         t.winner = "none"
-        t.note = "la TS declara grupo y el export no lo tiene"
+        t.note = "the TS declares a group and the export doesn't have one"
         return "MISSING", t
 
     if not ep.group_name and ap.group_name:
         t.winner = "none"
-        t.note = "el export tiene grupo y la TS lo dejo vacio"
+        t.note = "the export has a group and the TS left it empty"
         return "EXTRA", t
 
     t.keys_tried.append("group_name_norm")
@@ -493,15 +493,15 @@ def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
         if exp_id and ap.group_id:
             t.keys_tried.append("decision_tree_id")
             if exp_id == ap.group_id:
-                t.note = f"nombre + Dtree_ID {ap.group_id} coinciden"
+                t.note = f"name + Dtree_ID {ap.group_id} match"
                 return "OK", t
-            t.note = f"nombre coincide pero Dtree_ID difiere ({exp_id} vs {ap.group_id})"
+            t.note = f"name matches but Dtree_ID differs ({exp_id} vs {ap.group_id})"
             return "MISMATCH", t
-        t.note = f"nombre coincide, Dtree_ID no verificable (export: {ap.group_id or '-'})"
+        t.note = f"name matches, Dtree_ID not verifiable (export: {ap.group_id or '-'})"
         return "NAME_ONLY", t
 
     t.discarded.append(f"'{ap.group_name}' != '{exp_name}'")
-    t.note = "nombre de grupo distinto (sin fuzzy por diseno)"
+    t.note = "different group name (no fuzzy matching by design)"
     return "MISMATCH", t
 
 # ------------------------------------------------------------------ L4 creativo
@@ -585,15 +585,15 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
 
     if not ts_cid or not ex_cid:
         res.scope_guard = "UNKNOWN"
-        res.scope_evidence = (f"TS campaign_id='{ts_cid or 'ausente'}' · "
-                              f"export='{ex_cid or 'ausente'}'")
+        res.scope_evidence = (f"TS campaign_id='{ts_cid or 'missing'}' · "
+                              f"export='{ex_cid or 'missing'}'")
     elif ts_cid == ex_cid:
         res.scope_guard = "OK"
-        res.scope_evidence = f"campaign_id {ts_cid} coincide"
+        res.scope_evidence = f"campaign_id {ts_cid} matches"
     else:
         res.scope_guard = "MISMATCH"
-        res.scope_evidence = (f"TS declara {ts_cid} y el export {ex_cid}: "
-                              f"son campanas distintas")
+        res.scope_evidence = (f"TS declares {ts_cid} and the export {ex_cid}: "
+                              f"different campaigns")
         return res
 
     expected = build_expected(ts)
@@ -615,7 +615,7 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
 
         if ap is None:
             t.winner = "none"
-            t.note = "el placement esperado no esta en el export"
+            t.note = "the expected placement isn't in the export"
             res.only_expected.append(ep)
             res.confidence_counts[CONF_NONE] = \
                 res.confidence_counts.get(CONF_NONE, 0) + 1

@@ -20,7 +20,7 @@ def evaluate(match_result, buffer):
                 buffer.pass_(
                     rule_id="TRK-002",
                     domain=Domain.ATTRIBUTION,
-                    message="DSet correcto",
+                    message="DSet is correct",
                     placement_id=pm.placement_id,
                 )
 

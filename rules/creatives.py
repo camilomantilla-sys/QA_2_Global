@@ -7,11 +7,11 @@ def evaluate(match_result, buffer):
 
     for pm in match_result.matched:
 
-        # Creative Rotations declara un pool de variantes en rotacion
-        # (Rotation % = EVEN/weighted). Que una variante puntual no
-        # tenga match en Innovid es normal cuando el grupo hace swap
-        # de creativos: solo es un problema real si NINGUNA variante
-        # del grupo esta corriendo en Innovid.
+        # Creative Rotations declares a pool of rotating variants
+        # (Rotation % = EVEN/weighted). One variant not matching in
+        # Innovid is normal when the group does a creative swap: it's
+        # only a real problem if NONE of the group's variants are
+        # running in Innovid.
         rotation_links = [
             cl for cl in pm.creative_links
             if cl.expected.ts_sheet == ROTATION_SHEET
@@ -29,17 +29,17 @@ def evaluate(match_result, buffer):
                         rule_id="CRE-001",
                         domain=Domain.CREATIVE,
                         message=(
-                            "Variante de Creative Rotations sin match individual, "
-                            "pero el grupo tiene otras variantes activas en "
-                            "Innovid (posible swap de rotacion)."
+                            "Creative Rotations variant with no individual match, "
+                            "but the group has other active variants in "
+                            "Innovid (possible rotation swap)."
                         ),
                         placement_id=pm.placement_id,
                         creative_id=cl.expected.creative_id,
                         creative_name=cl.expected.name,
                         expected=cl.expected.name,
                         recommended_action=(
-                            "Confirmar si esta variante fue swapeada "
-                            "intencionalmente en la rotacion."
+                            "Confirm whether this variant was swapped "
+                            "out of the rotation intentionally."
                         ),
                     )
                     continue
@@ -47,7 +47,7 @@ def evaluate(match_result, buffer):
                 buffer.fail(
                     rule_id="CRE-001",
                     domain=Domain.CREATIVE,
-                    message="Creative faltante en export",
+                    message="Creative missing in export",
                     placement_id=pm.placement_id,
                     creative_id=cl.expected.creative_id,
                     creative_name=cl.expected.name,
@@ -59,7 +59,7 @@ def evaluate(match_result, buffer):
                 buffer.pass_(
                     rule_id="CRE-001",
                     domain=Domain.CREATIVE,
-                    message="Creative encontrado",
+                    message="Creative found",
                     placement_id=pm.placement_id,
                     creative_id=cl.actual.creative_id,
                     creative_name=cl.actual.name,

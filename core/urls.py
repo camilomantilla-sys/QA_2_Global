@@ -1,14 +1,14 @@
 """
-Motor de URLs y attribution.
+URL and attribution engine.
 
-Comparacion de URLs por componentes, NUNCA por igualdad de string cruda:
-  scheme+host lowercase, path normalizado, query params como CONJUNTO
-  (el orden es irrelevante), fragment descartado.
+URL comparison by component, NEVER by raw string equality:
+  scheme+host lowercase, normalized path, query params as a SET
+  (order is irrelevant), fragment discarded.
 
-Triangulo de attribution (Adobe):
-    TS.CGENS  ==  Export.Third_Party_ID  ==  sdid en la URL
-Cuando los tres coinciden -> PASS con certeza.
-Cuando uno difiere -> el finding señala CUAL esta desviado.
+Attribution triangle (Adobe):
+    TS.CGENS  ==  Export.Third_Party_ID  ==  sdid in the URL
+When all three match -> PASS with certainty.
+When one differs -> the finding points out WHICH one is off.
 """
 from __future__ import annotations
 
@@ -16,17 +16,17 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-# Parametros que identifican el CGEN dentro de la URL, por orden de prioridad
+# Params that identify the CGEN inside the URL, in priority order
 CGEN_URL_PARAMS = ["sdid", "s_did"]
 
-# Parametros de attribution derivados que Adobe usa
+# Derived attribution params that Adobe uses
 ATTR_PARAMS = ["as_campaign", "as_source", "as_content", "as_camptype",
                "as_channel", "as_campclass", "mv", "mv2"]
 
-# Parametros que se ignoran al comparar (cache busters, timestamps)
+# Params ignored when comparing (cache busters, timestamps)
 IGNORE_PARAMS = {"ord", "random", "cachebuster", "cb", "ts", "_"}
 
-# Macros o tokens sin reemplazar
+# Unreplaced macros or tokens
 _MACRO = re.compile(r"(%%|\[[A-Za-z_]+\]|%[A-Za-z_]+!|\{\{|\$\{|%e[a-z]+!)")
 
 @dataclass
@@ -55,7 +55,7 @@ def parse_url(value: object) -> ParsedURL:
     raw = str(value or "").strip()
     out = ParsedURL(raw=raw)
     if not raw:
-        out.error = "vacia"
+        out.error = "empty"
         return out
 
     out.unresolved_macros = sorted(set(_MACRO.findall(raw)))
@@ -63,11 +63,11 @@ def parse_url(value: object) -> ParsedURL:
     try:
         s = urlsplit(raw)
     except Exception as exc:
-        out.error = f"no parseable: {exc}"
+        out.error = f"not parseable: {exc}"
         return out
 
     if not s.scheme or not s.netloc:
-        out.error = "sin scheme o host"
+        out.error = "no scheme or host"
         return out
 
     out.scheme = s.scheme.lower()
@@ -84,7 +84,7 @@ def parse_url(value: object) -> ParsedURL:
     out.ok = True
     return out
 
-# ------------------------------------------------------------------ comparacion
+# ------------------------------------------------------------------ comparison
 
 URL_MATCH = "MATCH"
 URL_PARAMS_DIFF = "PARAMS_DIFF"
@@ -114,15 +114,15 @@ def compare_urls(expected: object, actual: object) -> URLComparison:
 
     if not e.raw and not a.raw:
         c.result = URL_BOTH_MISSING
-        c.note = "ninguna URL declarada"
+        c.note = "no URL declared"
         return c
     if not e.raw:
         c.result = URL_MISSING_EXPECTED
-        c.note = "la TS no declara URL para este creativo"
+        c.note = "the TS doesn't declare a URL for this creative"
         return c
     if not a.raw:
         c.result = URL_MISSING_ACTUAL
-        c.note = "el creativo no tiene ClickTag en Innovid"
+        c.note = "the creative has no ClickTag in Innovid"
         return c
     if not e.ok or not a.ok:
         c.result = URL_MALFORMED
@@ -131,7 +131,7 @@ def compare_urls(expected: object, actual: object) -> URLComparison:
 
     if e.base != a.base:
         c.result = URL_BASE_DIFF
-        c.note = f"destino distinto: '{e.base}' vs '{a.base}'"
+        c.note = f"different destination: '{e.base}' vs '{a.base}'"
         return c
 
     ek, ak = set(e.params), set(a.params)
@@ -150,37 +150,37 @@ def compare_urls(expected: object, actual: object) -> URLComparison:
             bits.append(", ".join(f"{k}: {v[0]} -> {v[1]}"
                                   for k, v in list(c.params_diff_value.items())[:3]))
         if c.params_only_expected:
-            bits.append(f"faltan: {', '.join(list(c.params_only_expected)[:3])}")
+            bits.append(f"missing: {', '.join(list(c.params_only_expected)[:3])}")
         if c.params_only_actual:
             bits.append(f"extra: {', '.join(list(c.params_only_actual)[:3])}")
         c.note = " · ".join(bits)
         return c
 
     c.result = URL_MATCH
-    c.note = "destino y parametros coinciden"
+    c.note = "destination and params match"
     return c
 
-# ------------------------------------------------------------------ triangulo
+# ------------------------------------------------------------------ triangle
 
 TRI_OK = "OK"
-TRI_URL_DESVIADO = "URL_DESVIADA"
-TRI_EXPORT_DESVIADO = "EXPORT_DESVIADO"
-TRI_TS_DESVIADO = "TS_DESVIADO"
-TRI_TODOS_DISTINTOS = "TODOS_DISTINTOS"
-TRI_INCOMPLETO = "INCOMPLETO"
+TRI_URL_MISMATCH = "URL_MISMATCH"
+TRI_EXPORT_MISMATCH = "EXPORT_MISMATCH"
+TRI_TS_MISMATCH = "TS_MISMATCH"
+TRI_ALL_DIFFERENT = "ALL_DIFFERENT"
+TRI_INCOMPLETE = "INCOMPLETE"
 
 @dataclass
 class AttributionTriangle:
     """
-    Tres vertices que deben coincidir:
-      ts       = CGENS declarado en la Traffic Sheet
-      export   = Third_Party_ID de la fila en Innovid
-      url      = parametro sdid extraido del ClickTag
+    Three vertices that must match:
+      ts       = CGENS declared in the Traffic Sheet
+      export   = Third_Party_ID of the row in Innovid
+      url      = sdid param extracted from the ClickTag
     """
     ts: str = ""
     export: str = ""
     url: str = ""
-    result: str = TRI_INCOMPLETO
+    result: str = TRI_INCOMPLETE
     deviant: str = ""
     consensus: str = ""
     note: str = ""
@@ -204,9 +204,9 @@ def check_triangle(ts_cgen: object, export_tpid: object,
                  if k not in present]
 
     if len(present) < 2:
-        t.result = TRI_INCOMPLETO
-        t.note = ("no verificable: solo hay "
-                  f"{', '.join(present) or 'ningun vertice'}")
+        t.result = TRI_INCOMPLETE
+        t.note = ("not verifiable: only "
+                  f"{', '.join(present) or 'no vertex'} present")
         return t
 
     vals = list(present.values())
@@ -214,20 +214,20 @@ def check_triangle(ts_cgen: object, export_tpid: object,
         t.consensus = vals[0]
         if len(present) == 3:
             t.result = TRI_OK
-            t.note = f"los tres vertices coinciden en {t.consensus}"
+            t.note = f"all three vertices match on {t.consensus}"
         else:
-            t.result = TRI_INCOMPLETO
-            t.note = (f"{' y '.join(present)} coinciden en {t.consensus}, "
-                      f"falta {', '.join(t.missing)}")
+            t.result = TRI_INCOMPLETE
+            t.note = (f"{' and '.join(present)} match on {t.consensus}, "
+                      f"missing {', '.join(t.missing)}")
         return t
 
     if len(present) == 2:
         a, b = list(present.items())
-        t.result = TRI_TODOS_DISTINTOS
-        t.note = f"{a[0]}={a[1]} vs {b[0]}={b[1]} (falta {', '.join(t.missing)})"
+        t.result = TRI_ALL_DIFFERENT
+        t.note = f"{a[0]}={a[1]} vs {b[0]}={b[1]} (missing {', '.join(t.missing)})"
         return t
 
-    # tres vertices con desacuerdo: hallar la mayoria
+    # three vertices disagree: find the majority
     counts: dict[str, list[str]] = {}
     for src, val in present.items():
         counts.setdefault(val, []).append(src)
@@ -237,13 +237,13 @@ def check_triangle(ts_cgen: object, export_tpid: object,
         t.consensus = majority[0]
         odd_src = next(s for s in present if s not in majority[1])
         t.deviant = odd_src
-        t.result = {"URL": TRI_URL_DESVIADO,
-                    "Innovid": TRI_EXPORT_DESVIADO,
-                    "TS": TRI_TS_DESVIADO}[odd_src]
-        t.note = (f"{' y '.join(majority[1])} coinciden en {t.consensus}, "
-                  f"pero {odd_src}={present[odd_src]}")
+        t.result = {"URL": TRI_URL_MISMATCH,
+                    "Innovid": TRI_EXPORT_MISMATCH,
+                    "TS": TRI_TS_MISMATCH}[odd_src]
+        t.note = (f"{' and '.join(majority[1])} match on {t.consensus}, "
+                  f"but {odd_src}={present[odd_src]}")
         return t
 
-    t.result = TRI_TODOS_DISTINTOS
+    t.result = TRI_ALL_DIFFERENT
     t.note = f"TS={t.ts} · Innovid={t.export} · URL={t.url}"
     return t
