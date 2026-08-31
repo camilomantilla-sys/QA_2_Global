@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import sys
 import tempfile
 import warnings
@@ -97,11 +98,11 @@ STATUS_LABEL = {
 
 
 STATUS_COLOR = {
-    "PASS": "#16a34a",
-    "FAIL": "#dc2626",
-    "REVIEW": "#d97706",
-    "NOT_VERIFIED": "#64748b",
-    "INFO": "#2563eb",
+    "PASS": "#0FA97C",
+    "FAIL": "#DC2626",
+    "REVIEW": "#D97706",
+    "NOT_VERIFIED": "#64748B",
+    "INFO": "#0EA5C4",
 }
 
 
@@ -115,11 +116,11 @@ VERDICT_LABELS = {
 
 
 VERDICT_COLORS = {
-    "PASSED": "#16a34a",
-    "FAILED": "#dc2626",
-    "BLOCKED": "#991b1b",
-    "NEEDS_REVIEW": "#d97706",
-    "NO_CHECKS": "#64748b",
+    "PASSED": "#0FA97C",
+    "FAILED": "#DC2626",
+    "BLOCKED": "#991B1B",
+    "NEEDS_REVIEW": "#D97706",
+    "NO_CHECKS": "#64748B",
 }
 
 
@@ -397,8 +398,17 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+        :root {
+            --wpp-indigo: #4B5EEA;
+            --wpp-indigo-dark: #2C36A8;
+            --wpp-cyan: #17B4DE;
+            --wpp-mint: #0FA97C;
+            --wpp-ink: #171B2E;
+            --wpp-bg: #F5F7FD;
+        }
+
         .stApp {
-            background-color: #f4f7fb;
+            background-color: var(--wpp-bg);
         }
 
         .block-container {
@@ -407,77 +417,111 @@ st.markdown(
             padding-bottom: 3rem;
         }
 
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(
+                180deg,
+                #EEF1FE 0%,
+                #F5F7FD 55%
+            );
+            border-right: 1px solid #E2E6FB;
+        }
+
+        .wpp-logo-wrap {
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            box-shadow: 0 6px 16px rgba(43, 54, 168, 0.18);
+        }
+
         .qa-header {
             color: white;
-            background:
-                linear-gradient(
-                    110deg,
-                    #3730a3 0%,
-                    #2563eb 55%,
-                    #0891b2 100%
-                );
-            padding: 24px 30px;
-            border-radius: 17px;
-            box-shadow:
-                0 12px 30px rgba(30, 64, 175, 0.20);
-            margin-bottom: 18px;
+            background: linear-gradient(
+                120deg,
+                var(--wpp-indigo-dark) 0%,
+                var(--wpp-indigo) 45%,
+                var(--wpp-cyan) 80%,
+                var(--wpp-mint) 115%
+            );
+            padding: 28px 32px;
+            border-radius: 18px;
+            box-shadow: 0 14px 34px rgba(43, 54, 168, 0.25);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .qa-header::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(
+                circle at 85% -20%,
+                rgba(255, 255, 255, 0.35),
+                transparent 55%
+            );
+            pointer-events: none;
         }
 
         .qa-header h1 {
             margin: 0;
             padding: 0;
-            font-size: 2rem;
+            font-size: 2.1rem;
             font-weight: 900;
+            letter-spacing: -0.01em;
         }
 
         .qa-header p {
-            margin: 7px 0 0 0;
-            opacity: 0.92;
-            font-size: 0.95rem;
+            margin: 8px 0 0 0;
+            opacity: 0.94;
+            font-size: 0.97rem;
         }
 
         .verdict-card {
             background: white;
-            border-radius: 14px;
-            padding: 19px 23px;
+            border-radius: 16px;
+            padding: 20px 24px;
             margin: 10px 0 18px 0;
-            box-shadow:
-                0 5px 18px rgba(15, 23, 42, 0.08);
+            box-shadow: 0 6px 20px rgba(23, 27, 46, 0.07);
         }
 
         .verdict-caption {
             color: #64748b;
             font-size: 0.78rem;
             font-weight: 800;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.09em;
         }
 
         .verdict-value {
             margin-top: 4px;
-            font-size: 1.9rem;
+            font-size: 1.95rem;
             font-weight: 900;
         }
 
         div[data-testid="stMetric"] {
             background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 13px;
+            border: 1px solid #E5E9FA;
+            border-radius: 14px;
             padding: 14px;
-            box-shadow:
-                0 3px 12px rgba(15, 23, 42, 0.05);
+            box-shadow: 0 3px 12px rgba(23, 27, 46, 0.05);
         }
 
         div[data-testid="stExpander"] {
             background: white;
-            border: 1px solid #dbe3ef;
-            border-radius: 12px;
+            border: 1px solid #E2E6FB;
+            border-radius: 13px;
             margin-bottom: 8px;
             overflow: hidden;
+            transition: box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        div[data-testid="stExpander"]:hover {
+            border-color: var(--wpp-indigo);
+            box-shadow: 0 4px 14px rgba(75, 94, 234, 0.12);
         }
 
         div[data-testid="stFileUploader"] {
             background: white;
-            border-radius: 12px;
+            border-radius: 13px;
             padding: 6px;
         }
 
@@ -491,31 +535,55 @@ st.markdown(
 
         .profile-card {
             background: white;
-            border: 1px solid #dbeafe;
-            border-radius: 12px;
+            border: 1px solid #E2E6FB;
+            border-radius: 13px;
             padding: 13px 16px;
             margin-bottom: 15px;
             line-height: 1.55;
         }
 
         .profile-card strong {
-            color: #1d4ed8;
+            color: var(--wpp-indigo-dark);
         }
 
         .section-note {
-            background: #eff6ff;
-            border-left: 5px solid #2563eb;
-            border-radius: 9px;
+            background: #EEF1FE;
+            border-left: 5px solid var(--wpp-indigo);
+            border-radius: 10px;
             padding: 11px 14px;
             margin-bottom: 12px;
-            color: #1e3a8a;
+            color: var(--wpp-indigo-dark);
         }
 
         .stButton > button {
             width: 100%;
             min-height: 48px;
-            border-radius: 10px;
+            border-radius: 11px;
             font-weight: 850;
+        }
+
+        .stButton > button[kind="primary"] {
+            background: linear-gradient(
+                100deg,
+                var(--wpp-indigo) 0%,
+                var(--wpp-cyan) 130%
+            );
+            border: none;
+            box-shadow: 0 6px 16px rgba(75, 94, 234, 0.3);
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        .stButton > button[kind="primary"]:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(75, 94, 234, 0.4);
+        }
+
+        button[role="tab"][aria-selected="true"] {
+            color: var(--wpp-indigo-dark) !important;
+        }
+
+        div[data-baseweb="tab-highlight"] {
+            background-color: var(--wpp-indigo) !important;
         }
     </style>
     """,
@@ -542,6 +610,20 @@ st.markdown(
 # ============================================================
 
 with st.sidebar:
+    _logo_path = PROJECT_ROOT / "ui" / "assets" / "wpp-media-logo.png.png"
+
+    if _logo_path.exists():
+        _logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode()
+        st.markdown(
+            f"""
+            <div class="wpp-logo-wrap">
+                <img src="data:image/png;base64,{_logo_b64}"
+                     style="width:100%; display:block;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     st.header("QA2 Files")
 
     uploaded_ts = st.file_uploader(
