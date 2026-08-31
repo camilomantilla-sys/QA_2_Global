@@ -337,7 +337,13 @@ def _worked_vendor_data(ts_result) -> dict[str, dict]:
     """
     records: dict[str, dict] = {}
 
-    worked_ids = set(ts_result.scope)
+    # ts_result.scope holds EVERY placement row (including ones with
+    # REQ_NOT_WORKED, i.e. out of scope for this request). Using it
+    # directly pulled in placements from other work orders / prior
+    # rounds on the same tab, producing DISQO FAILs for placements
+    # that aren't even being worked right now. ts_result.worked is
+    # already the correctly filtered subset everywhere else in the app.
+    worked_ids = {s.placement_id for s in ts_result.worked}
 
     for row in ts_result.placements.rows:
         placement_id = str(
@@ -553,13 +559,18 @@ def reconcile_adobe_pixels(
             not innovid_has_disqo
             and not tags_have_disqo
         ):
+            # No evidence yet is not the same as broken: Adobe workflows
+            # often ship tags before DISQO delivers the vendor pixel for
+            # a placement. This is inherently a pending/uncertain state
+            # a human must confirm (still waiting vs. genuinely missing),
+            # not a certain error, so it is REVIEW rather than FAIL.
             result.checks.append(
                 AdobePixelCheck(
-                    result=PixelResult.FAIL.value,
+                    result=PixelResult.REVIEW.value,
                     message=(
                         "DISQO is required but no "
-                        "implementation evidence "
-                        "was found."
+                        "implementation evidence was found yet "
+                        "(may still be pending from the vendor)."
                     ),
                     expected=(
                         "DISQO integration "
@@ -570,9 +581,9 @@ def reconcile_adobe_pixels(
                         "or tag files"
                     ),
                     recommended_action=(
-                        "Integrate DISQO in Innovid "
-                        "and regenerate the "
-                        "Placement View."
+                        "Confirm with DISQO whether the pixel for "
+                        "this placement has been delivered yet; "
+                        "integrate in Innovid once available."
                     ),
                     **common,
                 )
