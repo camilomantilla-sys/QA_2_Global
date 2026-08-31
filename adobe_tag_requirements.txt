@@ -1,0 +1,961 @@
+==============================================================================================================
+ADOBE TAG REQUIREMENTS DIAGNOSTIC
+==============================================================================================================
+
+DOCUMENTS
+Traffic Sheet                 : TS_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_ASY_C.xlsx
+Implementation model          : adobe_variante_b
+Tag files processed           : 10
+Tag files with fatal errors  : 0
+
+CAMPAIGN
+Traffic Sheet Campaign ID    : 326319
+Tag Campaign IDs             : {'326319': 10}
+
+COVERAGE
+Worked placements            : 127
+Placements in tag inventory  : 127
+Placements without tag rows  : 0
+Placements without vendor    : 0
+
+CLASSIFIED REQUIREMENTS
+FTRACK                        : 125
+PROTECTED                     : 74
+DISQO                         : 74
+CLICKTAG                      : 2
+
+RAW VENDORS / PIXELS VALUES
+  57 | ftrack, DISQO, Protected
+  51 | ftrack
+  17 | fTrack, Protected, DISQO
+   2 | Click tag only
+
+UNCLASSIFIED VENDOR VALUES
+None
+
+TAG COLUMNS FOUND
+  93 | ftrack 1x1 imp
+  93 | ftrack 1x1 click
+  42 | protected pixel
+  42 | protected pixel html
+  42 | protected pixel (js)
+  42 | protected pixel (js) html
+  30 | DISQO
+  18 | js_https
+  18 | if_https
+  18 | async_https
+  18 | ins
+  14 | preroll_https
+  12 | disqo
+   2 | Static_Clicktag1
+   2 | Update_Clicktag1
+
+TAG TYPES FOUND
+PIXEL                         : 126
+1X1_CLICK                     : 97
+1X1_IMPRESSION                : 93
+PIXEL_HTML                    : 84
+DISPLAY_JS                    : 18
+DISPLAY_IFRAME                : 18
+DISPLAY_ASYNC                 : 18
+DISPLAY_INS                   : 18
+VIDEO_VAST                    : 14
+
+PLACEMENTS WITHOUT TAG ROWS
+None
+
+PLACEMENTS WITHOUT VENDOR REQUIREMENT
+None
+
+PLACEMENT DETAIL
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038629
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038630
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038631
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038632
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038633
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038634
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038635
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038636
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038637
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038638
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038639
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038640
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : disqo, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Duolingo_1x1_FY26_Q4_AMER_Creative_STEDiscover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038641
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038642
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038643
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038644
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038645
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038646
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038647
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038648
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038649
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038650
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038651
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038652
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038653
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038654
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038655
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038656
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038657
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038658
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038659
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038660
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038661
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038662
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038663
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038664
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038665
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038666
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038667
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_myunidays_1x1_FY26_Q4_AMER_Creative_STEDiscover_4536906246_08.20.2026.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038668
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038669
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038670
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038671
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038672
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038673
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038674
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038675
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038676
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038677
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038678
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038679
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038680
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038681
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038682
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038683
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038684
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_SiriusXM_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discov.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038685
+Vendor TS    : Click tag only
+Requirements : CLICKTAG
+Tag columns  : Static_Clicktag1, Update_Clicktag1
+Tag types    : 1X1_CLICK
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038686
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038687
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038688
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038689
+Vendor TS    : Click tag only
+Requirements : CLICKTAG
+Tag columns  : Static_Clicktag1, Update_Clicktag1
+Tag types    : 1X1_CLICK
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038690
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038691
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038692
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038695
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038696
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038697
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038700
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038701
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038702
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038703
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038704
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038705
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Brainly_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_A.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038706
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038707
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038708
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038709
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038710
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038711
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038712
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038713
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038714
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Brainly_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038715
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038719
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038720
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038721
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038722
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038723
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038724
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038725
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038726
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038727
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038729
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038730
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038731
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038732
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038733
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038734
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038735
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038736
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038737
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038738
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038739
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038740
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038741
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038742
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038743
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038744
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038745
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_CheggUS_VIDEO_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038747
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038749
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038750
+Vendor TS    : ftrack
+Requirements : FTRACK
+Tag columns  : ftrack 1x1 click, ftrack 1x1 imp
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION
+Files        : TAGS_Chegg_US_1x1_FY26_Q4_AMER_Creative_STEDiscover_}.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038751
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038752
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038753
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038754
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038755
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038756
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Quizlet_Display_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038757
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038758
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038759
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038760
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11038761
+Vendor TS    : ftrack, DISQO, Protected
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : DISQO, ftrack 1x1 click, ftrack 1x1 imp, protected pixel, protected pixel (js), protected pixel (js) html, protected pixel html
+Tag types    : 1X1_CLICK, 1X1_IMPRESSION, PIXEL, PIXEL_HTML
+Files        : TAGS_Quizlet_1x1_FY26_Q4_AMER_Creative_STEDiscover_Awareness_Discover_.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11058731
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11058732
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : async_https, if_https, ins, js_https
+Tag types    : DISPLAY_ASYNC, DISPLAY_IFRAME, DISPLAY_INS, DISPLAY_JS
+Files        : TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11058734
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+--------------------------------------------------------------------------------------------------------------
+Placement ID : 11058735
+Vendor TS    : fTrack, Protected, DISQO
+Requirements : DISQO, FTRACK, PROTECTED
+Tag columns  : preroll_https
+Tag types    : VIDEO_VAST
+Files        : TAGS_Learnverse_VIDEO_DISPLAY_FY26_Q4_AMER_Creative_STEDiscover.xlsx
+
+==============================================================================================================
