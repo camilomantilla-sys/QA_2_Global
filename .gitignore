@@ -63,3 +63,11 @@ wpp_*.txt
 # Streamlit local secrets
 
 # Operating system
+
+# QA2 generated diagnostic outputs
+adobe_*.txt
+pixel_findings_context.txt
+current_disqo_function.txt
+tag_inventory_coverage*.txt
+*_integration_context.txt
+*_requirements.txt
