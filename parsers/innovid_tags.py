@@ -123,6 +123,13 @@ _PLACEMENT_QUERY = re.compile(
     re.IGNORECASE,
 )
 
+# DISQO's verification pixel (ad-score.com) encodes campaign/placement as
+# positional params (l1=campaign, l2=?, l3=placement, l4=), not by name.
+# Scoped to that host so 'l3' is never misread as a placement ID on an
+# unrelated vendor's tag.
+_ADSCORE_HOSTS = ("ad-score.com",)
+_ADSCORE_PLACEMENT_QUERY = re.compile(r"[?&#]l3=(\d+)", re.IGNORECASE)
+
 _WIDTH_QUERY = re.compile(
     r"(?:ft_width|data-placement-width|width)[=\"':\s]+(\d+)",
     re.IGNORECASE,
@@ -372,6 +379,7 @@ def _unique_matches(pattern: re.Pattern, raw: str) -> list[str]:
 
 def _parse_tag_value(column_name: str, raw: str) -> TagValue:
     urls = _extract_urls(raw)
+    hosts = _extract_hosts(urls)
 
     campaign_ids = _unique_matches(_CAMPAIGN_PATH, raw)
 
@@ -381,12 +389,19 @@ def _parse_tag_value(column_name: str, raw: str) -> TagValue:
         if placement_id not in placement_ids:
             placement_ids.append(placement_id)
 
+    if not placement_ids and any(
+        adscore_host in host
+        for host in hosts
+        for adscore_host in _ADSCORE_HOSTS
+    ):
+        placement_ids = _unique_matches(_ADSCORE_PLACEMENT_QUERY, raw)
+
     return TagValue(
         column_name=column_name,
         tag_type=_classify_tag_header(column_name) or TAG_UNKNOWN,
         raw=raw,
         urls=urls,
-        hosts=_extract_hosts(urls),
+        hosts=hosts,
         campaign_ids=campaign_ids,
         placement_ids=placement_ids,
         widths=_unique_matches(_WIDTH_QUERY, raw),
