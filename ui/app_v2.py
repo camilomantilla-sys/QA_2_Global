@@ -2149,6 +2149,18 @@ with tempfile.TemporaryDirectory(
                         "#### 1. Placement: Traffic Sheet vs Innovid"
                     )
 
+                    # "Decision Tree" is an Adobe-specific Innovid
+                    # feature (Decision_Tree_Name column). WPP Media's
+                    # standard Traffic Sheets group creatives instead
+                    # via the Creative Rotations sheet -- referred to
+                    # here as a "Decision Set" to avoid conflating the
+                    # two concepts.
+                    group_label = (
+                        "Decision Tree"
+                        if ts_result.profile == "adobe_variante_a"
+                        else "Decision Set (Creative Rotation)"
+                    )
+
                     placement_comparisons = [
                         comparison_row(
                             "Placement ID",
@@ -2194,7 +2206,7 @@ with tempfile.TemporaryDirectory(
                             actual.end if actual else "",
                         ),
                         comparison_row(
-                            "Decision Tree",
+                            group_label,
                             expected.group_name,
                             (
                                 actual.group_name
@@ -2454,7 +2466,7 @@ with tempfile.TemporaryDirectory(
                                         if extra.running
                                         else "No"
                                     ),
-                                    "Decision Tree": (
+                                    group_label: (
                                         extra.group_name
                                     ),
                                     "Third Party ID": (

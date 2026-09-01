@@ -25,11 +25,23 @@ def evaluate(match_result, buffer):
 
         else:
 
-            buffer.fail(
+            # Placement ID already matched at this point (this loop
+            # only runs over matched placements), so trafficking is
+            # correct. A name mismatch doesn't block implementation
+            # -- it's a callout for the digital team to clean up the
+            # naming later, not a failure.
+            buffer.review(
                 rule_id="PLC-006",
                 domain=Domain.IDENTITY,
-                message="Placement Name mismatch",
+                message=(
+                    "Placement Name mismatch (Placement ID matched; "
+                    "this does not affect trafficking)."
+                ),
                 placement_id=pm.placement_id,
                 expected=expected,
                 actual=actual,
+                recommended_action=(
+                    "Flag to the digital team as a naming cleanup; "
+                    "no re-trafficking required."
+                ),
             )
