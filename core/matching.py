@@ -591,10 +591,20 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
         res.scope_guard = "OK"
         res.scope_evidence = f"campaign_id {ts_cid} matches"
     else:
+        # Adobe TS's declare Prisma/Advertising Cloud's own campaign ID
+        # here, which is a different number space from Innovid's
+        # ad-server-assigned Campaign ID in the export metadata -- the
+        # two never match even for a perfectly correct pairing of
+        # files. A hard abort on this alone used to zero out the whole
+        # run (expected_total=0) for any such campaign. Report the
+        # mismatch as evidence, but let placement-ID overlap (computed
+        # below) be the real signal for whether these files belong
+        # together -- a genuinely unrelated file naturally shows up as
+        # 0 matched / all only_expected instead of a blank screen.
         res.scope_guard = "MISMATCH"
         res.scope_evidence = (f"TS declares {ts_cid} and the export {ex_cid}: "
-                              f"different campaigns")
-        return res
+                              f"different campaign IDs (informational only -- "
+                              f"matching still runs by Placement ID)")
 
     expected = build_expected(ts)
     actual = build_actual(export_pc, export_pl)
