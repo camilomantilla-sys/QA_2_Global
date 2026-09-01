@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import sys
 import tempfile
 import warnings
@@ -33,6 +34,7 @@ from core.matching import match
 from core.normalize import norm_compare, norm_dims
 from core.tag_matching import match_tags
 from core.pdf_report import ReportMeta, build_pdf_report
+from core.excel_report import build_excel_report
 from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
@@ -722,6 +724,13 @@ with st.sidebar:
         record_campaign = st.text_input(
             "Campaign", key="qa2_record_campaign"
         )
+        record_request_type = st.text_input(
+            "Request Type",
+            placeholder=(
+                "e.g. New placements, swaps, creative adds..."
+            ),
+            key="qa2_record_request_type",
+        )
         record_wrike_id = st.text_input(
             "Wrike ID", key="qa2_record_wrike"
         )
@@ -749,6 +758,14 @@ with st.sidebar:
             value=None,
             key="qa2_record_qa3_date",
         )
+        record_notes = st.text_area(
+            "Notes / Callouts",
+            placeholder=(
+                "Anything worth flagging that doesn't block "
+                "implementation but should be on record..."
+            ),
+            key="qa2_record_notes",
+        )
 
     st.divider()
 
@@ -765,12 +782,24 @@ with st.sidebar:
         use_container_width=True,
     )
 
+    # st.button() only returns True on the single rerun triggered by
+    # the click itself -- on every later rerun (e.g. changing a filter
+    # in the results tabs) it goes back to False. Without persisting
+    # this in session_state, touching any filter after running QA2
+    # would drop back to the landing screen and appear to "reset"
+    # the whole app, discarding the analysis.
+    if "qa2_has_run" not in st.session_state:
+        st.session_state.qa2_has_run = False
+
+    if analyze_button:
+        st.session_state.qa2_has_run = True
+
 
 # ============================================================
 # Landing screen
 # ============================================================
 
-if not analyze_button:
+if not st.session_state.qa2_has_run:
     st.info(
         "Upload at least the Traffic Sheet and the "
         "Innovid Placement-Creative View."
@@ -941,7 +970,9 @@ with tempfile.TemporaryDirectory(
             {
                 "File": uploaded_ts.name,
                 "Expected Type": "Traffic Sheet",
-                "Detected Type": ts_result.profile,
+                "Detected Type": professional_profile_name(
+                    ts_result.profile
+                ),
                 "Status": (
                     "FATAL"
                     if result_is_fatal(ts_result)
@@ -1197,9 +1228,9 @@ with tempfile.TemporaryDirectory(
             f"""
             <div class="profile-card">
                 <strong>Profile used:</strong>
-                {ts_result.profile}<br>
+                {professional_profile_name(ts_result.profile)}<br>
                 <strong>Detected profile:</strong>
-                {detected_profile}<br>
+                {professional_profile_name(detected_profile)}<br>
                 <strong>Evidence:</strong>
                 {detection_evidence}<br>
                 <strong>Scope Guard:</strong>
@@ -1208,6 +1239,65 @@ with tempfile.TemporaryDirectory(
             """,
             unsafe_allow_html=True,
         )
+
+        _record_echo_fields = [
+            ("Campaign", record_campaign),
+            ("Request Type", record_request_type),
+            ("Wrike ID", record_wrike_id),
+            ("Implemented By", record_implemented_by),
+            (
+                "Implementation Date",
+                (
+                    record_implementation_date.isoformat()
+                    if record_implementation_date
+                    else ""
+                ),
+            ),
+            ("QA2 By", record_qa2_by),
+            (
+                "QA2 Date",
+                record_qa2_date.isoformat() if record_qa2_date else "",
+            ),
+            ("QA3 By", record_qa3_by),
+            (
+                "QA3 Date",
+                record_qa3_date.isoformat() if record_qa3_date else "",
+            ),
+        ]
+
+        _record_echo_filled = [
+            (label, value)
+            for label, value in _record_echo_fields
+            if value
+        ]
+
+        if _record_echo_filled or record_notes:
+            _record_echo_html = "<br>".join(
+                f"<strong>{html.escape(label)}:</strong> "
+                f"{html.escape(str(value))}"
+                for label, value in _record_echo_filled
+            )
+
+            st.markdown(
+                f"""
+                <div class="profile-card">
+                    <strong>Implementation Record</strong><br>
+                    {_record_echo_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if record_notes:
+                st.markdown(
+                    f"""
+                    <div class="section-note">
+                        <strong>Notes / Callouts:</strong><br>
+                        {html.escape(record_notes).replace(chr(10), "<br>")}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
         # ----------------------------------------------------
         # Adobe Pixel & Tag Requirements
@@ -1498,8 +1588,12 @@ with tempfile.TemporaryDirectory(
                 verdict_label=VERDICT_LABELS.get(
                     scorecard.verdict, scorecard.verdict
                 ),
-                profile_used=ts_result.profile,
-                detected_profile=detected_profile,
+                profile_used=professional_profile_name(
+                    ts_result.profile
+                ),
+                detected_profile=professional_profile_name(
+                    detected_profile
+                ),
                 detection_evidence=detection_evidence,
                 scope_guard=match_result.scope_guard or "UNKNOWN",
                 scope_evidence=match_result.scope_evidence,
@@ -1518,6 +1612,7 @@ with tempfile.TemporaryDirectory(
                     row["File"] for row in file_rows
                 ],
                 campaign=record_campaign,
+                request_type=record_request_type,
                 wrike_id=record_wrike_id,
                 implemented_by=record_implemented_by,
                 implementation_date=record_implementation_date,
@@ -1525,6 +1620,7 @@ with tempfile.TemporaryDirectory(
                 qa2_date=record_qa2_date,
                 qa3_by=record_qa3_by,
                 qa3_date=record_qa3_date,
+                notes=record_notes,
             ),
             findings_df=findings_dataframe(
                 [
@@ -1545,13 +1641,104 @@ with tempfile.TemporaryDirectory(
             ),
         )
 
-        st.download_button(
+        tag_coverage_rows_for_excel = [
+            {
+                "File": file_name,
+                "Campaign ID": tags_result.campaign_id,
+                "Sheet": tags_result.sheet,
+                "Placements": tags_result.distinct_placements,
+                "Materialized Tags": tags_result.total_tags,
+                "Rows In Scope": len(
+                    tag_match_result.matched_to_scope
+                ),
+                "Rows Out of Scope": len(
+                    tag_match_result.outside_scope
+                ),
+                "No Innovid Match": len(
+                    tag_match_result.missing_in_innovid
+                ),
+            }
+            for file_name, tags_result, tag_match_result in tag_matches
+        ]
+
+        excel_report_bytes = build_excel_report(
+            ReportMeta(
+                verdict=scorecard.verdict,
+                verdict_label=VERDICT_LABELS.get(
+                    scorecard.verdict, scorecard.verdict
+                ),
+                profile_used=professional_profile_name(
+                    ts_result.profile
+                ),
+                detected_profile=professional_profile_name(
+                    detected_profile
+                ),
+                detection_evidence=detection_evidence,
+                scope_guard=match_result.scope_guard or "UNKNOWN",
+                scope_evidence=match_result.scope_evidence,
+                ts_campaign_id=match_result.ts_campaign_id,
+                export_campaign_id=match_result.export_campaign_id,
+                metrics={
+                    "Worked Placements": match_result.expected_total,
+                    "Found": len(match_result.matched),
+                    "Missing": len(match_result.only_expected),
+                    "Tag Files": len(tags_results),
+                    "Errors": scorecard.errors,
+                    "Reviews": scorecard.reviews,
+                    "Not Verified": scorecard.not_verified,
+                },
+                source_files=[
+                    row["File"] for row in file_rows
+                ],
+                campaign=record_campaign,
+                request_type=record_request_type,
+                wrike_id=record_wrike_id,
+                implemented_by=record_implemented_by,
+                implementation_date=record_implementation_date,
+                qa2_by=record_qa2_by,
+                qa2_date=record_qa2_date,
+                qa3_by=record_qa3_by,
+                qa3_date=record_qa3_date,
+                notes=record_notes,
+            ),
+            findings_df=findings_dataframe(findings_buffer.findings),
+            rules_df=rule_summary_dataframe(findings_buffer),
+            files_df=files_dataframe,
+            placements_df=pd.DataFrame(placements_rows_for_pdf),
+            tag_coverage_df=(
+                pd.DataFrame(tag_coverage_rows_for_excel)
+                if tag_coverage_rows_for_excel else None
+            ),
+            logo_path=(
+                PROJECT_ROOT
+                / "ui"
+                / "assets"
+                / "wpp-media-logo.png.png"
+            ),
+        )
+
+        download_columns = st.columns(2)
+
+        download_columns[0].download_button(
             "Download PDF Report",
             data=pdf_report_bytes,
             file_name=(
                 f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
             ),
             mime="application/pdf",
+            use_container_width=True,
+        )
+
+        download_columns[1].download_button(
+            "Download Excel Report",
+            data=excel_report_bytes,
+            file_name=(
+                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            ),
+            mime=(
+                "application/vnd.openxmlformats-officedocument"
+                ".spreadsheetml.sheet"
+            ),
             use_container_width=True,
         )
 
@@ -2402,12 +2589,13 @@ with tempfile.TemporaryDirectory(
             st.markdown("#### Traffic Sheet")
 
             st.write(
-                f"**Profile used:** {ts_result.profile}"
+                f"**Profile used:** "
+                f"{professional_profile_name(ts_result.profile)}"
             )
 
             st.write(
                 f"**Detected profile:** "
-                f"{detected_profile}"
+                f"{professional_profile_name(detected_profile)}"
             )
 
             st.write(
