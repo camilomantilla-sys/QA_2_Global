@@ -78,6 +78,7 @@ class ReportMeta:
     # Implementation record -- filled from the sidebar, or left blank
     # for the reviewer to fill by hand on a printed copy.
     campaign: str = ""
+    request_type: str = ""
     wrike_id: str = ""
     implemented_by: str = ""
     implementation_date: date | None = None
@@ -85,6 +86,7 @@ class ReportMeta:
     qa2_date: date | None = None
     qa3_by: str = ""
     qa3_date: date | None = None
+    notes: str = ""
 
 
 def _styles():
@@ -218,10 +220,20 @@ def _info_flowable(meta: ReportMeta, styles):
     return t
 
 
+def _esc(text: str) -> str:
+    """Escape user-typed text before it goes into reportlab markup."""
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def _blank(value: str | None, width: int = 28) -> str:
     """Render a filled value, or an underscored blank line to fill by hand."""
     if value:
-        return str(value)
+        return _esc(value)
     return "_" * width
 
 
@@ -234,6 +246,7 @@ def _blank_date(value: date | None) -> str:
 def _record_flowable(meta: ReportMeta, styles):
     left = [
         f"<b>Campaign:</b> {_blank(meta.campaign, 34)}",
+        f"<b>Request Type:</b> {_blank(meta.request_type, 34)}",
         f"<b>Wrike ID:</b> {_blank(meta.wrike_id, 20)}",
         f"<b>Implemented By:</b> {_blank(meta.implemented_by, 24)}",
         f"<b>Implementation Date:</b> "
@@ -269,7 +282,33 @@ def _record_flowable(meta: ReportMeta, styles):
         "IMPLEMENTATION RECORD &mdash; fill in the app or by hand",
         styles["muted"],
     )
-    return [caption, Spacer(1, 4), t]
+    flowables = [caption, Spacer(1, 4), t]
+
+    if meta.notes:
+        notes_para = Paragraph(
+            _esc(meta.notes).replace("\n", "<br/>"), styles["body"]
+        )
+        notes_table = Table([[notes_para]], colWidths=[170 * mm])
+        notes_table.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 0.75, WPP_BORDER),
+                    ("BACKGROUND", (0, 0), (-1, -1), WPP_BG),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                    ("TOPPADDING", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
+        flowables += [
+            Spacer(1, 8),
+            Paragraph("NOTES / CALLOUTS", styles["muted"]),
+            Spacer(1, 4),
+            notes_table,
+        ]
+
+    return flowables
 
 
 def _metrics_flowable(meta: ReportMeta, styles):
