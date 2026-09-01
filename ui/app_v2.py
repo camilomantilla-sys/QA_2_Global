@@ -27,7 +27,9 @@ from core.engine import run_rules
 from core.adobe_pixel_reconciliation import (
     reconcile_adobe_pixels,
 )
+from core.dv_reconciliation import reconcile_dv_tags
 from core.tag_inventory import (
+    TagInventory,
     build_tag_inventory_from_results,
 )
 from core.matching import match
@@ -35,11 +37,13 @@ from core.normalize import norm_compare, norm_dims
 from core.tag_matching import match_tags
 from core.pdf_report import ReportMeta, build_pdf_report
 from core.excel_report import build_excel_report
+from parsers.dv_tags import parse_dv_tags
 from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
 from rules import adobe_pixels
+from rules import dv_tags as dv_rules
 
 
 warnings.filterwarnings(
@@ -297,6 +301,7 @@ def compare_value(
     *,
     normalizer=None,
     optional: bool = False,
+    fuzzy: bool = False,
 ) -> str:
     expected_text = clean_value(expected)
     actual_text = clean_value(actual)
@@ -317,6 +322,16 @@ def compare_value(
     if expected_comparable == actual_comparable:
         return "PASS"
 
+    # Fuzzy fields (e.g. Site) commonly get a shorter or longer label
+    # between the TS and Innovid ("The Trade Desk" vs "The Trade Desk
+    # Usa") without being a real mismatch -- if one contains the
+    # other, that's a match.
+    if fuzzy and (
+        expected_comparable in actual_comparable
+        or actual_comparable in expected_comparable
+    ):
+        return "PASS"
+
     return "FAIL"
 
 
@@ -327,6 +342,7 @@ def comparison_row(
     *,
     normalizer=None,
     optional: bool = False,
+    fuzzy: bool = False,
 ) -> dict:
     return {
         "Validated Field": field_name,
@@ -336,6 +352,7 @@ def comparison_row(
             expected,
             actual,
             normalizer=normalizer,
+            fuzzy=fuzzy,
             optional=optional,
         ),
     }
@@ -714,6 +731,23 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    uploaded_dv = st.file_uploader(
+        "6. Upload DV Pinnacle Tags",
+        type=["xlsx", "xlsm"],
+        accept_multiple_files=False,
+        key="qa2_dv",
+    )
+
+    st.markdown(
+        """
+        <div class="upload-help">
+            Optional. Only needed for placements whose "Vendors /
+            Pixels" value mentions DV (DoubleVerify).
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.divider()
 
     with st.expander("Implementation Record (optional)"):
@@ -883,6 +917,16 @@ with tempfile.TemporaryDirectory(
         else None
     )
 
+    dv_path = (
+        save_upload(
+            uploaded_dv,
+            temporary_path,
+            "dv_",
+        )
+        if uploaded_dv is not None
+        else None
+    )
+
     tag_paths = []
 
     for index, uploaded_tag in enumerate(
@@ -963,6 +1007,18 @@ with tempfile.TemporaryDirectory(
                     )
 
         # ----------------------------------------------------
+        # DV Pinnacle Tags
+        # ----------------------------------------------------
+
+        dv_result = None
+
+        if dv_path is not None:
+            with st.spinner(
+                "Reading DV Pinnacle Tags..."
+            ):
+                dv_result = parse_dv_tags(dv_path)
+
+        # ----------------------------------------------------
         # File understanding
         # ----------------------------------------------------
 
@@ -1037,6 +1093,25 @@ with tempfile.TemporaryDirectory(
                 }
             )
 
+        if dv_result is not None:
+            file_rows.append(
+                {
+                    "File": uploaded_dv.name,
+                    "Expected Type": "DV Pinnacle Tags",
+                    "Detected Type": (
+                        f"DV Pinnacle | sheet {dv_result.sheet}"
+                        if dv_result.sheet
+                        else "Not Recognized"
+                    ),
+                    "Status": (
+                        "FATAL"
+                        if result_is_fatal(dv_result)
+                        else "OK"
+                    ),
+                    "Records": len(dv_result.rows),
+                }
+            )
+
         files_dataframe = pd.DataFrame(file_rows)
 
         # ----------------------------------------------------
@@ -1072,6 +1147,14 @@ with tempfile.TemporaryDirectory(
                 anomaly_rows(
                     f"Tags | {file_name}",
                     tags_result,
+                )
+            )
+
+        if dv_result is not None:
+            all_anomaly_rows.extend(
+                anomaly_rows(
+                    "DV Pinnacle Tags",
+                    dv_result,
                 )
             )
 
@@ -1215,6 +1298,26 @@ with tempfile.TemporaryDirectory(
                     adobe_pixel_result,
                     findings_buffer,
                 )
+
+            # DV (DoubleVerify) tag delivery check.
+            #
+            # Applies to any placement whose Traffic Sheet
+            # "Vendors / Pixels" value mentions DV, regardless of
+            # profile. Uses an empty inventory when no tag files
+            # were uploaded, so delivered-but-unverifiable DV tags
+            # surface as REVIEW rather than being silently skipped.
+            dv_reconciliation = reconcile_dv_tags(
+                ts_result,
+                tag_inventory
+                if tag_inventory is not None
+                else TagInventory(),
+                dv_result,
+            )
+
+            dv_rules.evaluate(
+                dv_reconciliation,
+                findings_buffer,
+            )
 
             scorecard = findings_buffer.scorecard()
 
@@ -1434,6 +1537,104 @@ with tempfile.TemporaryDirectory(
                     pd.DataFrame(disqo_rows),
                     use_container_width=True,
                     hide_index=True,
+                )
+
+        # ----------------------------------------------------
+        # DV (DoubleVerify) Tag Delivery
+        # ----------------------------------------------------
+
+        if dv_reconciliation.checks:
+            st.subheader("DV (DoubleVerify) Tag Delivery")
+
+            dv_pass = sum(
+                check.result == "PASS"
+                for check in dv_reconciliation.checks
+            )
+
+            dv_fail = sum(
+                check.result == "FAIL"
+                for check in dv_reconciliation.checks
+            )
+
+            dv_review = sum(
+                check.result == "REVIEW"
+                for check in dv_reconciliation.checks
+            )
+
+            dv_not_verified = sum(
+                check.result == "NOT_VERIFIED"
+                for check in dv_reconciliation.checks
+            )
+
+            metric_columns = st.columns(4)
+
+            metric_columns[0].metric(
+                "DV required",
+                len(dv_reconciliation.checks),
+            )
+
+            metric_columns[1].metric("Pass", dv_pass)
+
+            metric_columns[2].metric("Fail", dv_fail)
+
+            metric_columns[3].metric(
+                "Review / Not Verified",
+                dv_review + dv_not_verified,
+            )
+
+            if dv_fail:
+                st.error(
+                    f"{dv_fail} placements require a DV tag but it "
+                    "was not found or was empty."
+                )
+            elif dv_not_verified:
+                st.warning(
+                    "Upload the DV Pinnacle file to verify DV tag "
+                    "delivery for these placements."
+                )
+            elif dv_review:
+                st.warning(
+                    f"{dv_review} DV placements require review."
+                )
+            else:
+                st.success(
+                    "All DV-required placements have a delivered "
+                    "tag present in the Innovid tag file."
+                )
+
+            dv_rows = [
+                {
+                    "Placement ID": check.placement_id,
+                    "Placement Name": check.placement_name,
+                    "Vendors / Pixels": check.vendor_raw,
+                    "Result": check.result,
+                    "In DV File": (
+                        "Yes" if check.in_dv_file else "No"
+                    ),
+                    "In Tag File": (
+                        "Yes" if check.in_tag_inventory else "No"
+                    ),
+                    "Message": check.message,
+                }
+                for check in dv_reconciliation.checks
+            ]
+
+            with st.expander(
+                "View DV placement details",
+                expanded=bool(dv_fail or dv_review),
+            ):
+                st.dataframe(
+                    pd.DataFrame(dv_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            if dv_reconciliation.extra_dv_placements:
+                st.caption(
+                    "DV Pinnacle placements outside worked scope: "
+                    + ", ".join(
+                        dv_reconciliation.extra_dv_placements
+                    )
                 )
 
         metric_columns = st.columns(7)
@@ -1974,6 +2175,7 @@ with tempfile.TemporaryDirectory(
                             "Site",
                             expected.site,
                             actual.site if actual else "",
+                            fuzzy=True,
                         ),
                         comparison_row(
                             "Dimensions",
@@ -2001,6 +2203,13 @@ with tempfile.TemporaryDirectory(
                             ),
                             optional=(
                                 not bool(expected.group_name)
+                                # 1x1s are direct-assigned in Innovid.
+                                # The TS "Decision Set" name for a 1x1
+                                # is a reference only -- it is never a
+                                # real Innovid Decision Tree and never
+                                # shows up in the export, so it isn't
+                                # something to verify.
+                                or norm_dims(expected.dims) == "1x1"
                             ),
                         ),
                     ]
