@@ -668,8 +668,24 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
 
             # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
             exp_cgen = cl.expected.cgen or ep.cgen
-            act_tpid = (cl.actual.third_party_id if cl.actual else "") \
-                       or ap.third_party_id
+            act_tpid = cl.actual.third_party_id if cl.actual else ""
+            if not act_tpid:
+                # Site-served 1x1 (Placement_Type=Pixel, row_type
+                # TRACKER): the individual creative link fails by
+                # design -- Innovid's row is the account's generic
+                # 1x1.gif pixel, not a named creative -- but that
+                # pixel row still carries its own correct, per-
+                # placement Third_Party_ID (the real CGEN code). The
+                # Placement View's ap.third_party_id is a different
+                # field that stays constant across placements and
+                # must not be used as a stand-in for it: doing so
+                # produced a false EXPORT_MISMATCH review on every
+                # site-served placement.
+                trackers = [ac for ac in ap.creatives if ac.row_type == "TRACKER"]
+                if len(trackers) == 1 and trackers[0].third_party_id:
+                    act_tpid = trackers[0].third_party_id
+                else:
+                    act_tpid = ap.third_party_id
             cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
             res.triangle_counts[cl.triangle.result] = \
                 res.triangle_counts.get(cl.triangle.result, 0) + 1
