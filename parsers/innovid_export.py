@@ -302,6 +302,28 @@ def parse_innovid_export(path: Path, sheet_name: str | None = None) -> ExportRes
         if rtype == T_DIRECT and reason:
             res.direct_reasons[reason] = res.direct_reasons.get(reason, 0) + 1
 
+        # WPP Media style Decision Set / Creative Rotation groups: this
+        # account never populates Decision_Tree_Name. Instead Innovid
+        # emits one header row per group (T_PLACEMENT_HEADER, no
+        # Creative_ID) whose Filename holds the group name with an
+        # injected "(id)" suffix, e.g. "Disp Fresh Seekers 2P UG
+        # 160x600 (28809)". Recover it the same way Decision_Tree_Name
+        # values are recovered so the group stays visible to matching
+        # and the UI even when it's expressed this way instead of via
+        # Adobe's Decision Tree feature. Only applies when
+        # Decision_Tree_Name is absent, so it never overrides the
+        # authoritative column when both are present.
+        if (
+            rtype == T_PLACEMENT_HEADER
+            and not vals.get("group_name")
+            and vals.get("filename")
+        ):
+            hname, hid = split_platform_id(str(vals["filename"]))
+            if hname:
+                vals["group_name"] = hname
+                vals["group_name_norm"] = hname
+                vals["group_id_from_name"] = hid
+
         res.rows.append(ExportRow(row=r, row_type=rtype, row_reason=reason,
                                   values=vals, multi=multi))
 
