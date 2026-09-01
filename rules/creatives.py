@@ -20,6 +20,17 @@ def evaluate(match_result, buffer):
             cl.actual is not None for cl in rotation_links
         )
 
+        # Adobe Direct & Site-Served 1x1s: Innovid represents these
+        # as Placement_Type=Pixel rows (row_type TRACKER), whose
+        # "creative" is the account's generic 1x1.gif tracking pixel.
+        # The real ad creative is served by the publisher directly
+        # and was never going to show up in the export under the
+        # TS's stated creative name -- an unmatched expected creative
+        # here is the expected, correct state, not a missing creative.
+        site_served_pixel = pm.actual is not None and any(
+            ac.row_type == "TRACKER" for ac in pm.actual.creatives
+        )
+
         for cl in pm.creative_links:
 
             if cl.actual is None:
@@ -41,6 +52,23 @@ def evaluate(match_result, buffer):
                             "Confirm whether this variant was swapped "
                             "out of the rotation intentionally."
                         ),
+                    )
+                    continue
+
+                if site_served_pixel:
+                    buffer.pass_(
+                        rule_id="CRE-001",
+                        domain=Domain.CREATIVE,
+                        message=(
+                            "Site-served 1x1: Innovid runs the generic "
+                            "1x1.gif tracking pixel here. The creative "
+                            "is served by the publisher directly and "
+                            "isn't expected to appear in the export."
+                        ),
+                        placement_id=pm.placement_id,
+                        creative_id=cl.expected.creative_id,
+                        creative_name=cl.expected.name,
+                        expected=cl.expected.name,
                     )
                     continue
 
