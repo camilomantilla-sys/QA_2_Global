@@ -1,4 +1,4 @@
-from core.colors import RED
+from core.colors import RED, WHITE
 from core.findings import Domain
 
 ROTATION_SHEET = "Creative Rotations"
@@ -33,6 +33,12 @@ def evaluate(match_result, buffer):
         )
 
         for cl in pm.creative_links:
+
+            # Los creativos en blanco son contexto del Decision Set: no
+            # son parte de lo que se pidio cambiar, asi que se muestran
+            # pero no se juzgan.
+            if cl.expected.intent == WHITE:
+                continue
 
             # Un creativo en rojo es una REMOCION: la TS pide que quede
             # desasignado. Su ausencia del export no es un problema, es
