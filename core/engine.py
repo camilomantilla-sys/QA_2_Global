@@ -20,6 +20,7 @@ from rules import tags
 from rules import urls
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
 from rules import pixels  # idem: recibe `reconciliation`
+from rules import defaults  # idem: recibe `reconciliation`
 
 
 def run_rules(
@@ -27,6 +28,7 @@ def run_rules(
     tags_result=None,
     adobe_pixel_reconciliation=None,
     pixel_reconciliation=None,
+    default_ad_reconciliation=None,
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
 
@@ -43,6 +45,9 @@ def run_rules(
 
     if pixel_reconciliation is not None:
         pixels.evaluate(pixel_reconciliation, buffer)
+
+    if default_ad_reconciliation is not None:
+        defaults.evaluate(default_ad_reconciliation, buffer)
 
     if tags_result is not None:
         tag_match_result = match_tags(match_result, tags_result)
