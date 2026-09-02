@@ -1,3 +1,4 @@
+from core.colors import RED
 from core.findings import Domain
 
 ROTATION_SHEET = "Creative Rotations"
@@ -32,6 +33,52 @@ def evaluate(match_result, buffer):
         )
 
         for cl in pm.creative_links:
+
+            # Un creativo en rojo es una REMOCION: la TS pide que quede
+            # desasignado. Su ausencia del export no es un problema, es
+            # la confirmacion de que se hizo. Las dos cuentas lo dejan
+            # distinto y ambas son correctas: Adobe lo conserva en el
+            # export con Status=Disabled, y BlackRock, cuando el
+            # placement usa Decision Set, lo elimina y desaparece.
+            # Lo que si es un fallo real es el caso contrario: que siga
+            # ahi y corriendo.
+            if cl.expected.intent == RED:
+
+                if cl.actual is None or not cl.actual.running:
+                    buffer.pass_(
+                        rule_id="CRE-001",
+                        domain=Domain.CREATIVE,
+                        message=(
+                            "Removal confirmed: the creative is no longer "
+                            "running on this placement."
+                        ),
+                        placement_id=pm.placement_id,
+                        creative_id=(
+                            cl.actual.creative_id
+                            if cl.actual
+                            else cl.expected.creative_id
+                        ),
+                        creative_name=cl.expected.name,
+                        expected=cl.expected.name,
+                    )
+                else:
+                    buffer.fail(
+                        rule_id="CRE-001",
+                        domain=Domain.CREATIVE,
+                        message=(
+                            "The Traffic Sheet asks to remove this creative, "
+                            "but it's still running in Innovid."
+                        ),
+                        placement_id=pm.placement_id,
+                        creative_id=cl.actual.creative_id,
+                        creative_name=cl.expected.name,
+                        expected=cl.expected.name,
+                        actual=cl.actual.state_label,
+                        recommended_action=(
+                            "Unassign the creative from the placement."
+                        ),
+                    )
+                continue
 
             if cl.actual is None:
 
