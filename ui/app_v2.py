@@ -23,11 +23,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+from core.colors import RED
 from core.engine import run_rules
 from core.adobe_pixel_reconciliation import (
     reconcile_adobe_pixels,
 )
 from core.dv_reconciliation import reconcile_dv_tags
+from core.pixel_reconciliation import reconcile_pixels
+from core.default_ads import reconcile_default_ads
 from core.tag_inventory import (
     TagInventory,
     build_tag_inventory_from_results,
@@ -44,6 +47,8 @@ from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
 from rules import adobe_pixels
 from rules import dv_tags as dv_rules
+from rules import pixels as pixel_rules
+from rules import defaults as default_rules
 
 
 warnings.filterwarnings(
@@ -1319,6 +1324,32 @@ with tempfile.TemporaryDirectory(
                 findings_buffer,
             )
 
+            # Pixeles de vendor declarados en "Vendors / Pixels"
+            # (DoubleVerify, Dynata, Kantar) contra lo que Innovid
+            # tiene cargado a nivel de placement.
+            pixel_reconciliation = reconcile_pixels(
+                ts_result,
+                pl_result,
+            )
+
+            pixel_rules.evaluate(
+                pixel_reconciliation,
+                findings_buffer,
+            )
+
+            # El default ad es un creativo aparte, el mismo para todos
+            # los placements de su dimension: si uno se queda con otro
+            # default o con otra landing page, no recibio el swap.
+            default_ad_reconciliation = reconcile_default_ads(
+                ts_result,
+                pc_result,
+            )
+
+            default_rules.evaluate(
+                default_ad_reconciliation,
+                findings_buffer,
+            )
+
             scorecard = findings_buffer.scorecard()
 
         # ----------------------------------------------------
@@ -2287,7 +2318,16 @@ with tempfile.TemporaryDirectory(
                                     "Status": (
                                         actual_creative.state_label
                                         if actual_creative
-                                        else "MISSING"
+                                        # Un creativo en rojo es una
+                                        # desasignacion: que no este en
+                                        # el export es la confirmacion
+                                        # de que se hizo, no una falta.
+                                        else (
+                                            "Removed (confirmed)"
+                                            if expected_creative.intent
+                                            == RED
+                                            else "MISSING"
+                                        )
                                     ),
                                     "URL": (
                                         creative_link.url.result
@@ -2747,6 +2787,69 @@ with tempfile.TemporaryDirectory(
                         )
                     ]
                 )
+
+                # Un mismo problema repetido en 60 placements son 60
+                # filas identicas en el detalle. Agrupado se lee de una:
+                # cuantos placements comparten cada hallazgo y cuales.
+                grouped_rows = []
+
+                for (rule, status, message), group in (
+                    filtered_attention_df.groupby(
+                        ["Rule", "Status", "Message"],
+                        sort=False,
+                    )
+                ):
+                    placements_in_group = [
+                        str(value)
+                        for value in group["Placement ID"].tolist()
+                        if str(value).strip()
+                    ]
+
+                    grouped_rows.append(
+                        {
+                            "Placements": len(group),
+                            "Status": status,
+                            "Rule": rule,
+                            "Finding": message,
+                            "Placement IDs": ", ".join(
+                                dict.fromkeys(placements_in_group)
+                            ),
+                        }
+                    )
+
+                grouped_df = pd.DataFrame(grouped_rows)
+
+                if not grouped_df.empty:
+                    grouped_df = grouped_df.sort_values(
+                        "Placements",
+                        ascending=False,
+                        kind="stable",
+                    )
+
+                    st.markdown("#### Grouped by finding")
+                    st.caption(
+                        f"{len(grouped_df)} distinct findings across "
+                        f"{len(filtered_attention_df)} rows."
+                    )
+
+                    st.dataframe(
+                        grouped_df,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.download_button(
+                        "Download Grouped Findings CSV",
+                        data=grouped_df.to_csv(
+                            index=False,
+                            encoding="utf-8-sig",
+                        ),
+                        file_name="qa2_findings_grouped.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+
+                st.markdown("#### Every finding")
 
                 st.dataframe(
                     filtered_attention_df,

@@ -28,6 +28,7 @@ CONF_LOW = "LOW"
 CONF_NONE = "NONE"
 
 _EXT = re.compile(r"\.(jpg|jpeg|png|gif|mp4|mov|webm|html|htm|zip|svg)$", re.I)
+_IS_DEFAULT = re.compile(r"\bdefault\b", re.I)
 
 def norm_creative(value: object) -> str:
     """
@@ -74,6 +75,14 @@ class ExpectedPlacement:
     impl_type: str = ""
     fmt: str = ""
     request_type: str = ""
+    # URL declarada para el placement cuando lo unico que se trabajo fue
+    # la landing page. En ese caso la TS no declara creativos, asi que
+    # esta es la unica URL esperada que existe.
+    url: str = ""
+    # El unico cambio de landing page que alcanza a este placement es el
+    # del default ad, que es un creativo aparte: no se puede validar
+    # contra el clicktag del placement.
+    url_is_default_only: bool = False
     visual_review: bool = False
     source: str = ""
     creatives: list[ExpectedCreative] = field(default_factory=list)
@@ -259,6 +268,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # Creative Rotations contiene el Landing Page Name, no la URL final.
     # La URL autoritativa vive en la pestaña Landing Pages.
     landing_page_urls: dict[str, str] = {}
+    green_landing_page_urls: dict[str, str] = {}
 
     if getattr(ts, "landing_pages", None) is not None:
         for lp_row in ts.landing_pages.rows:
@@ -269,6 +279,11 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
 
             if lp_name and lp_url:
                 landing_page_urls[lp_name] = lp_url
+
+                # La fila VERDE es la URL nueva del swap. Es la unica que
+                # sirve como valor esperado: la roja es la que se va.
+                if lp_row.intent in (GREEN, "SWAP"):
+                    green_landing_page_urls[lp_name] = lp_url
 
     # --- creativos con intencion, indexados por grupo (Creative Rotations)
     by_group: dict[str, list[ExpectedCreative]] = {}
@@ -369,6 +384,47 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 continue
             ep.creatives.append(c)
             have.add(c.key_norm)
+
+    # --- URL esperada del placement, siguiendo la cadena de la TS.
+    #
+    # En un swap de solo URL la TS no declara ningun creativo: los
+    # placements siguen activos y en blanco, y lo unico marcado es la
+    # fila verde de Landing Pages. La cadena que conecta una con otra es
+    #   placement -> creative rotation -> landing page name -> URL
+    # y el placement puede referenciar la landing page directamente en su
+    # propia columna, o a traves de la rotacion que declara.
+    # El default ad se excluye a proposito: es un creativo independiente,
+    # el mismo para todos los placements de su dimension, con su propia
+    # landing page. Su swap es un cambio distinto del de la landing page
+    # del placement, y mezclarlos hacia comparar el clicktag del creativo
+    # principal contra la URL del default.
+    for pid, ep in out.items():
+        sc = ts.scope.get(pid)
+        if sc is None:
+            continue
+
+        own: list[str] = []
+        default_only: list[str] = []
+
+        for group in sorted(sc.groups):
+            if group.startswith("__lp__"):
+                names = [group[6:]]
+            else:
+                gs = ts.groups.get(group)
+                names = sorted(gs.lp_names) if gs else []
+
+            for name in names:
+                url = green_landing_page_urls.get(name)
+                if not url:
+                    continue
+                target = default_only if _IS_DEFAULT.search(name) else own
+                if url not in target:
+                    target.append(url)
+
+        if own:
+            ep.url = own[0]
+        elif default_only:
+            ep.url_is_default_only = True
 
     return out
 # ------------------------------------------------------------------ Actual
