@@ -50,7 +50,13 @@ def evaluate(match_result, buffer):
             # ahi y corriendo.
             if cl.expected.intent == RED:
 
-                if cl.actual is None or not cl.actual.running:
+                # Si el placement quedo detenido, lo que tenga asignado
+                # ya no corre: la remocion esta cumplida aunque el
+                # creativo siga figurando como activo en el export.
+                placement_running = pm.actual is None or pm.actual.running
+
+                if (cl.actual is None or not cl.actual.running
+                        or not placement_running):
                     buffer.pass_(
                         rule_id="CRE-001",
                         domain=Domain.CREATIVE,

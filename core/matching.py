@@ -174,6 +174,13 @@ class ActualPlacement:
     export_rows: list[int] = field(default_factory=list)
     from_placement_level: bool = False
 
+    @property
+    def running(self) -> bool:
+        """Un placement detenido no esta sirviendo, corran o no sus creativos."""
+        return norm_compare(self.status) not in (
+            "stopped", "disabled", "inactive", "paused"
+        )
+
 # ------------------------------------------------------------------ trace
 
 @dataclass
@@ -543,8 +550,16 @@ def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
             ap.third_party_id = str(row.values.get("third_party_id") or "")
             ap.clicktags = list(row.multi.get("clicktag", []))
             ap.impressions = list(row.multi.get("third_party_impression", []))
-            if not ap.status:
-                ap.status = str(row.values.get("status") or "")
+
+            # El Placement View manda sobre el status del placement. El
+            # export placement-creative trae en esa columna el status del
+            # CREATIVO, y al llenarse primero tapaba el del placement: un
+            # placement Stopped se leia Active porque su creativo seguia
+            # activo. Eso hacia fallar la desasignacion (PLC-002) y la
+            # remocion de creativos (CRE-001) en placements ya apagados.
+            status = str(row.values.get("status") or "")
+            if status:
+                ap.status = status
 
     return out
 
