@@ -1,3 +1,4 @@
+from core.colors import GREEN
 from core.findings import Domain
 from core.urls import (
     URL_BASE_DIFF,
@@ -141,6 +142,12 @@ def evaluate(match_result, buffer):
         for cl in pm.creative_links:
 
             if cl.url is None:
+                continue
+
+            # Los creativos en blanco son el contenido del Decision Set,
+            # no lo que se pidio cambiar. Se les calcula la URL para
+            # poder mostrarla, pero no generan hallazgos.
+            if cl.expected.intent != GREEN:
                 continue
 
             result = cl.url.result

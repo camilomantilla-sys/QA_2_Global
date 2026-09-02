@@ -86,23 +86,16 @@ def _evaluate_disassignment(pm, buffer):
             **common,
         )
 
-    elif running:
-        buffer.review(
-            message=(
-                "The placement is stopped, but it still has creatives "
-                "assigned."
-            ),
-            actual=f"Status={status}, {len(running)} creative(s) running",
-            recommended_action=(
-                "Confirm whether the remaining creatives should be "
-                "unassigned too."
-            ),
-            **common,
-        )
-
     else:
+        # Un placement detenido no sirve nada, lleve o no creativos
+        # colgados. La desasignacion se ejecuta apagando el placement,
+        # asi que exigir ademas que quede vacio solo generaba ruido
+        # sobre algo que ya no corre.
         buffer.pass_(
-            message="Placement disassignment confirmed: stopped and empty.",
-            actual=f"Status={status}",
+            message="Placement disassignment confirmed: it's stopped.",
+            actual=(
+                f"Status={status}"
+                + (f", {len(running)} creative(s) still attached" if running else "")
+            ),
             **common,
         )

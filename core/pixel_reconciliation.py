@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass, field
 
 from core.normalize import clean_id, norm_compare, norm_dims
+from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
 # Columnas del export a nivel de placement donde viven los pixeles.
 SURVEY = "third_party_survey"
@@ -27,6 +28,9 @@ F_VIDEO = "video"
 F_DISPLAY = "display"
 
 _VIDEO_DIMS = {"640x480", "1920x1080", "1280x720", "0x0"}
+
+# Estados de Innovid en los que el placement no esta sirviendo.
+_NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
 
 
 @dataclass(frozen=True)
@@ -136,6 +140,18 @@ def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
         placement_id = clean_id(ts_row.values.get("placement_id"))
         if not placement_id or placement_id not in worked:
             continue
+
+        # Un placement que la TS pide desasignar por completo, o que en
+        # Innovid ya quedo detenido, no esta sirviendo: exigirle el pixel
+        # del vendor no tiene sentido.
+        if worked[placement_id].request_type == REQ_CREATIVE_REMOVE:
+            continue
+
+        row_for_status = rows_by_placement.get(placement_id)
+        if row_for_status is not None:
+            status = norm_compare(row_for_status.values.get("status"))
+            if status in _NOT_RUNNING:
+                continue
 
         vendor_raw = str(ts_row.values.get("vendors") or "").strip()
         if not vendor_raw:

@@ -13,11 +13,11 @@ Principios:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
-from core.colors import GREEN, RED
-from core.normalize import norm_compare, norm_dims, split_platform_id
+from core.colors import GREEN, RED, WHITE
+from core.normalize import dims_match, norm_compare, norm_dims, split_platform_id
 from core.urls import (
     AttributionTriangle, URLComparison, check_triangle, compare_urls,
 )
@@ -174,6 +174,13 @@ class ActualPlacement:
     export_rows: list[int] = field(default_factory=list)
     from_placement_level: bool = False
 
+    @property
+    def running(self) -> bool:
+        """Un placement detenido no esta sirviendo, corran o no sus creativos."""
+        return norm_compare(self.status) not in (
+            "stopped", "disabled", "inactive", "paused"
+        )
+
 # ------------------------------------------------------------------ trace
 
 @dataclass
@@ -289,12 +296,21 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     by_group: dict[str, list[ExpectedCreative]] = {}
     if ts.rotations is not None:
         for row in ts.rotations.rows:
-            if row.intent not in (GREEN, RED, "SWAP"):
+            # Los creativos en blanco de una rotacion trabajada no son
+            # parte del cambio, pero si son el contenido del Decision
+            # Set. Sin ellos el placement queda sin ningun creativo
+            # esperado y todo lo que Innovid tiene aparece como "extra
+            # creative", sin comparacion ni URL. Entran como contexto:
+            # se muestran y se matchean, pero no generan hallazgos.
+            if row.intent not in (GREEN, RED, "SWAP", WHITE):
                 continue
             g = norm_compare(str(row.values.get("group_name") or ""))
             if not g:
                 continue
-            intent = GREEN if row.intent in (GREEN, "SWAP") else RED
+            if row.intent == WHITE:
+                intent = WHITE
+            else:
+                intent = GREEN if row.intent in (GREEN, "SWAP") else RED
             by_group.setdefault(g, []).append(ExpectedCreative(
                 name=str(row.values.get("creative_name") or ""),
                 creative_id=str(row.values.get("creative_id") or ""),
@@ -380,10 +396,39 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
         for c in by_group.get(g, []):
             if not c.key_norm or c.key_norm in have:
                 continue
-            if ep.dims and c.dims and ep.dims != c.dims:
+            if not dims_match(ep.dims, c.dims):
                 continue
             ep.creatives.append(c)
             have.add(c.key_norm)
+
+    # --- el default ad, enganchado por dimension.
+    #
+    # No se declara en la columna de rotacion del placement: vive en su
+    # propia rotacion, una por dimension ("300x600 Co-Marketing Default
+    # Ad"). Sin engancharlo, el default que corre en la plataforma
+    # aparecia como un extra sin nada contra que compararlo.
+    default_by_dims: dict[str, list[ExpectedCreative]] = {}
+    for group_key, group_creatives in by_group.items():
+        if not _IS_DEFAULT.search(group_key):
+            continue
+        for creative in group_creatives:
+            if creative.dims:
+                default_by_dims.setdefault(creative.dims, []).append(creative)
+
+    for ep in out.values():
+        if not ep.dims:
+            continue
+        have = {c.key_norm for c in ep.creatives}
+        for creative in default_by_dims.get(ep.dims, []):
+            if not creative.key_norm or creative.key_norm in have:
+                continue
+            # Siempre como contexto, sea cual sea su color en la TS: el
+            # placement no lo declara, se engancha por dimension. Si se
+            # dejara con su intencion original, un default en verde
+            # pasaria a ser exigible en todos los placements de esa
+            # dimension y los que no lo llevan darian FAIL.
+            ep.creatives.append(replace(creative, intent=WHITE))
+            have.add(creative.key_norm)
 
     # --- URL esperada del placement, siguiendo la cadena de la TS.
     #
@@ -505,8 +550,16 @@ def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
             ap.third_party_id = str(row.values.get("third_party_id") or "")
             ap.clicktags = list(row.multi.get("clicktag", []))
             ap.impressions = list(row.multi.get("third_party_impression", []))
-            if not ap.status:
-                ap.status = str(row.values.get("status") or "")
+
+            # El Placement View manda sobre el status del placement. El
+            # export placement-creative trae en esa columna el status del
+            # CREATIVO, y al llenarse primero tapaba el del placement: un
+            # placement Stopped se leia Active porque su creativo seguia
+            # activo. Eso hacia fallar la desasignacion (PLC-002) y la
+            # remocion de creativos (CRE-001) en placements ya apagados.
+            status = str(row.values.get("status") or "")
+            if status:
+                ap.status = status
 
     return out
 
@@ -708,7 +761,10 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
 
             # solo los VERDES deben tener URL y CGEN correctos.
             # los rojos se van, no importa a donde apuntaban.
-            if cl.expected.intent != GREEN:
+            # Un creativo removido no tiene URL ni atribucion que
+            # revisar. Los de contexto (en blanco) si: se muestran para
+            # poder comparar, aunque no generen hallazgos.
+            if cl.expected.intent == RED:
                 continue
 
             # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
