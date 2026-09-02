@@ -7,13 +7,123 @@ from core.urls import (
     URL_MISSING_ACTUAL,
     URL_MISSING_EXPECTED,
     URL_PARAMS_DIFF,
+    compare_urls,
 )
+from parsers.ts_parser import REQ_URL_SWAP
 
 
 ROTATION_SHEET = "Creative Rotations"
 
 
+def _actual_urls(ap) -> list[str]:
+    """
+    Clicktags que Innovid tiene realmente para el placement.
+
+    En 1x1 el clicktag vive a nivel de placement; en display y video
+    vive en cada creativo. Un swap de URL puede llegar de cualquiera de
+    las dos formas, asi que se miran ambas.
+    """
+    if ap is None:
+        return []
+
+    if ap.clicktags:
+        return list(ap.clicktags)
+
+    out: list[str] = []
+    for creative in ap.creatives:
+        if not creative.running:
+            continue
+        for tag in creative.clicktags:
+            if tag and tag not in out:
+                out.append(tag)
+    return out
+
+
+def evaluate_placement_urls(match_result, buffer):
+    """
+    URL-002 - swap de solo URL.
+
+    Cuando lo unico trabajado es la landing page, la TS no declara
+    creativos, asi que URL-001 no tiene por donde entrar y el placement
+    quedaba aprobado sin haber validado justamente lo unico que cambio.
+    """
+    for pm in match_result.matched:
+
+        if pm.expected.request_type != REQ_URL_SWAP:
+            continue
+
+        expected_url = pm.expected.url
+
+        common = {
+            "rule_id": "URL-002",
+            "domain": Domain.URL,
+            "placement_id": pm.placement_id,
+            "placement_name": pm.expected.name,
+            "expected": expected_url,
+        }
+
+        if not expected_url:
+            if pm.expected.url_is_default_only:
+                buffer.not_verified(
+                    message=(
+                        "The only landing page swapped here belongs to "
+                        "the default ad, which is a separate creative "
+                        "and can't be checked against the placement's "
+                        "Clicktag."
+                    ),
+                    recommended_action=(
+                        "Review the default ad's landing page in Innovid."
+                    ),
+                    **common,
+                )
+            continue
+
+        actual_urls = _actual_urls(pm.actual)
+
+        if not actual_urls:
+            buffer.not_verified(
+                message=(
+                    "The Traffic Sheet swaps this placement's landing "
+                    "page, but Innovid reports no Clicktag to compare."
+                ),
+                recommended_action=(
+                    "Upload the export that carries the Clicktag for "
+                    "this placement."
+                ),
+                **common,
+            )
+            continue
+
+        comparisons = [compare_urls(expected_url, url) for url in actual_urls]
+        best = next(
+            (c for c in comparisons if c.result == URL_MATCH),
+            comparisons[0],
+        )
+
+        if best.result == URL_MATCH:
+            buffer.pass_(
+                message="The new landing page is live in Innovid.",
+                actual=best.actual.raw,
+                **common,
+            )
+        else:
+            buffer.fail(
+                message=(
+                    "The new landing page from the Traffic Sheet isn't "
+                    "the one configured in Innovid."
+                ),
+                actual=best.actual.raw,
+                reason=best.note,
+                recommended_action=(
+                    "Update the Clicktag to the new landing page."
+                ),
+                **common,
+            )
+
+
 def evaluate(match_result, buffer):
+
+    evaluate_placement_urls(match_result, buffer)
 
     for pm in match_result.matched:
 

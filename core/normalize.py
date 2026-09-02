@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 
 _WS = re.compile(r"\s+")
+_EXCEL_CR = re.compile(r"_x000[dDaA]_")
 _PLATFORM_ID_SUFFIX = re.compile(r"\s*\((\d+)\)\s*$")
 _DIMS = re.compile(r"(\d{1,5})\s*[xX\u00d7]\s*(\d{1,5})")
 
@@ -13,7 +14,14 @@ def norm_text(value: str | None) -> str:
     """Trim + colapso de espacios. Preserva mayusculas."""
     if value is None:
         return ""
-    return _WS.sub(" ", str(value).replace("\u00a0", " ")).strip()
+    text = str(value).replace("\u00a0", " ")
+    # Excel serializa un salto de linea dentro de una celda como el
+    # literal "_x000D_". Sobrevive al parseo y se pega al valor: una URL
+    # partida con Alt+Enter llegaba como "&_x000D_ imm_pid=..." y se
+    # reportaba como URL distinta cuando es la misma. Se trata como el
+    # salto de linea que representa.
+    text = _EXCEL_CR.sub(" ", text)
+    return _WS.sub(" ", text).strip()
 
 def norm_compare(value: str | None) -> str:
     """Forma canonica para comparar: sin case, sin espacios sobrantes."""
