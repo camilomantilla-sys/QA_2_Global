@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from core.normalize import clean_id
 from parsers.dv_tags import DVTagsResult
+from parsers.ts_parser import REQ_NEW_PLACEMENT
 
 _DV_TOKEN = re.compile(r"\bdv\b", re.IGNORECASE)
 
@@ -44,17 +45,22 @@ class DVReconciliation:
 
 def _worked_dv_data(ts_result) -> dict[str, dict]:
     records: dict[str, dict] = {}
-    worked_ids = {s.placement_id for s in ts_result.worked}
+    worked = {s.placement_id: s for s in ts_result.worked}
 
     for row in ts_result.placements.rows:
         placement_id = clean_id(row.values.get("placement_id"))
+        scope = worked.get(placement_id)
 
-        if not placement_id or placement_id not in worked_ids:
+        if not placement_id or scope is None:
             continue
 
         record = records.setdefault(
             placement_id,
-            {"placement_name": "", "vendor_raw": set()},
+            {
+                "placement_name": "",
+                "vendor_raw": set(),
+                "request_type": scope.request_type,
+            },
         )
 
         if not record["placement_name"]:
@@ -87,6 +93,14 @@ def reconcile_dv_tags(
         vendor_raw = " | ".join(sorted(record["vendor_raw"]))
 
         if not _DV_TOKEN.search(vendor_raw):
+            continue
+
+        # El archivo de DV Pinnacle solo se descarga para placements
+        # NUEVOS. Un placement que ya existia y solo cambia creativos o
+        # URL conserva el tag de DV que se entrego cuando se implemento,
+        # asi que pedirlo otra vez marcaba como no verificado el 100% de
+        # la cuenta en vez de los pocos que si lo necesitan.
+        if record["request_type"] != REQ_NEW_PLACEMENT:
             continue
 
         in_inventory = placement_id in tag_inventory.placement_ids

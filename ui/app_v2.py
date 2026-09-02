@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+from core.colors import RED
 from core.engine import run_rules
 from core.adobe_pixel_reconciliation import (
     reconcile_adobe_pixels,
@@ -2287,7 +2288,16 @@ with tempfile.TemporaryDirectory(
                                     "Status": (
                                         actual_creative.state_label
                                         if actual_creative
-                                        else "MISSING"
+                                        # Un creativo en rojo es una
+                                        # desasignacion: que no este en
+                                        # el export es la confirmacion
+                                        # de que se hizo, no una falta.
+                                        else (
+                                            "Removed (confirmed)"
+                                            if expected_creative.intent
+                                            == RED
+                                            else "MISSING"
+                                        )
                                     ),
                                     "URL": (
                                         creative_link.url.result
