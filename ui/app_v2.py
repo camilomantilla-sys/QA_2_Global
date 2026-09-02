@@ -29,6 +29,7 @@ from core.adobe_pixel_reconciliation import (
     reconcile_adobe_pixels,
 )
 from core.dv_reconciliation import reconcile_dv_tags
+from core.pixel_reconciliation import reconcile_pixels
 from core.tag_inventory import (
     TagInventory,
     build_tag_inventory_from_results,
@@ -45,6 +46,7 @@ from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
 from rules import adobe_pixels
 from rules import dv_tags as dv_rules
+from rules import pixels as pixel_rules
 
 
 warnings.filterwarnings(
@@ -1317,6 +1319,19 @@ with tempfile.TemporaryDirectory(
 
             dv_rules.evaluate(
                 dv_reconciliation,
+                findings_buffer,
+            )
+
+            # Pixeles de vendor declarados en "Vendors / Pixels"
+            # (DoubleVerify, Dynata, Kantar) contra lo que Innovid
+            # tiene cargado a nivel de placement.
+            pixel_reconciliation = reconcile_pixels(
+                ts_result,
+                pl_result,
+            )
+
+            pixel_rules.evaluate(
+                pixel_reconciliation,
                 findings_buffer,
             )
 

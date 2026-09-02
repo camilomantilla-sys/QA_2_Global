@@ -19,9 +19,15 @@ from rules import placements
 from rules import tags
 from rules import urls
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
+from rules import pixels  # idem: recibe `reconciliation`
 
 
-def run_rules(match_result, tags_result=None, adobe_pixel_reconciliation=None) -> FindingsBuffer:
+def run_rules(
+    match_result,
+    tags_result=None,
+    adobe_pixel_reconciliation=None,
+    pixel_reconciliation=None,
+) -> FindingsBuffer:
     buffer = FindingsBuffer()
 
     placements.evaluate(match_result, buffer)
@@ -34,6 +40,9 @@ def run_rules(match_result, tags_result=None, adobe_pixel_reconciliation=None) -
 
     if adobe_pixel_reconciliation is not None:
         adobe_pixels.evaluate(adobe_pixel_reconciliation, buffer)
+
+    if pixel_reconciliation is not None:
+        pixels.evaluate(pixel_reconciliation, buffer)
 
     if tags_result is not None:
         tag_match_result = match_tags(match_result, tags_result)

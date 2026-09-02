@@ -403,12 +403,21 @@ def evaluate(
                         ),
                     )
             else:
-                buffer.not_verified(
+                # No hay Placement ID embebido que contrastar. Eso es
+                # una propiedad del tipo de tag, no un insumo que falte:
+                # no hay nada que el trafficker pueda subir para que
+                # este check corra. Como INFO queda registrado sin
+                # arrastrar el veredicto a NEEDS_REVIEW, que dejaba la
+                # campana sin poder aprobar por mas correcta que
+                # estuviera la implementacion.
+                buffer.info(
                     rule_id="TAG-007",
                     domain=Domain.TAG,
                     message=(
-                        "This tag type doesn't expose a verifiable "
-                        "Placement ID."
+                        "The tag carries no embedded Placement ID, so "
+                        "there's nothing to cross-check. This is how "
+                        "this tag type is built, not a problem with "
+                        "the implementation."
                     ),
                     entity_type=EntityType.TAG,
                     placement_id=row.placement_id,
