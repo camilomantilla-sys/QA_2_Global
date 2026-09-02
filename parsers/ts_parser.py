@@ -68,6 +68,13 @@ class GroupScope:
     red_creatives: int = 0
     white_creatives: int = 0
     rows: list[int] = field(default_factory=list)
+    # Nombres de landing page que declara la rotacion. En el perfil WPP
+    # la columna "Landing Page Name" de Creative Rotations trae un
+    # NOMBRE que hay que resolver contra el tab Landing Pages; en Adobe
+    # la misma columna trae la URL final. Se guarda tal cual y solo se
+    # usa cuando coincide con un nombre real de landing page, asi que la
+    # URL de Adobe nunca engancha por accidente.
+    lp_names: set[str] = field(default_factory=set)
 
     @property
     def worked(self) -> bool:
@@ -540,6 +547,11 @@ def _build_groups(sr: TSSheetResult | None) -> dict[str, GroupScope]:
             g = GroupScope(group_name=str(row.values.get("group_name")))
             out[gname] = g
         g.rows.append(row.row)
+
+        lp_ref = norm_compare(str(row.values.get("lp_url") or ""))
+        if lp_ref:
+            g.lp_names.add(lp_ref)
+
         if row.intent == GREEN:
             g.green_creatives += 1
         elif row.intent == RED:
@@ -630,13 +642,30 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
                     prop_green += gs.green_creatives
                     prop_red += gs.red_creatives
 
-        # propagacion desde landing pages
-        prop_lp = (propagate and
-                   any(g[6:] in lp_worked for g in sc.groups
-                       if g.startswith("__lp__")))
-
-        # propagacion desde landing pages
-        prop_lp = any(g[6:] in lp_worked for g in sc.groups if g.startswith("__lp__"))
+        # Propagacion desde landing pages. La TS puede enganchar el
+        # placement con su landing page por dos caminos:
+        #
+        #   1. el placement la referencia directamente en su propia
+        #      columna Landing Page  (Unilever, Wendy's)
+        #   2. el placement dice "See Creative Rotation Tab" y el nombre
+        #      de la landing page vive en la fila de la rotacion. Esa es
+        #      la cadena de BlackRock:
+        #         placement -> creative rotation -> landing page -> URL
+        #
+        # Sin el segundo camino un swap de solo URL deja el scope vacio:
+        # el tab de Placements va todo en blanco porque los placements
+        # siguen activos, y el unico color esta en Landing Pages. La app
+        # corria, no reportaba nada y daba NO_CHECKS.
+        prop_lp = False
+        if propagate:
+            direct = any(g[6:] in lp_worked
+                         for g in sc.groups if g.startswith("__lp__"))
+            via_rotation = any(
+                lp in lp_worked
+                for g in sc.groups if not g.startswith("__lp__")
+                for lp in (groups[g].lp_names if g in groups else ())
+            )
+            prop_lp = direct or via_rotation
 
         propagated = bool(prop_green or prop_red or prop_lp)
 
