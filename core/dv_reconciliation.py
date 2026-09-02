@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from core.normalize import clean_id
+from core.normalize import clean_id, norm_dims
 from parsers.dv_tags import DVTagsResult
 from parsers.ts_parser import REQ_NEW_PLACEMENT
 
@@ -60,8 +60,12 @@ def _worked_dv_data(ts_result) -> dict[str, dict]:
                 "placement_name": "",
                 "vendor_raw": set(),
                 "request_type": scope.request_type,
+                "dims": "",
             },
         )
+
+        if not record["dims"]:
+            record["dims"] = norm_dims(row.values.get("dimensions"))
 
         if not record["placement_name"]:
             record["placement_name"] = str(
@@ -101,6 +105,12 @@ def reconcile_dv_tags(
         # asi que pedirlo otra vez marcaba como no verificado el 100% de
         # la cuenta en vez de los pocos que si lo necesitan.
         if record["request_type"] != REQ_NEW_PLACEMENT:
+            continue
+
+        # El wrapping de DV Pinnacle hoy solo se hace para 1x1. Para
+        # display y video la exigencia de DV se valida como pixel en el
+        # export (PIX-002), no como archivo de Pinnacle.
+        if record["dims"] != "1x1":
             continue
 
         in_inventory = placement_id in tag_inventory.placement_ids

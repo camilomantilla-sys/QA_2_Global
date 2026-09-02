@@ -71,6 +71,54 @@ def split_platform_id(value: str | None) -> tuple[str, str | None]:
         return text[: m.start()].strip(), m.group(1)
     return text, None
 
+_ALNUM = re.compile(r"[^a-z0-9]+")
+_MIN_SITE_TOKEN = 4
+
+
+def site_names_match(left: object, right: object) -> bool:
+    """
+    ¿Son el mismo site escrito distinto?
+
+    La TS y la plataforma nombran el mismo site de formas que no se
+    contienen una a otra: "The Trade Desk" vs "FC TradeDesk-DBM". Basta
+    con que compartan una palabra significativa -- se comparan los
+    tokens de una contra la forma sin separadores de la otra, para que
+    "trade" enganche dentro de "tradedesk".
+    """
+    a, b = norm_compare(left), norm_compare(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+
+    flat_a, flat_b = _ALNUM.sub("", a), _ALNUM.sub("", b)
+    if flat_a in flat_b or flat_b in flat_a:
+        return True
+
+    for text, other in ((a, flat_b), (b, flat_a)):
+        for token in _ALNUM.split(text):
+            if len(token) >= _MIN_SITE_TOKEN and token in other:
+                return True
+    return False
+
+
+def dims_match(left: object, right: object) -> bool:
+    """
+    Compara dimensiones tolerando como se declara el video.
+
+    Un placement de video se escribe 0x0 en un lado y con su tamano real
+    (1920x1080, 640x480) en el otro; las dos formas significan lo mismo,
+    asi que 0x0 hace match con cualquier dimension. Sin esto el filtro
+    por dimension descartaba los creativos de video y terminaban
+    reportados como "extra creative in Innovid".
+    """
+    a, b = norm_dims(left), norm_dims(right)
+    if not a or not b:
+        return True
+    if a == b:
+        return True
+    return "0x0" in (a, b)
+
 def norm_dims(value: object) -> str:
     """'160 x 600' / '160X600' / '160\u00d7600' -> '160x600'"""
     text = norm_text(str(value) if value is not None else "")

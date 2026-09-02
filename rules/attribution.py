@@ -2,7 +2,39 @@ from core.findings import Domain
 from core.urls import TRI_INCOMPLETE
 
 
+def _declares_cgen(match_result) -> bool:
+    """
+    ¿Esta cuenta maneja CGEN?
+
+    El triangulo de atribucion se apoya en el CGEN que declara la TS.
+    BlackRock, Unilever y Wendy's no lo manejan: no tienen ni la columna.
+    Sin esto, cada placement de esas cuentas emitia un NOT_VERIFIED
+    pidiendo un dato que nunca va a existir, y el veredicto se quedaba
+    en NEEDS_REVIEW aunque todo lo demas estuviera perfecto.
+    """
+    for pm in match_result.matched:
+        if str(pm.expected.cgen or "").strip():
+            return True
+        for creative in pm.expected.creatives:
+            if str(creative.cgen or "").strip():
+                return True
+    return False
+
+
 def evaluate(match_result, buffer):
+
+    if not _declares_cgen(match_result):
+        if match_result.matched:
+            buffer.info(
+                rule_id="ATR-001",
+                domain=Domain.ATTRIBUTION,
+                message=(
+                    "Attribution isn't checked: this Traffic Sheet "
+                    "declares no CGEN, so the account doesn't use the "
+                    "attribution triangle."
+                ),
+            )
+        return
 
     for pm in match_result.matched:
 

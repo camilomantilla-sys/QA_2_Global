@@ -36,7 +36,7 @@ from core.tag_inventory import (
     build_tag_inventory_from_results,
 )
 from core.matching import match
-from core.normalize import norm_compare, norm_dims
+from core.normalize import norm_compare, norm_dims, site_names_match
 from core.tag_matching import match_tags
 from core.pdf_report import ReportMeta, build_pdf_report
 from core.excel_report import build_excel_report
@@ -327,14 +327,10 @@ def compare_value(
     if expected_comparable == actual_comparable:
         return "PASS"
 
-    # Fuzzy fields (e.g. Site) commonly get a shorter or longer label
-    # between the TS and Innovid ("The Trade Desk" vs "The Trade Desk
-    # Usa") without being a real mismatch -- if one contains the
-    # other, that's a match.
-    if fuzzy and (
-        expected_comparable in actual_comparable
-        or actual_comparable in expected_comparable
-    ):
+    # El nombre del site se escribe distinto en cada lado y sigue siendo
+    # el mismo: "The Trade Desk" en la TS y "FC TradeDesk-DBM" en la
+    # plataforma. Basta con que compartan una palabra significativa.
+    if fuzzy and site_names_match(expected_comparable, actual_comparable):
         return "PASS"
 
     return "FAIL"
@@ -2329,15 +2325,28 @@ with tempfile.TemporaryDirectory(
                                             else "MISSING"
                                         )
                                     ),
+                                    # En un creativo que se removio no hay
+                                    # URL ni atribucion que revisar: se
+                                    # fue. Marcarlo NOT_VERIFIED hacia
+                                    # parecer pendiente algo que ya esta
+                                    # resuelto.
                                     "URL": (
-                                        creative_link.url.result
-                                        if creative_link.url
-                                        else "NOT_VERIFIED"
+                                        "N/A (removed)"
+                                        if expected_creative.intent == RED
+                                        else (
+                                            creative_link.url.result
+                                            if creative_link.url
+                                            else "NOT_VERIFIED"
+                                        )
                                     ),
                                     "Attribution": (
-                                        creative_link.triangle.result
-                                        if creative_link.triangle
-                                        else "NOT_VERIFIED"
+                                        "N/A (removed)"
+                                        if expected_creative.intent == RED
+                                        else (
+                                            creative_link.triangle.result
+                                            if creative_link.triangle
+                                            else "NOT_VERIFIED"
+                                        )
                                     ),
                                 }
                             )

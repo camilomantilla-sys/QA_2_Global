@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from core.colors import GREEN, RED
-from core.normalize import norm_compare, norm_dims, split_platform_id
+from core.normalize import dims_match, norm_compare, norm_dims, split_platform_id
 from core.urls import (
     AttributionTriangle, URLComparison, check_triangle, compare_urls,
 )
@@ -380,7 +380,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
         for c in by_group.get(g, []):
             if not c.key_norm or c.key_norm in have:
                 continue
-            if ep.dims and c.dims and ep.dims != c.dims:
+            if not dims_match(ep.dims, c.dims):
                 continue
             ep.creatives.append(c)
             have.add(c.key_norm)
