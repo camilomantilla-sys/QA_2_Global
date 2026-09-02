@@ -604,12 +604,20 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
         sc.rows.append(row.row)
         sc.fields_touched |= set(row.intent_fields)
 
-        gname = norm_compare(str(row.values.get("group_name") or ""))
-        if gname:
-            sc.groups.add(gname)
-        lp = norm_compare(str(row.values.get("lp_ref") or ""))
-        if lp:
-            sc.groups.add("__lp__" + lp)
+        # Una fila gris/amarilla esta explicitamente fuera de scope: es
+        # un cambio viejo que quedo documentado en la TS. El mismo
+        # Placement ID puede aparecer dos veces, una gris con la rotacion
+        # de la solicitud anterior y otra blanca con la rotacion vigente.
+        # Si la gris aportara su rotacion, el placement heredaria la
+        # landing page de aquella y se leeria como un swap de URL que
+        # nadie pidio (los 4 falsos URL-002 de PBU).
+        if row.intent != "SCOPE_EXCLUDED":
+            gname = norm_compare(str(row.values.get("group_name") or ""))
+            if gname:
+                sc.groups.add(gname)
+            lp = norm_compare(str(row.values.get("lp_ref") or ""))
+            if lp:
+                sc.groups.add("__lp__" + lp)
 
         if row.intent == GREEN:
             sc.green_rows += 1
