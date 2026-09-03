@@ -5,6 +5,7 @@ import html
 import sys
 import tempfile
 import warnings
+from io import BytesIO
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +34,16 @@ from core.adobe_pixel_reconciliation import (
 )
 from core.dv_reconciliation import reconcile_dv_tags
 from core.dv_omni_reconciliation import reconcile_dv_omni
-from core.pixel_reconciliation import reconcile_pixels
+from core.pixel_reconciliation import (
+    F_1X1,
+    F_DISPLAY,
+    F_VIDEO,
+    IMPRESSION,
+    SURVEY,
+    load_vendor_rows,
+    reconcile_pixels,
+    save_vendor_rows,
+)
 from core.default_ads import reconcile_default_ads
 from core.tag_inventory import (
     TagInventory,
@@ -163,6 +173,51 @@ def save_upload(
     return destination
 
 
+def peek_campaign_name(uploaded_file) -> str:
+    """
+    Reads just the Campaign Name cell from a TS's Campaign Information
+    sheet, without running the full parse_ts pipeline (colors, scope,
+    placements...). Used to prefill the Implementation Record's
+    Campaign field, which renders before the TS is fully parsed.
+
+    Cheap and best-effort: any failure returns "" so a malformed or
+    unusual file never blocks the uploader.
+    """
+    try:
+        from openpyxl import load_workbook
+
+        from core.normalize import norm_key
+
+        wb = load_workbook(
+            BytesIO(uploaded_file.getbuffer()),
+            read_only=True,
+            data_only=True,
+        )
+        try:
+            sheet = next(
+                (
+                    ws for ws in wb.worksheets
+                    if norm_key(ws.title) in ("campaigninformation", "campaigninfo")
+                ),
+                None,
+            )
+            if sheet is None:
+                return ""
+
+            for row in sheet.iter_rows(min_row=1, max_row=45):
+                for idx, cell in enumerate(row):
+                    if norm_key(str(cell.value or "").rstrip(":")) != "campaignname":
+                        continue
+                    for next_cell in row[idx + 1:]:
+                        if next_cell.value not in (None, ""):
+                            return str(next_cell.value).strip()
+            return ""
+        finally:
+            wb.close()
+    except Exception:
+        return ""
+
+
 def anomaly_rows(
     source_name: str,
     result,
@@ -236,6 +291,7 @@ def findings_dataframe(findings) -> pd.DataFrame:
     for finding in findings:
         rows.append(
             {
+                "Finding ID": finding.finding_id,
                 "Status": finding.status.value,
                 "Severity": finding.severity.value,
                 "Rule": finding.rule_id,
@@ -255,6 +311,30 @@ def findings_dataframe(findings) -> pd.DataFrame:
         )
 
     return pd.DataFrame(rows)
+
+
+def with_signoffs(df: pd.DataFrame, signoffs: dict) -> pd.DataFrame:
+    """
+    Adds "Reviewed OK" / "Reviewer Note" columns to a findings
+    dataframe from the review sign-off widget's session state.
+
+    Signing off documents a human decision on a REVIEW finding (e.g.
+    "TS asked for the wrong thing, Digital will fix post-launch") --
+    it doesn't change the finding's own Status, it just records that a
+    QA looked at it and confirmed it's fine to proceed. Both columns
+    stay empty for a finding nobody has signed off on.
+    """
+    if df.empty or "Finding ID" not in df.columns:
+        return df
+
+    df = df.copy()
+    df["Reviewed OK"] = df["Finding ID"].map(
+        lambda fid: "Yes" if signoffs.get(fid, {}).get("confirmed") else ""
+    )
+    df["Reviewer Note"] = df["Finding ID"].map(
+        lambda fid: signoffs.get(fid, {}).get("note", "")
+    )
+    return df
 
 
 def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
@@ -634,6 +714,95 @@ st.markdown(
 
 
 # ============================================================
+# Editable vendor pixel config (PIX-002: DoubleVerify, Dynata,
+# Kantar, Inmarket, DISQO)
+# ============================================================
+
+with st.expander("⚙️ Pixels by account (editable)"):
+    st.caption(
+        "Vendor pixel rules PIX-002 checks against Innovid: which "
+        "host identifies each vendor's pixel, which export column it "
+        "lives in, which formats it applies to, and any site it "
+        "never applies to. Edit and save here if a host or column "
+        "changes -- no code change needed. Saved to "
+        "config/vendor_pixels.json; applies on the next QA2 run for "
+        "everyone who pulls this repo after the file is committed."
+    )
+
+    _vendor_rows = load_vendor_rows()
+    _vendor_df = pd.DataFrame(
+        [
+            {
+                "Vendor": r.get("name", ""),
+                "TS terms": ", ".join(r.get("ts_terms", [])),
+                "Host terms": ", ".join(r.get("host_terms", [])),
+                "Column": r.get("column", IMPRESSION),
+                "1x1": F_1X1 in (r.get("formats") or []),
+                "Display": F_DISPLAY in (r.get("formats") or []),
+                "Video": F_VIDEO in (r.get("formats") or []),
+                "Site exceptions": ", ".join(r.get("site_exceptions", [])),
+                "Note": r.get("note", ""),
+            }
+            for r in _vendor_rows
+        ]
+    )
+
+    _edited_vendor_df = st.data_editor(
+        _vendor_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "Column": st.column_config.SelectboxColumn(
+                options=[SURVEY, IMPRESSION]
+            ),
+        },
+        key="qa2_vendor_editor",
+    )
+
+    if st.button("Save pixel table", key="qa2_vendor_save"):
+        _new_vendor_rows = []
+        for _, _row in _edited_vendor_df.iterrows():
+            _name = str(_row.get("Vendor") or "").strip()
+            if not _name:
+                continue
+            _formats = []
+            if _row.get("1x1"):
+                _formats.append(F_1X1)
+            if _row.get("Display"):
+                _formats.append(F_DISPLAY)
+            if _row.get("Video"):
+                _formats.append(F_VIDEO)
+            _new_vendor_rows.append(
+                {
+                    "name": _name,
+                    "ts_terms": [
+                        t.strip()
+                        for t in str(_row.get("TS terms") or "").split(",")
+                        if t.strip()
+                    ],
+                    "host_terms": [
+                        t.strip()
+                        for t in str(_row.get("Host terms") or "").split(",")
+                        if t.strip()
+                    ],
+                    "column": _row.get("Column") or IMPRESSION,
+                    "formats": _formats,
+                    "site_exceptions": [
+                        t.strip()
+                        for t in str(_row.get("Site exceptions") or "").split(",")
+                        if t.strip()
+                    ],
+                    "note": str(_row.get("Note") or ""),
+                }
+            )
+        save_vendor_rows(_new_vendor_rows)
+        st.success(
+            f"Saved {len(_new_vendor_rows)} vendor(s) to "
+            "config/vendor_pixels.json."
+        )
+
+
+# ============================================================
 # Sidebar
 # ============================================================
 
@@ -660,6 +829,19 @@ with st.sidebar:
         accept_multiple_files=False,
         key="qa2_ts",
     )
+
+    if uploaded_ts is not None:
+        # Prefills the Implementation Record's Campaign field from the
+        # TS's own Campaign Information sheet. Only re-peeks when the
+        # uploaded file actually changes, so it doesn't re-parse on
+        # every rerun, and never overwrites a name the user already
+        # typed by hand for the current file.
+        _campaign_source = (uploaded_ts.name, uploaded_ts.size)
+        if st.session_state.get("_campaign_autofill_source") != _campaign_source:
+            _peeked_name = peek_campaign_name(uploaded_ts)
+            if _peeked_name:
+                st.session_state["qa2_record_campaign"] = _peeked_name
+            st.session_state["_campaign_autofill_source"] = _campaign_source
 
     st.markdown(
         """
@@ -1395,6 +1577,81 @@ with tempfile.TemporaryDirectory(
             scorecard = findings_buffer.scorecard()
 
         # ----------------------------------------------------
+        # Review sign-off
+        #
+        # REVIEW findings are a callout, not a blocker (e.g. a TS
+        # asking for something that's wrong on its own terms, or two
+        # creatives sharing an ID with a naming mismatch). This lets a
+        # QA confirm "I looked at this, it's fine to proceed" with a
+        # note for the record, without changing the underlying
+        # finding. Rendered before the exports below so the sign-off
+        # is included in the same run's PDF/Excel.
+        # ----------------------------------------------------
+
+        review_findings = [
+            finding for finding in findings_buffer.findings
+            if finding.status.value == "REVIEW"
+        ]
+
+        signoff_notes: dict[str, dict] = {}
+
+        if review_findings:
+            with st.expander(
+                f"📝 Review sign-off ({len(review_findings)} item(s))"
+            ):
+                st.caption(
+                    "Confirm a REVIEW item is fine to proceed and "
+                    "leave a note -- both are saved into the PDF and "
+                    "Excel reports as the QA record. The finding "
+                    "itself stays REVIEW; signing off documents the "
+                    "decision, it doesn't remove it."
+                )
+
+                _review_base_df = pd.DataFrame(
+                    [
+                        {
+                            "Reviewed OK": False,
+                            "Rule": finding.rule_id,
+                            "Placement ID": finding.placement_id,
+                            "Creative ID": finding.creative_id,
+                            "Finding": finding.message,
+                            "Note": "",
+                        }
+                        for finding in review_findings
+                    ]
+                )
+
+                _edited_review_df = st.data_editor(
+                    _review_base_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=[
+                        "Rule", "Placement ID", "Creative ID", "Finding",
+                    ],
+                    key="qa2_review_signoff",
+                )
+
+                for finding, (_, _row) in zip(
+                    review_findings, _edited_review_df.iterrows()
+                ):
+                    _confirmed = bool(_row.get("Reviewed OK"))
+                    _note = str(_row.get("Note") or "").strip()
+                    if _confirmed or _note:
+                        signoff_notes[finding.finding_id] = {
+                            "confirmed": _confirmed,
+                            "note": _note,
+                        }
+
+                _signed_off = sum(
+                    1 for v in signoff_notes.values() if v["confirmed"]
+                )
+                if _signed_off:
+                    st.info(
+                        f"{_signed_off} of {len(review_findings)} "
+                        "REVIEW item(s) signed off."
+                    )
+
+        # ----------------------------------------------------
         # Results header
         # ----------------------------------------------------
 
@@ -1896,12 +2153,15 @@ with tempfile.TemporaryDirectory(
                 qa3_date=record_qa3_date,
                 notes=record_notes,
             ),
-            findings_df=findings_dataframe(
-                [
-                    finding
-                    for finding in findings_buffer.findings
-                    if finding.status.value != "PASS"
-                ]
+            findings_df=with_signoffs(
+                findings_dataframe(
+                    [
+                        finding
+                        for finding in findings_buffer.findings
+                        if finding.status.value != "PASS"
+                    ]
+                ),
+                signoff_notes,
             ),
             rules_df=rule_summary_dataframe(findings_buffer),
             files_df=files_dataframe,
@@ -1975,7 +2235,9 @@ with tempfile.TemporaryDirectory(
                 qa3_date=record_qa3_date,
                 notes=record_notes,
             ),
-            findings_df=findings_dataframe(findings_buffer.findings),
+            findings_df=with_signoffs(
+                findings_dataframe(findings_buffer.findings), signoff_notes
+            ),
             rules_df=rule_summary_dataframe(findings_buffer),
             files_df=files_dataframe,
             placements_df=pd.DataFrame(placements_rows_for_pdf),
@@ -2807,8 +3069,8 @@ with tempfile.TemporaryDirectory(
                 if finding.status.value != "PASS"
             ]
 
-            attention_df = findings_dataframe(
-                attention_findings
+            attention_df = with_signoffs(
+                findings_dataframe(attention_findings), signoff_notes
             )
 
             if attention_df.empty:

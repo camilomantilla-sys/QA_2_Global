@@ -556,7 +556,7 @@ def build_pdf_report(
     findings_cols = [
         c for c in [
             "Status", "Rule", "Placement ID", "Placement Name",
-            "Message", "Expected", "Found", "Reason",
+            "Message", "Expected", "Found", "Reason", "Reviewer Note",
         ]
         if c in findings_df.columns
     ]
@@ -565,8 +565,8 @@ def build_pdf_report(
     if findings_cols:
         weights = {
             "Status": 0.09, "Rule": 0.09, "Placement ID": 0.10,
-            "Placement Name": 0.15, "Message": 0.20, "Expected": 0.13,
-            "Found": 0.13, "Reason": 0.11,
+            "Placement Name": 0.15, "Message": 0.16, "Expected": 0.10,
+            "Found": 0.10, "Reason": 0.09, "Reviewer Note": 0.12,
         }
         total = 170 * mm
         col_widths = [

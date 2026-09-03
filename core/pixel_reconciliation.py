@@ -6,14 +6,18 @@ que ese placement debe llevar. Cada vendor entrega su pixel y ese pixel
 tiene que quedar cargado en una columna concreta del export a nivel de
 placement.
 
-La tabla VENDORS de abajo es el unico sitio que hay que tocar para
-agregar un vendor, cambiar el pixel de uno existente o mover en que
-columna se espera. La logica no cambia.
+La tabla _DEFAULT_VENDORS de abajo son los valores de fabrica. La
+fuente real una vez existe es config/vendor_pixels.json, editable
+desde el panel "Pixels by account" de la app -- asi el equipo no
+depende de que alguien toque este archivo para agregar un vendor,
+cambiar su host o mover en que columna se espera.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from core.dv_subtype import MONITORING, MONITORING_BLOCKING, OMNI, dv_subtype
 from core.normalize import clean_id, norm_compare, norm_dims
@@ -55,7 +59,7 @@ class Vendor:
     site_exceptions: frozenset[str] = frozenset()
 
 
-VENDORS: tuple[Vendor, ...] = (
+_DEFAULT_VENDORS: tuple[Vendor, ...] = (
     # DoubleVerify: solo cubre aqui el sub-tipo Monitoring (solo o con
     # Blocking) en Display, que es el unico que exige un pixel a nivel
     # de placement. Omni no lo usa (va por columna en el archivo de
@@ -112,6 +116,91 @@ VENDORS: tuple[Vendor, ...] = (
         site_exceptions=frozenset({"netflix"}),
     ),
 )
+
+
+# ------------------------------------------------------------------
+# Editable config: config/vendor_pixels.json
+#
+# The account team shouldn't have to depend on someone editing this
+# Python file to update a vendor's host, column or formats. The table
+# above are the shipped defaults; a JSON file next to the repo is the
+# actual source of truth once it exists, editable from the app's
+# "Pixels by account" panel. Every call to reconcile_pixels() re-reads
+# it, so an edit takes effect on the very next QA2 run, no restart.
+#
+# This only covers the flat per-vendor rows (Dynata, Kantar, Inmarket,
+# DISQO, and the Display-only part of DoubleVerify Monitoring). DV's
+# Omni/Monitoring/Blocking routing and Adobe's FTRACK/Protected column
+# policy are structural, not a simple table, so they stay in code.
+# ------------------------------------------------------------------
+
+VENDOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "vendor_pixels.json"
+
+_VENDOR_FIELDS = ("name", "ts_terms", "host_terms", "column", "formats", "note", "site_exceptions")
+
+
+def _vendor_to_dict(vendor: Vendor) -> dict:
+    return {
+        "name": vendor.name,
+        "ts_terms": list(vendor.ts_terms),
+        "host_terms": list(vendor.host_terms),
+        "column": vendor.column,
+        "formats": sorted(vendor.formats),
+        "note": vendor.note,
+        "site_exceptions": sorted(vendor.site_exceptions),
+    }
+
+
+def _dict_to_vendor(data: dict) -> Vendor:
+    return Vendor(
+        name=str(data.get("name") or "").strip(),
+        ts_terms=tuple(str(t).strip() for t in (data.get("ts_terms") or []) if str(t).strip()),
+        host_terms=tuple(str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()),
+        column=str(data.get("column") or IMPRESSION).strip(),
+        formats=frozenset(
+            f for f in (data.get("formats") or []) if f in (F_1X1, F_DISPLAY, F_VIDEO)
+        ),
+        note=str(data.get("note") or ""),
+        site_exceptions=frozenset(
+            norm_compare(s) for s in (data.get("site_exceptions") or []) if str(s).strip()
+        ),
+    )
+
+
+def default_vendor_rows() -> list[dict]:
+    """The shipped defaults, as plain dicts -- used to seed the config file."""
+    return [_vendor_to_dict(v) for v in _DEFAULT_VENDORS]
+
+
+def load_vendor_rows() -> list[dict]:
+    """
+    Raw rows from config/vendor_pixels.json, or the shipped defaults if
+    the file doesn't exist yet or fails to parse.
+    """
+    try:
+        with open(VENDOR_CONFIG_PATH, encoding="utf-8") as f:
+            rows = json.load(f)
+        if isinstance(rows, list) and rows:
+            return rows
+    except (OSError, json.JSONDecodeError):
+        pass
+    return default_vendor_rows()
+
+
+def save_vendor_rows(rows: list[dict]) -> None:
+    """Writes the vendor table back to config/vendor_pixels.json."""
+    VENDOR_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(VENDOR_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+def load_vendors() -> tuple[Vendor, ...]:
+    """Vendor table reconcile_pixels() actually uses: config file, else defaults."""
+    rows = load_vendor_rows()
+    vendors = [_dict_to_vendor(row) for row in rows]
+    vendors = [v for v in vendors if v.name and v.ts_terms and v.host_terms]
+    return tuple(vendors) if vendors else _DEFAULT_VENDORS
 
 
 @dataclass
@@ -195,7 +284,7 @@ def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
         placement_name = str(ts_row.values.get("placement_name") or "").strip()
         site_name = norm_compare(str(ts_row.values.get("site") or ""))
 
-        for vendor in VENDORS:
+        for vendor in load_vendors():
             if not _declared(vendor, vendor_raw):
                 continue
             if fmt not in vendor.formats:
