@@ -20,6 +20,14 @@ names one of three flavors, and each is verified in a different place.
         Video: table says this combo "shouldn't normally show up" --
         treated as a callout, validated the same way as Omni Video.
 
+    DV Integration          1x1
+        Camilo: "solo hay que descargar tags, no es necesario hacer
+        wrapping de DV Pinnacle." No Pinnacle file, no placement
+        pixel, no tag-file column -- the only requirement is that the
+        regular Innovid tags get delivered, which TAG-013 (tag
+        coverage) already checks. DV-001 and DV-003 both skip this
+        subtype outright.
+
 Camilo confirmed the table isn't complete yet (still missing one
 BlackRock and one Wendy's example), and none of the files reviewed so
 far carry an actual doubleverify_vast/doubleverify_html column to
@@ -38,6 +46,7 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 OMNI = "OMNI"
 MONITORING = "MONITORING"
 MONITORING_BLOCKING = "MONITORING_BLOCKING"
+INTEGRATION = "INTEGRATION"
 UNDETERMINED = "UNDETERMINED"
 
 
@@ -52,8 +61,8 @@ def is_dv(vendor_raw: object) -> bool:
 
 def dv_subtype(vendor_raw: object) -> str | None:
     """
-    Return OMNI / MONITORING / MONITORING_BLOCKING / UNDETERMINED, or
-    None if the text doesn't mention DV at all.
+    Return OMNI / MONITORING / MONITORING_BLOCKING / INTEGRATION /
+    UNDETERMINED, or None if the text doesn't mention DV at all.
     """
     if not is_dv(vendor_raw):
         return None
@@ -63,6 +72,7 @@ def dv_subtype(vendor_raw: object) -> str | None:
     omni = "omni" in text
     monitoring = "monitoring" in text
     blocking = "blocking" in text
+    integration = "integration" in text
 
     if omni:
         return OMNI
@@ -72,4 +82,6 @@ def dv_subtype(vendor_raw: object) -> str | None:
         return MONITORING_BLOCKING
     if monitoring:
         return MONITORING
+    if integration:
+        return INTEGRATION
     return UNDETERMINED

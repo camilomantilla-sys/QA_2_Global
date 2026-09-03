@@ -8,7 +8,7 @@ Initial validations:
   TAG-004 Placement Name.
   TAG-005 Dimensions.
   TAG-006 Third Party ID.
-  TAG-007 Placement ID embedded in the tag.
+  TAG-007 (disabled) Placement ID embedded in the tag.
   TAG-008 Campaign ID embedded in the tag.
   TAG-009 Embedded dimensions.
   TAG-010 Empty tag.
@@ -19,7 +19,6 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from core.findings import (
-    Confidence,
     Domain,
     EntityType,
     FindingsBuffer,
@@ -372,62 +371,16 @@ def evaluate(
             )
 
             # TAG-007: embedded Placement ID.
-
-            if tag.placement_ids:
-                if row.placement_id in tag.placement_ids:
-                    buffer.pass_(
-                        rule_id="TAG-007",
-                        domain=Domain.TAG,
-                        message=(
-                            "Embedded Placement ID in the tag is correct."
-                        ),
-                        entity_type=EntityType.TAG,
-                        placement_id=row.placement_id,
-                        expected=row.placement_id,
-                        actual=", ".join(tag.placement_ids),
-                        reason=tag_source,
-                    )
-                else:
-                    buffer.fail(
-                        rule_id="TAG-007",
-                        domain=Domain.TAG,
-                        message=(
-                            "Embedded Placement ID in the tag doesn't "
-                            "match the row."
-                        ),
-                        entity_type=EntityType.TAG,
-                        placement_id=row.placement_id,
-                        expected=row.placement_id,
-                        actual=", ".join(tag.placement_ids),
-                        reason=tag_source,
-                        recommended_action=(
-                            "Regenerate the tag for this placement."
-                        ),
-                    )
-            else:
-                # No hay Placement ID embebido que contrastar. Eso es
-                # una propiedad del tipo de tag, no un insumo que falte:
-                # no hay nada que el trafficker pueda subir para que
-                # este check corra. Como INFO queda registrado sin
-                # arrastrar el veredicto a NEEDS_REVIEW, que dejaba la
-                # campana sin poder aprobar por mas correcta que
-                # estuviera la implementacion.
-                buffer.info(
-                    rule_id="TAG-007",
-                    domain=Domain.TAG,
-                    message=(
-                        "This tag's own code doesn't embed a Placement "
-                        "ID -- that's how this tag type is built, not "
-                        "a problem with the implementation. The row's "
-                        "Placement_ID column (always present in the "
-                        "file) is what TAG-002/003/004 already "
-                        "verified this placement against."
-                    ),
-                    entity_type=EntityType.TAG,
-                    placement_id=row.placement_id,
-                    reason=tag_source,
-                    confidence=Confidence.NONE,
-                )
+            #
+            # DISABLED per Camilo: don't check the tag's own pixel
+            # content at all -- what matters is that the file's
+            # Placement_ID column carries every ID the request asks
+            # for (TAG-002/003, and the new coverage check TAG-013)
+            # and that the vendor-required column is populated
+            # (TAG-012). Comparing embedded macros inside the tag's
+            # own code added noise without a corresponding action a
+            # trafficker could take. This rule emits no PASS, FAIL,
+            # REVIEW, or NOT_VERIFIED.
 
             # TAG-008: embedded Campaign ID.
 

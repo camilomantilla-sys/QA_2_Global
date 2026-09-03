@@ -37,11 +37,40 @@ _VIDEO_DIMS = {"640x480", "1920x1080", "1280x720", "0x0"}
 # Estados de Innovid en los que el placement no esta sirviendo.
 _NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
 
+# Reconoce los macros que Innovid deja sin resolver en un pixel
+# ("[%placementID%]", "%%SITE%%", "${CAMPAIGN}") para poder comparar
+# la URL oficial contra la implementada ignorando esos valores, que
+# cambian por diseno, sin ignorar el resto de la URL.
+_PIXEL_MACRO = re.compile(
+    r"\[%[^%\]]+%\]"
+    r"|\$\{[^{}]+\}"
+    r"|\[[A-Za-z_][A-Za-z0-9_]*\]"
+    r"|%%[^%]+%%",
+    re.IGNORECASE,
+)
+
+
+def _pixel_skeleton(url: str) -> str:
+    """Pixel URL con cada macro reemplazado por un token comun, para comparar."""
+    return _PIXEL_MACRO.sub("<MACRO>", str(url or "").strip()).casefold()
+
+
+def pixel_matches_official(found: str, official: str) -> bool:
+    """
+    True si el pixel encontrado coincide con el oficial una vez se
+    ignoran los macros de ambos lados. Cualquier otra diferencia (host,
+    path, un parametro con valor fijo que cambio) cuenta como mismatch.
+    """
+    if not official:
+        return True
+    return _pixel_skeleton(found) == _pixel_skeleton(official)
+
 
 @dataclass(frozen=True)
 class Vendor:
     """
     name            nombre legible que se muestra en el hallazgo
+    account         cuenta a la que aplica esta fila ("" = todas)
     ts_terms        como aparece nombrado en "Vendors / Pixels"
     host_terms      como se reconoce su pixel dentro del tag
     column          donde debe estar cargado
@@ -49,6 +78,11 @@ class Vendor:
     note            por que no aplica a los formatos que quedan fuera
     site_exceptions sitios donde el vendor nunca aplica, aunque la TS
                     lo pida (el publisher lo integra distinto)
+    official_pixel  la URL de referencia vigente (con macros), tal
+                    como Camilo la mantiene actualizada. Si esta
+                    presente, un pixel encontrado se compara contra
+                    ella ademas de contra host_terms -- ver
+                    pixel_matches_official().
     """
     name: str
     ts_terms: tuple[str, ...]
@@ -57,6 +91,8 @@ class Vendor:
     formats: frozenset[str]
     note: str = ""
     site_exceptions: frozenset[str] = frozenset()
+    account: str = ""
+    official_pixel: str = ""
 
 
 _DEFAULT_VENDORS: tuple[Vendor, ...] = (
@@ -73,6 +109,12 @@ _DEFAULT_VENDORS: tuple[Vendor, ...] = (
         host_terms=("doubleverify.com",),
         column=SURVEY,
         formats=frozenset({F_DISPLAY}),
+        # Camilo's reference URL has ctx=715607, but a real BlackRock
+        # placement showed ctx=27799358 -- that value isn't a fixed
+        # constant, it varies (by account or by DV setup). Left blank
+        # on purpose: paste the real reference into the "Pixels by
+        # account" panel only once you've confirmed with DV which
+        # part of the URL is actually fixed for a given account.
         note=(
             "Monitoring on 1x1 is delivered as a wrapped tag from DV "
             "Pinnacle (DV-001), not as a placement-level pixel. Omni "
@@ -92,28 +134,38 @@ _DEFAULT_VENDORS: tuple[Vendor, ...] = (
         host_terms=("insightexpressai.com",),
         column=IMPRESSION,
         formats=frozenset({F_1X1, F_DISPLAY, F_VIDEO}),
+        # Left blank for the same reason as DoubleVerify's ctx above:
+        # bannerID=13015010 looks like it could be account-specific
+        # too, unconfirmed against real data. Paste it into the UI
+        # once you've checked it holds across accounts.
     ),
     # Wendy's only. Publishers apply Inmarket in the backend for 1x1,
     # so it never shows up as a placement-level pixel there even when
     # the TS lists it -- that's why 1x1 is excluded from formats.
     Vendor(
         name="Inmarket",
+        account="Wendy's",
         ts_terms=("inmarket",),
         host_terms=("ninthdecimal.com",),
         column=IMPRESSION,
         formats=frozenset({F_DISPLAY, F_VIDEO}),
         site_exceptions=frozenset({"vevo"}),
+        # Left blank -- same caution as above, not yet validated
+        # against a real Wendy's export.
     ),
     # Wendy's only. Same backend-applied logic as Inmarket for 1x1.
     # This is a separate entry from Adobe's DISQO (PIX-A01): different
     # accounts, different profile, same vendor name.
     Vendor(
         name="DISQO",
+        account="Wendy's",
         ts_terms=("disqo",),
         host_terms=("activemetering.com",),
         column=IMPRESSION,
         formats=frozenset({F_DISPLAY, F_VIDEO}),
         site_exceptions=frozenset({"netflix"}),
+        # Left blank -- same caution as above, not yet validated
+        # against a real Wendy's export.
     ),
 )
 
@@ -141,11 +193,13 @@ _VENDOR_FIELDS = ("name", "ts_terms", "host_terms", "column", "formats", "note",
 
 def _vendor_to_dict(vendor: Vendor) -> dict:
     return {
+        "account": vendor.account,
         "name": vendor.name,
         "ts_terms": list(vendor.ts_terms),
         "host_terms": list(vendor.host_terms),
         "column": vendor.column,
         "formats": sorted(vendor.formats),
+        "official_pixel": vendor.official_pixel,
         "note": vendor.note,
         "site_exceptions": sorted(vendor.site_exceptions),
     }
@@ -153,6 +207,7 @@ def _vendor_to_dict(vendor: Vendor) -> dict:
 
 def _dict_to_vendor(data: dict) -> Vendor:
     return Vendor(
+        account=str(data.get("account") or "").strip(),
         name=str(data.get("name") or "").strip(),
         ts_terms=tuple(str(t).strip() for t in (data.get("ts_terms") or []) if str(t).strip()),
         host_terms=tuple(str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()),
@@ -160,6 +215,7 @@ def _dict_to_vendor(data: dict) -> Vendor:
         formats=frozenset(
             f for f in (data.get("formats") or []) if f in (F_1X1, F_DISPLAY, F_VIDEO)
         ),
+        official_pixel=str(data.get("official_pixel") or "").strip(),
         note=str(data.get("note") or ""),
         site_exceptions=frozenset(
             norm_compare(s) for s in (data.get("site_exceptions") or []) if str(s).strip()
@@ -214,6 +270,7 @@ class PixelCheck:
     result: str = "NOT_VERIFIED"
     message: str = ""
     found: str = ""
+    official: str = ""
 
 
 @dataclass
@@ -243,7 +300,7 @@ def _pixels_in(row, column: str) -> list[str]:
     return [tag for tag in (row.multi.get(column) or []) if tag]
 
 
-def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
+def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelReconciliation:
     out = PixelReconciliation(placement_view_loaded=placement_view is not None)
 
     worked = {s.placement_id: s for s in ts_result.worked}
@@ -290,6 +347,8 @@ def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
             if fmt not in vendor.formats:
                 continue
             if site_name in vendor.site_exceptions:
+                continue
+            if vendor.account and norm_compare(vendor.account) != norm_compare(account):
                 continue
 
             if vendor.name == "DoubleVerify":
@@ -365,7 +424,15 @@ def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
                     None,
                 )
 
-                if match:
+                if match and not pixel_matches_official(match, vendor.official_pixel):
+                    check.result = "REVIEW"
+                    check.found = match
+                    check.official = vendor.official_pixel
+                    check.message = (
+                        f"{vendor.name} pixel is loaded, but doesn't match "
+                        "the official pixel on record for this vendor."
+                    )
+                elif match:
                     check.result = "PASS"
                     check.found = match
                     check.message = (

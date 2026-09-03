@@ -111,11 +111,13 @@ def reconcile_dv_tags(
         subtype = dv_subtype(vendor_raw)
 
         if subtype != MONITORING:
-            # OMNI, MONITORING_BLOCKING or UNDETERMINED on 1x1: none
-            # of those is this rule's job. DV-003 (dv_omni_reconciliation)
-            # owns the fallback "which DV check applies here" finding
-            # for every case this rule doesn't handle, so it isn't
-            # duplicated across both rules for the same placement.
+            # OMNI, MONITORING_BLOCKING, INTEGRATION or UNDETERMINED
+            # on 1x1: none of those is this rule's job. Integration
+            # needs nothing beyond the regular tags (TAG-013 checks
+            # that); DV-003 (dv_omni_reconciliation) owns the fallback
+            # "which DV check applies here" finding for every other
+            # case this rule doesn't handle, so it isn't duplicated
+            # across both rules for the same placement.
             continue
 
         in_inventory = placement_id in tag_inventory.placement_ids

@@ -33,7 +33,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from core.dv_subtype import MONITORING, MONITORING_BLOCKING, OMNI, dv_subtype, is_dv
+from core.dv_subtype import (
+    INTEGRATION,
+    MONITORING,
+    MONITORING_BLOCKING,
+    OMNI,
+    dv_subtype,
+    is_dv,
+)
 from core.normalize import clean_id, norm_compare, norm_dims
 from core.tag_inventory import TagInventory
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
@@ -140,6 +147,13 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
         if subtype == MONITORING and fmt in (F_1X1, F_DISPLAY):
             continue
 
+        # DV Integration (1x1): no Pinnacle file, no placement pixel,
+        # no tag-file column -- just needs the regular tags delivered,
+        # which TAG-013 (tag coverage) already checks. Nothing for
+        # this module to add.
+        if subtype == INTEGRATION:
+            continue
+
         if subtype == OMNI and fmt in (F_1X1, F_VIDEO):
             tag_type, column_label = _DV_VAST, "doubleverify_vast"
         elif subtype == MONITORING_BLOCKING and fmt == F_DISPLAY:
@@ -167,8 +181,8 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
                     result="NOT_VERIFIED",
                     message=message,
                     recommended_action=(
-                        "Confirm with Camilo which DV check applies to "
-                        "this placement."
+                        "Confirm with the team which DV check applies "
+                        "to this placement."
                     ),
                     **common,
                 )
