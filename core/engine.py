@@ -19,7 +19,9 @@ from rules import placements
 from rules import tags
 from rules import urls
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
+from rules import adobe_tag_policy  # idem: recibe `reconciliation`
 from rules import pixels  # idem: recibe `reconciliation`
+from rules import dv_omni  # idem: recibe `reconciliation`
 from rules import defaults  # idem: recibe `reconciliation`
 
 
@@ -27,7 +29,9 @@ def run_rules(
     match_result,
     tags_result=None,
     adobe_pixel_reconciliation=None,
+    adobe_tag_policy_reconciliation=None,
     pixel_reconciliation=None,
+    dv_omni_reconciliation=None,
     default_ad_reconciliation=None,
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
@@ -43,8 +47,14 @@ def run_rules(
     if adobe_pixel_reconciliation is not None:
         adobe_pixels.evaluate(adobe_pixel_reconciliation, buffer)
 
+    if adobe_tag_policy_reconciliation is not None:
+        adobe_tag_policy.evaluate(adobe_tag_policy_reconciliation, buffer)
+
     if pixel_reconciliation is not None:
         pixels.evaluate(pixel_reconciliation, buffer)
+
+    if dv_omni_reconciliation is not None:
+        dv_omni.evaluate(dv_omni_reconciliation, buffer)
 
     if default_ad_reconciliation is not None:
         defaults.evaluate(default_ad_reconciliation, buffer)

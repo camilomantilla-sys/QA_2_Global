@@ -33,6 +33,8 @@ AUXILIARY_PIXEL_TYPES = {
     "PIXEL",
     "PIXEL_HTML",
     "1X1_IMPRESSION",
+    "DV_VAST",
+    "DV_HTML",
 }
 
 
@@ -414,10 +416,12 @@ def evaluate(
                     rule_id="TAG-007",
                     domain=Domain.TAG,
                     message=(
-                        "The tag carries no embedded Placement ID, so "
-                        "there's nothing to cross-check. This is how "
-                        "this tag type is built, not a problem with "
-                        "the implementation."
+                        "This tag's own code doesn't embed a Placement "
+                        "ID -- that's how this tag type is built, not "
+                        "a problem with the implementation. The row's "
+                        "Placement_ID column (always present in the "
+                        "file) is what TAG-002/003/004 already "
+                        "verified this placement against."
                     ),
                     entity_type=EntityType.TAG,
                     placement_id=row.placement_id,
