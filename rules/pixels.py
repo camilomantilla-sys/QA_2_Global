@@ -39,6 +39,19 @@ def evaluate(reconciliation, buffer):
                 **common,
             )
 
+        elif check.result == "REVIEW":
+            buffer.review(
+                message=check.message,
+                expected=check.official,
+                actual=check.found,
+                recommended_action=(
+                    "Confirm with the team whether the vendor rotated "
+                    "its pixel -- if so, update the official pixel in "
+                    "the Pixels by account panel."
+                ),
+                **{k: v for k, v in common.items() if k not in ("expected", "actual")},
+            )
+
         else:
             buffer.not_verified(
                 message=check.message,

@@ -28,13 +28,70 @@ Tag files are secondary evidence.
 """
 from __future__ import annotations
 
+import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from enum import Enum
 from typing import Iterable
 
 from core.normalize import norm_compare
+from core.pixel_reconciliation import pixel_matches_official
 from core.tag_inventory import TagInventory, TagSourceRow
+
+# ------------------------------------------------------------------
+# Editable config: config/vendor_pixels_adobe.json
+#
+# Independent from the WPP table in core/pixel_reconciliation.py --
+# Adobe's DISQO/iSpot check doesn't gate presence off one host+column
+# pair the way WPP's does (it searches broadly across Innovid and the
+# tag files instead). This only supplies the official reference URL
+# used, once evidence is found, to flag a vendor pixel that drifted.
+# ------------------------------------------------------------------
+
+ADOBE_VENDOR_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent / "config" / "vendor_pixels_adobe.json"
+)
+
+
+def _default_adobe_vendor_rows() -> list[dict]:
+    return [
+        {"name": "DISQO", "official_pixel": "", "note": ""},
+        {"name": "iSpot", "official_pixel": "", "note": ""},
+    ]
+
+
+def load_adobe_vendor_rows() -> list[dict]:
+    try:
+        with open(ADOBE_VENDOR_CONFIG_PATH, encoding="utf-8") as f:
+            rows = json.load(f)
+        if isinstance(rows, list) and rows:
+            return rows
+    except (OSError, json.JSONDecodeError):
+        pass
+    return _default_adobe_vendor_rows()
+
+
+def save_adobe_vendor_rows(rows: list[dict]) -> None:
+    ADOBE_VENDOR_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(ADOBE_VENDOR_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+def _official_pixels() -> dict[str, str]:
+    """{vendor name -> official pixel}, skipping blanks."""
+    return {
+        str(row.get("name") or "").strip(): str(row.get("official_pixel") or "").strip()
+        for row in load_adobe_vendor_rows()
+        if str(row.get("official_pixel") or "").strip()
+    }
+
+
+def _evidence_value(evidence_line: str) -> str:
+    """"row 12 | third_party_impression | <url>" -> "<url>"."""
+    parts = str(evidence_line or "").split(" | ")
+    return parts[-1].strip() if parts else ""
 
 
 class PixelResult(str, Enum):
@@ -624,4 +681,70 @@ def reconcile_adobe_pixels(
             )
         )
 
+    return _flag_official_pixel_drift(result)
+
+
+def _flag_official_pixel_drift(
+    result: AdobePixelReconciliation,
+) -> AdobePixelReconciliation:
+    """
+    Downgrades a PASS to REVIEW when the evidence that made it pass
+    doesn't structurally match the official pixel on record for that
+    requirement (config/vendor_pixels_adobe.json). Leaves every other
+    result untouched -- this only adds a narrower check on top of the
+    existing presence check, it never overrides a FAIL/REVIEW/N/A.
+    """
+    official_by_vendor = _official_pixels()
+
+    if not official_by_vendor:
+        return result
+
+    updated: list[AdobePixelCheck] = []
+
+    for check in result.checks:
+        if check.result != PixelResult.PASS.value:
+            updated.append(check)
+            continue
+
+        requirement = (
+            "iSpot" if "ISPOT" in check.requirements else "DISQO"
+        )
+        official = official_by_vendor.get(requirement)
+
+        if not official:
+            updated.append(check)
+            continue
+
+        evidence_values = [
+            _evidence_value(line)
+            for line in (*check.innovid_evidence, *check.tag_evidence)
+        ]
+
+        if any(
+            pixel_matches_official(value, official)
+            for value in evidence_values
+            if value
+        ):
+            updated.append(check)
+            continue
+
+        updated.append(
+            replace(
+                check,
+                result=PixelResult.REVIEW.value,
+                message=(
+                    f"{requirement} evidence was found, but doesn't "
+                    "match the official pixel on record for this "
+                    "vendor."
+                ),
+                actual=" | ".join(v for v in evidence_values if v) or check.actual,
+                recommended_action=(
+                    "Confirm with the team whether the vendor rotated "
+                    "its pixel -- if so, update the official pixel in "
+                    "the Pixels by account (Adobe) panel."
+                ),
+            )
+        )
+
+    result.checks = updated
     return result

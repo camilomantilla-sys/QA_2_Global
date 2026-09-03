@@ -167,8 +167,8 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
                     result="NOT_VERIFIED",
                     message=message,
                     recommended_action=(
-                        "Confirm with Camilo which DV check applies to "
-                        "this placement."
+                        "Confirm with the team which DV check applies "
+                        "to this placement."
                     ),
                     **common,
                 )

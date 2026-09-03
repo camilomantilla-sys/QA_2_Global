@@ -7,6 +7,7 @@ import tempfile
 import warnings
 from io import BytesIO
 from collections import Counter, defaultdict
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -26,11 +27,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from core.colors import RED
 from core.engine import run_rules
+from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
     reconcile_adobe_tag_policy,
 )
+from core.tag_coverage_reconciliation import reconcile_tag_coverage
 from core.adobe_pixel_reconciliation import (
+    load_adobe_vendor_rows,
     reconcile_adobe_pixels,
+    save_adobe_vendor_rows,
 )
 from core.dv_reconciliation import reconcile_dv_tags
 from core.dv_omni_reconciliation import reconcile_dv_omni
@@ -61,6 +66,7 @@ from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
 from rules import adobe_pixels
 from rules import adobe_tag_policy
+from rules import tag_coverage as tag_coverage_rules
 from rules import dv_tags as dv_rules
 from rules import dv_omni as dv_omni_rules
 from rules import pixels as pixel_rules
@@ -291,7 +297,6 @@ def findings_dataframe(findings) -> pd.DataFrame:
     for finding in findings:
         rows.append(
             {
-                "Finding ID": finding.finding_id,
                 "Status": finding.status.value,
                 "Severity": finding.severity.value,
                 "Rule": finding.rule_id,
@@ -313,28 +318,45 @@ def findings_dataframe(findings) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def with_signoffs(df: pd.DataFrame, signoffs: dict) -> pd.DataFrame:
+def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
     """
-    Adds "Reviewed OK" / "Reviewer Note" columns to a findings
-    dataframe from the review sign-off widget's session state.
+    Turns an approved REVIEW finding into PASS, carrying the QA's
+    observation forward as the reason a human can read later.
 
-    Signing off documents a human decision on a REVIEW finding (e.g.
-    "TS asked for the wrong thing, Digital will fix post-launch") --
-    it doesn't change the finding's own Status, it just records that a
-    QA looked at it and confirmed it's fine to proceed. Both columns
-    stay empty for a finding nobody has signed off on.
+    `overrides` is {finding_id: {"approved": bool, "note": str}} from
+    the sign-off panel. A REVIEW finding not in `overrides` (or not
+    approved) passes through unchanged -- only an explicit approval
+    flips the status. The finding's identity (rule, placement,
+    creative, expected/actual) is untouched, so its finding_id stays
+    stable across reruns.
     """
-    if df.empty or "Finding ID" not in df.columns:
-        return df
+    out = []
 
-    df = df.copy()
-    df["Reviewed OK"] = df["Finding ID"].map(
-        lambda fid: "Yes" if signoffs.get(fid, {}).get("confirmed") else ""
-    )
-    df["Reviewer Note"] = df["Finding ID"].map(
-        lambda fid: signoffs.get(fid, {}).get("note", "")
-    )
-    return df
+    for finding in findings:
+        entry = overrides.get(finding.finding_id)
+
+        if not entry or not entry.get("approved") or finding.status.value != "REVIEW":
+            out.append(finding)
+            continue
+
+        note = entry.get("note", "").strip()
+        stamp = f"Approved by {approved_by}" if approved_by else "Approved"
+        approval_text = f"{stamp}: {note}" if note else stamp
+
+        out.append(
+            replace(
+                finding,
+                status=Status.PASS,
+                severity=Severity.NONE,
+                reason=(
+                    f"{finding.reason} | {approval_text}"
+                    if finding.reason
+                    else approval_text
+                ),
+            )
+        )
+
+    return out
 
 
 def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
@@ -718,21 +740,27 @@ st.markdown(
 # Kantar, Inmarket, DISQO)
 # ============================================================
 
-with st.expander("⚙️ Pixels by account (editable)"):
+with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     st.caption(
-        "Vendor pixel rules PIX-002 checks against Innovid: which "
-        "host identifies each vendor's pixel, which export column it "
-        "lives in, which formats it applies to, and any site it "
-        "never applies to. Edit and save here if a host or column "
-        "changes -- no code change needed. Saved to "
-        "config/vendor_pixels.json; applies on the next QA2 run for "
-        "everyone who pulls this repo after the file is committed."
+        "Vendor pixel rules PIX-002 checks against Innovid, for "
+        "Unilever / Wendy's / BlackRock. Leave Account blank for a "
+        "vendor shared across all three; set it (e.g. \"Wendy's\") "
+        "for one that only applies to that account -- pick the "
+        "matching Account in the sidebar when you run QA2. Official "
+        "pixel is optional: paste the vendor's current reference URL "
+        "(with its macros, e.g. [%placementID%]) and QA2 will flag "
+        "REVIEW if what's implemented in Innovid doesn't match it "
+        "anymore -- a vendor rotating its pixel, caught instead of "
+        "silently missed. Saved to config/vendor_pixels.json; applies "
+        "on the next QA2 run for everyone who pulls this repo after "
+        "the file is committed."
     )
 
     _vendor_rows = load_vendor_rows()
     _vendor_df = pd.DataFrame(
         [
             {
+                "Account": r.get("account", ""),
                 "Vendor": r.get("name", ""),
                 "TS terms": ", ".join(r.get("ts_terms", [])),
                 "Host terms": ", ".join(r.get("host_terms", [])),
@@ -741,6 +769,7 @@ with st.expander("⚙️ Pixels by account (editable)"):
                 "Display": F_DISPLAY in (r.get("formats") or []),
                 "Video": F_VIDEO in (r.get("formats") or []),
                 "Site exceptions": ", ".join(r.get("site_exceptions", [])),
+                "Official pixel": r.get("official_pixel", ""),
                 "Note": r.get("note", ""),
             }
             for r in _vendor_rows
@@ -774,6 +803,7 @@ with st.expander("⚙️ Pixels by account (editable)"):
                 _formats.append(F_VIDEO)
             _new_vendor_rows.append(
                 {
+                    "account": str(_row.get("Account") or "").strip(),
                     "name": _name,
                     "ts_terms": [
                         t.strip()
@@ -792,6 +822,7 @@ with st.expander("⚙️ Pixels by account (editable)"):
                         for t in str(_row.get("Site exceptions") or "").split(",")
                         if t.strip()
                     ],
+                    "official_pixel": str(_row.get("Official pixel") or "").strip(),
                     "note": str(_row.get("Note") or ""),
                 }
             )
@@ -799,6 +830,52 @@ with st.expander("⚙️ Pixels by account (editable)"):
         st.success(
             f"Saved {len(_new_vendor_rows)} vendor(s) to "
             "config/vendor_pixels.json."
+        )
+
+with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
+    st.caption(
+        "The official pixel Adobe's DISQO/iSpot check (PIX-A01) "
+        "compares against once it finds evidence in Innovid or the "
+        "tag files. Unlike the WPP table above, this doesn't gate "
+        "presence (that's still a broad search across Third Party "
+        "Impression, Third Party Survey, Clicktag and the tag files) "
+        "-- it only flags when a pixel IS found but doesn't match the "
+        "reference below. Leave blank to skip that check for now."
+    )
+
+    _adobe_vendor_rows = load_adobe_vendor_rows()
+    _adobe_vendor_df = pd.DataFrame(
+        [
+            {
+                "Vendor": r.get("name", ""),
+                "Official pixel": r.get("official_pixel", ""),
+                "Note": r.get("note", ""),
+            }
+            for r in _adobe_vendor_rows
+        ]
+    )
+
+    _edited_adobe_vendor_df = st.data_editor(
+        _adobe_vendor_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="qa2_adobe_vendor_editor",
+    )
+
+    if st.button("Save Adobe pixel table", key="qa2_adobe_vendor_save"):
+        _new_adobe_rows = [
+            {
+                "name": str(_row.get("Vendor") or "").strip(),
+                "official_pixel": str(_row.get("Official pixel") or "").strip(),
+                "note": str(_row.get("Note") or ""),
+            }
+            for _, _row in _edited_adobe_vendor_df.iterrows()
+            if str(_row.get("Vendor") or "").strip()
+        ]
+        save_adobe_vendor_rows(_new_adobe_rows)
+        st.success(
+            f"Saved {len(_new_adobe_rows)} vendor(s) to "
+            "config/vendor_pixels_adobe.json."
         )
 
 
@@ -991,6 +1068,27 @@ with st.sidebar:
         )
 
     st.divider()
+
+    _account_options = ["All / unknown"] + sorted(
+        {
+            row.get("account", "").strip()
+            for row in load_vendor_rows()
+            if row.get("account", "").strip()
+        }
+    )
+    selected_account = st.selectbox(
+        "Account",
+        options=_account_options,
+        index=0,
+        help=(
+            "Some vendor pixel rules only apply to one account (e.g. "
+            "Inmarket and DISQO are Wendy's-only). Pick the account "
+            "this Traffic Sheet belongs to so PIX-002 applies the "
+            "right rows from the Pixels by account panel."
+        ),
+    )
+    if selected_account == "All / unknown":
+        selected_account = ""
 
     selected_profile = st.selectbox(
         "Traffic Sheet Profile",
@@ -1512,6 +1610,19 @@ with tempfile.TemporaryDirectory(
                     findings_buffer,
                 )
 
+                # TAG-013: every 1x1 placement with a declared vendor
+                # requirement should have a row in the delivered tag
+                # file(s) -- coverage, not pixel content.
+                tag_coverage_result = reconcile_tag_coverage(
+                    ts_result,
+                    tag_inventory,
+                )
+
+                tag_coverage_rules.evaluate(
+                    tag_coverage_result,
+                    findings_buffer,
+                )
+
             # DV (DoubleVerify) tag delivery check.
             #
             # Applies to any placement whose Traffic Sheet
@@ -1554,6 +1665,7 @@ with tempfile.TemporaryDirectory(
             pixel_reconciliation = reconcile_pixels(
                 ts_result,
                 pl_result,
+                selected_account,
             )
 
             pixel_rules.evaluate(
@@ -1574,18 +1686,18 @@ with tempfile.TemporaryDirectory(
                 findings_buffer,
             )
 
-            scorecard = findings_buffer.scorecard()
-
         # ----------------------------------------------------
-        # Review sign-off
+        # Review approval: REVIEW -> PASS
         #
-        # REVIEW findings are a callout, not a blocker (e.g. a TS
-        # asking for something that's wrong on its own terms, or two
-        # creatives sharing an ID with a naming mismatch). This lets a
-        # QA confirm "I looked at this, it's fine to proceed" with a
-        # note for the record, without changing the underlying
-        # finding. Rendered before the exports below so the sign-off
-        # is included in the same run's PDF/Excel.
+        # A REVIEW finding is a callout, not a blocker (e.g. the TS
+        # asking for a combination that's wrong on its own terms, or
+        # two creatives sharing an ID with a naming mismatch). This
+        # lets a QA approve one with an observation explaining why --
+        # the finding's status actually becomes PASS everywhere below
+        # (verdict, Findings tab, exports), with the observation
+        # folded into its Reason so the record isn't lost. Rendered
+        # before the verdict so an approval made this run is reflected
+        # immediately, including in the same run's PDF/Excel.
         # ----------------------------------------------------
 
         review_findings = [
@@ -1593,29 +1705,26 @@ with tempfile.TemporaryDirectory(
             if finding.status.value == "REVIEW"
         ]
 
-        signoff_notes: dict[str, dict] = {}
-
         if review_findings:
             with st.expander(
-                f"📝 Review sign-off ({len(review_findings)} item(s))"
+                f"📝 Approve REVIEW items ({len(review_findings)})"
             ):
                 st.caption(
-                    "Confirm a REVIEW item is fine to proceed and "
-                    "leave a note -- both are saved into the PDF and "
-                    "Excel reports as the QA record. The finding "
-                    "itself stays REVIEW; signing off documents the "
-                    "decision, it doesn't remove it."
+                    "Check Approve once you've confirmed an item is "
+                    "fine to proceed, and add an observation of why -- "
+                    "the finding becomes PASS below, with the "
+                    "observation kept in the record."
                 )
 
                 _review_base_df = pd.DataFrame(
                     [
                         {
-                            "Reviewed OK": False,
+                            "Approve": False,
                             "Rule": finding.rule_id,
                             "Placement ID": finding.placement_id,
                             "Creative ID": finding.creative_id,
                             "Finding": finding.message,
-                            "Note": "",
+                            "Observation": "",
                         }
                         for finding in review_findings
                     ]
@@ -1628,28 +1737,38 @@ with tempfile.TemporaryDirectory(
                     disabled=[
                         "Rule", "Placement ID", "Creative ID", "Finding",
                     ],
-                    key="qa2_review_signoff",
+                    key="qa2_review_approval",
                 )
+
+                review_overrides: dict[str, dict] = {}
 
                 for finding, (_, _row) in zip(
                     review_findings, _edited_review_df.iterrows()
                 ):
-                    _confirmed = bool(_row.get("Reviewed OK"))
-                    _note = str(_row.get("Note") or "").strip()
-                    if _confirmed or _note:
-                        signoff_notes[finding.finding_id] = {
-                            "confirmed": _confirmed,
-                            "note": _note,
+                    if bool(_row.get("Approve")):
+                        review_overrides[finding.finding_id] = {
+                            "approved": True,
+                            "note": str(_row.get("Observation") or "").strip(),
                         }
 
-                _signed_off = sum(
-                    1 for v in signoff_notes.values() if v["confirmed"]
-                )
-                if _signed_off:
+                if review_overrides:
                     st.info(
-                        f"{_signed_off} of {len(review_findings)} "
-                        "REVIEW item(s) signed off."
+                        f"{len(review_overrides)} of "
+                        f"{len(review_findings)} REVIEW item(s) "
+                        "approved -- counted as PASS below."
                     )
+
+                    findings_buffer._items = apply_review_overrides(
+                        findings_buffer.findings,
+                        review_overrides,
+                        approved_by=record_qa2_by,
+                    )
+                    findings_buffer._seen = {
+                        finding.finding_id
+                        for finding in findings_buffer._items
+                    }
+
+        scorecard = findings_buffer.scorecard()
 
         # ----------------------------------------------------
         # Results header
@@ -2153,15 +2272,12 @@ with tempfile.TemporaryDirectory(
                 qa3_date=record_qa3_date,
                 notes=record_notes,
             ),
-            findings_df=with_signoffs(
-                findings_dataframe(
-                    [
-                        finding
-                        for finding in findings_buffer.findings
-                        if finding.status.value != "PASS"
-                    ]
-                ),
-                signoff_notes,
+            findings_df=findings_dataframe(
+                [
+                    finding
+                    for finding in findings_buffer.findings
+                    if finding.status.value != "PASS"
+                ]
             ),
             rules_df=rule_summary_dataframe(findings_buffer),
             files_df=files_dataframe,
@@ -2235,9 +2351,7 @@ with tempfile.TemporaryDirectory(
                 qa3_date=record_qa3_date,
                 notes=record_notes,
             ),
-            findings_df=with_signoffs(
-                findings_dataframe(findings_buffer.findings), signoff_notes
-            ),
+            findings_df=findings_dataframe(findings_buffer.findings),
             rules_df=rule_summary_dataframe(findings_buffer),
             files_df=files_dataframe,
             placements_df=pd.DataFrame(placements_rows_for_pdf),
@@ -3069,9 +3183,7 @@ with tempfile.TemporaryDirectory(
                 if finding.status.value != "PASS"
             ]
 
-            attention_df = with_signoffs(
-                findings_dataframe(attention_findings), signoff_notes
-            )
+            attention_df = findings_dataframe(attention_findings)
 
             if attention_df.empty:
                 st.success(
