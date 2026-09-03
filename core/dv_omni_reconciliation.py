@@ -33,7 +33,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from core.dv_subtype import MONITORING, MONITORING_BLOCKING, OMNI, dv_subtype, is_dv
+from core.dv_subtype import (
+    INTEGRATION,
+    MONITORING,
+    MONITORING_BLOCKING,
+    OMNI,
+    dv_subtype,
+    is_dv,
+)
 from core.normalize import clean_id, norm_compare, norm_dims
 from core.tag_inventory import TagInventory
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
@@ -138,6 +145,13 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
         # Display goes through PIX-002 (placement pixel). Neither is
         # this module's job.
         if subtype == MONITORING and fmt in (F_1X1, F_DISPLAY):
+            continue
+
+        # DV Integration (1x1): no Pinnacle file, no placement pixel,
+        # no tag-file column -- just needs the regular tags delivered,
+        # which TAG-013 (tag coverage) already checks. Nothing for
+        # this module to add.
+        if subtype == INTEGRATION:
             continue
 
         if subtype == OMNI and fmt in (F_1X1, F_VIDEO):
