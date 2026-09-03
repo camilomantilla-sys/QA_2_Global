@@ -148,6 +148,12 @@ _ISPOT_TERMS = (
     "i spot",
 )
 
+# iSpot "funciona igual que DISQO tanto para third party como para
+# site served": misma forma de verificar (Innovid o tags), pero su
+# propio pixel no se identifica con los terminos de DISQO. Se busca
+# evidencia de cualquiera de los dos vendors indistintamente.
+_DISQO_EVIDENCE_TERMS = _DISQO_TERMS + _ISPOT_TERMS + ("ispot.tv",)
+
 
 def _normalized_text(value: object) -> str:
     text = norm_compare(str(value or ""))
@@ -220,7 +226,7 @@ def _tag_source_has_disqo(
         ]
 
         if any(
-            _contains_any(value, _DISQO_TERMS)
+            _contains_any(value, _DISQO_EVIDENCE_TERMS)
             for value in searchable_values
         ):
             evidence.append(
@@ -279,7 +285,7 @@ def _row_disqo_evidence(row) -> list[str]:
         {},
     ).items():
         for value in values:
-            if _contains_any(value, _DISQO_TERMS):
+            if _contains_any(value, _DISQO_EVIDENCE_TERMS):
                 evidence.append(
                     f"row {row.row} | "
                     f"{canonical_name} | "
@@ -291,7 +297,7 @@ def _row_disqo_evidence(row) -> list[str]:
         "values",
         {},
     ).items():
-        if _contains_any(value, _DISQO_TERMS):
+        if _contains_any(value, _DISQO_EVIDENCE_TERMS):
             evidence.append(
                 f"row {row.row} | "
                 f"{canonical_name} | "
@@ -426,8 +432,13 @@ def reconcile_adobe_pixels(
         requirements = set(record["requirements"])
         raw_values = sorted(record["raw_values"])
 
-        disqo_required = (
-            PixelRequirement.DISQO in requirements
+        # iSpot funciona igual que DISQO tanto para Third Party como
+        # para Site-Served: misma evidencia (Innovid o tags), mismo
+        # veredicto. No es un requisito aparte, es el mismo cheque con
+        # otro nombre de vendor.
+        disqo_required = bool(
+            requirements
+            & {PixelRequirement.DISQO, PixelRequirement.ISPOT}
         )
 
         innovid_evidence = innovid_disqo.get(

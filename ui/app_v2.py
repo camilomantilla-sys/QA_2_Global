@@ -25,10 +25,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from core.colors import RED
 from core.engine import run_rules
+from core.adobe_tag_policy_reconciliation import (
+    reconcile_adobe_tag_policy,
+)
 from core.adobe_pixel_reconciliation import (
     reconcile_adobe_pixels,
 )
 from core.dv_reconciliation import reconcile_dv_tags
+from core.dv_omni_reconciliation import reconcile_dv_omni
 from core.pixel_reconciliation import reconcile_pixels
 from core.default_ads import reconcile_default_ads
 from core.tag_inventory import (
@@ -46,7 +50,9 @@ from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
 from rules import tags as tag_rules
 from rules import adobe_pixels
+from rules import adobe_tag_policy
 from rules import dv_tags as dv_rules
+from rules import dv_omni as dv_omni_rules
 from rules import pixels as pixel_rules
 from rules import defaults as default_rules
 
@@ -1278,12 +1284,16 @@ with tempfile.TemporaryDirectory(
                     )
                 )
 
-            # PIX-A01 applies only to Adobe Direct & Site-Served.
+            # PIX-A01 (DISQO/iSpot) applies to both Adobe profiles:
+            # Site-Served (adobe_variante_b) and Third Party / Decision
+            # Tree (adobe_variante_a). It used to run only for
+            # variante_b, so a Decision Tree campaign requiring DISQO
+            # never got checked at all.
             #
-            # Traffic Sheet defines whether DISQO is required.
+            # Traffic Sheet defines whether DISQO/iSpot is required.
             # Tags and Innovid Placement View provide evidence.
             if (
-                ts_result.profile == "adobe_variante_b"
+                ts_result.profile in ("adobe_variante_a", "adobe_variante_b")
                 and tag_inventory is not None
                 and pl_result is not None
             ):
@@ -1297,6 +1307,26 @@ with tempfile.TemporaryDirectory(
 
                 adobe_pixels.evaluate(
                     adobe_pixel_result,
+                    findings_buffer,
+                )
+
+            # TAG-012: Adobe tag column policy (Ftrack / No Ftrack /
+            # Clicktag / Protected). Only needs the delivered tag
+            # files, not the Placement View, so it can run for Adobe
+            # even without one uploaded.
+            adobe_tag_policy_result = None
+
+            if (
+                ts_result.profile in ("adobe_variante_a", "adobe_variante_b")
+                and tag_inventory is not None
+            ):
+                adobe_tag_policy_result = reconcile_adobe_tag_policy(
+                    ts_result,
+                    tag_inventory,
+                )
+
+                adobe_tag_policy.evaluate(
+                    adobe_tag_policy_result,
                     findings_buffer,
                 )
 
@@ -1317,6 +1347,22 @@ with tempfile.TemporaryDirectory(
 
             dv_rules.evaluate(
                 dv_reconciliation,
+                findings_buffer,
+            )
+
+            # DV-003: DV Omni y DV Monitoring/Blocking, que no van por
+            # pixel de placement ni por archivo de Pinnacle sino por
+            # una columna dentro del archivo de tags de Innovid.
+            dv_omni_reconciliation = reconcile_dv_omni(
+                ts_result,
+                pl_result,
+                tag_inventory
+                if tag_inventory is not None
+                else TagInventory(),
+            )
+
+            dv_omni_rules.evaluate(
+                dv_omni_reconciliation,
                 findings_buffer,
             )
 
@@ -1434,7 +1480,7 @@ with tempfile.TemporaryDirectory(
         # ----------------------------------------------------
 
         if (
-            ts_result.profile == "adobe_variante_b"
+            ts_result.profile in ("adobe_variante_a", "adobe_variante_b")
             and adobe_pixel_result is not None
         ):
             st.subheader("Pixel & Tag Requirements")

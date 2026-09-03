@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from core.dv_subtype import MONITORING, MONITORING_BLOCKING, OMNI, dv_subtype
 from core.normalize import clean_id, norm_compare, norm_dims
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
@@ -36,12 +37,14 @@ _NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
 @dataclass(frozen=True)
 class Vendor:
     """
-    name       nombre legible que se muestra en el hallazgo
-    ts_terms   como aparece nombrado en "Vendors / Pixels"
-    host_terms como se reconoce su pixel dentro del tag
-    column     donde debe estar cargado
-    formats    formatos a los que aplica
-    note       por que no aplica a los formatos que quedan fuera
+    name            nombre legible que se muestra en el hallazgo
+    ts_terms        como aparece nombrado en "Vendors / Pixels"
+    host_terms      como se reconoce su pixel dentro del tag
+    column          donde debe estar cargado
+    formats         formatos a los que aplica
+    note            por que no aplica a los formatos que quedan fuera
+    site_exceptions sitios donde el vendor nunca aplica, aunque la TS
+                    lo pida (el publisher lo integra distinto)
     """
     name: str
     ts_terms: tuple[str, ...]
@@ -49,18 +52,27 @@ class Vendor:
     column: str
     formats: frozenset[str]
     note: str = ""
+    site_exceptions: frozenset[str] = frozenset()
 
 
 VENDORS: tuple[Vendor, ...] = (
+    # DoubleVerify: solo cubre aqui el sub-tipo Monitoring (solo o con
+    # Blocking) en Display, que es el unico que exige un pixel a nivel
+    # de placement. Omni no lo usa (va por columna en el archivo de
+    # tags, ver DV-003) y ningun sub-tipo lo exige en Video ni 1x1
+    # (1x1 Monitoring va por el archivo de DV Pinnacle, ver DV-001).
+    # El chequeo real se resuelve en _reconcile_double_verify, no por
+    # la tabla generica de abajo.
     Vendor(
         name="DoubleVerify",
         ts_terms=("dv", "doubleverify"),
         host_terms=("doubleverify.com",),
         column=SURVEY,
-        formats=frozenset({F_DISPLAY, F_VIDEO}),
+        formats=frozenset({F_DISPLAY}),
         note=(
-            "On 1x1 placements DV is delivered as a wrapped tag from "
-            "DV Pinnacle, not as a placement-level pixel."
+            "Monitoring on 1x1 is delivered as a wrapped tag from DV "
+            "Pinnacle (DV-001), not as a placement-level pixel. Omni "
+            "is verified through the Innovid tag file (DV-003)."
         ),
     ),
     Vendor(
@@ -76,6 +88,28 @@ VENDORS: tuple[Vendor, ...] = (
         host_terms=("insightexpressai.com",),
         column=IMPRESSION,
         formats=frozenset({F_1X1, F_DISPLAY, F_VIDEO}),
+    ),
+    # Wendy's only. Publishers apply Inmarket in the backend for 1x1,
+    # so it never shows up as a placement-level pixel there even when
+    # the TS lists it -- that's why 1x1 is excluded from formats.
+    Vendor(
+        name="Inmarket",
+        ts_terms=("inmarket",),
+        host_terms=("ninthdecimal.com",),
+        column=IMPRESSION,
+        formats=frozenset({F_DISPLAY, F_VIDEO}),
+        site_exceptions=frozenset({"vevo"}),
+    ),
+    # Wendy's only. Same backend-applied logic as Inmarket for 1x1.
+    # This is a separate entry from Adobe's DISQO (PIX-A01): different
+    # accounts, different profile, same vendor name.
+    Vendor(
+        name="DISQO",
+        ts_terms=("disqo",),
+        host_terms=("activemetering.com",),
+        column=IMPRESSION,
+        formats=frozenset({F_DISPLAY, F_VIDEO}),
+        site_exceptions=frozenset({"netflix"}),
     ),
 )
 
@@ -159,12 +193,51 @@ def reconcile_pixels(ts_result, placement_view) -> PixelReconciliation:
 
         fmt = placement_format(ts_row.values.get("dimensions"))
         placement_name = str(ts_row.values.get("placement_name") or "").strip()
+        site_name = norm_compare(str(ts_row.values.get("site") or ""))
 
         for vendor in VENDORS:
             if not _declared(vendor, vendor_raw):
                 continue
             if fmt not in vendor.formats:
                 continue
+            if site_name in vendor.site_exceptions:
+                continue
+
+            if vendor.name == "DoubleVerify":
+                subtype = dv_subtype(vendor_raw)
+
+                if subtype == OMNI:
+                    # Omni no lleva pixel a nivel de placement: se
+                    # verifica por columna en el archivo de tags
+                    # (DV-003), no aqui.
+                    continue
+
+                if subtype not in (MONITORING, MONITORING_BLOCKING):
+                    # La TS dice "DV"/"DoubleVerify" pero no aclara si
+                    # es Omni, Monitoring o Blocking, y cada uno se
+                    # verifica distinto -- no hay forma de saber cual
+                    # regla aplica.
+                    if (placement_id, vendor.name) in seen:
+                        continue
+                    seen.add((placement_id, vendor.name))
+                    out.checks.append(
+                        PixelCheck(
+                            placement_id=placement_id,
+                            placement_name=placement_name,
+                            vendor=vendor.name,
+                            column=vendor.column,
+                            fmt=fmt,
+                            vendor_raw=vendor_raw,
+                            result="NOT_VERIFIED",
+                            message=(
+                                "Vendors / Pixels mentions DV but doesn't "
+                                "say Omni, Monitoring or Blocking, so it "
+                                "isn't clear which DV check applies."
+                            ),
+                        )
+                    )
+                    continue
+
             if (placement_id, vendor.name) in seen:
                 continue
             seen.add((placement_id, vendor.name))

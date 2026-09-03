@@ -68,6 +68,8 @@ TAG_DISPLAY_INS = "DISPLAY_INS"
 TAG_VIDEO_VAST = "VIDEO_VAST"
 TAG_PIXEL = "PIXEL"
 TAG_PIXEL_HTML = "PIXEL_HTML"
+TAG_DV_VAST = "DV_VAST"
+TAG_DV_HTML = "DV_HTML"
 TAG_UNKNOWN = "UNKNOWN"
 
 
@@ -100,6 +102,16 @@ TAG_HEADER_CLASSIFICATION = {
     "protectedpixeljs": TAG_PIXEL,
     "protectedpixeljshtml": TAG_PIXEL_HTML,
     "disqo": TAG_PIXEL,
+    # DV Omni entrega su tag como una columna aparte en el archivo de
+    # tags de Innovid (no un pixel a nivel de placement en el export):
+    # "doubleverify_vast" para video/1x1 y "doubleverify_html" para
+    # display. El nombre exacto de columna puede variar (L/O son solo
+    # la posicion tipica que reporto Camilo), asi que ademas del alias
+    # exacto hay un fallback por substring mas abajo.
+    "doubleverifyvast": TAG_DV_VAST,
+    "dvvast": TAG_DV_VAST,
+    "doubleverifyhtml": TAG_DV_HTML,
+    "dvhtml": TAG_DV_HTML,
 }
 
 
@@ -324,6 +336,12 @@ def _classify_tag_header(header: str) -> str:
 
     if "async" in key:
         return TAG_DISPLAY_ASYNC
+
+    if "doubleverify" in key and "vast" in key:
+        return TAG_DV_VAST
+
+    if "doubleverify" in key and "html" in key:
+        return TAG_DV_HTML
 
     if "pixel" in key or "tracker" in key:
         return TAG_PIXEL

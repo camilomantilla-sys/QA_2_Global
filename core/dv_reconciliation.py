@@ -1,28 +1,20 @@
 """
-DV Pinnacle site-served tag reconciliation.
+DV Pinnacle site-served tag reconciliation (DV-001).
 
-DV (DoubleVerify) tags for wrapped placements are delivered as a
-separate file from the regular Innovid tag export. This cross-checks
-that file against the Innovid tag inventory and the Traffic Sheet's
-worked scope, for placements whose "Vendors / Pixels" TS value
-mentions DV.
-
-Deliberately narrow: it only confirms a DV tag was delivered and made
-it into the Innovid tag file. It does NOT try to distinguish DV
-Monitoring vs DV Integration vendor semantics (doubleverify_html
-column requirements, third-party-survey checks) -- that nuance needs
-a confirmed example before it's safe to encode as a hard rule.
+This is specifically the DV Monitoring, 1x1 check: a wrapped DV
+Pinnacle tag file, delivered separately from the regular Innovid tag
+export, must exist and make it into the Innovid tag file. DV Omni
+doesn't use Pinnacle at all -- it's verified through a column in the
+Innovid tag file instead (see core/dv_omni_reconciliation.py, DV-003).
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
+from core.dv_subtype import MONITORING, dv_subtype, is_dv
 from core.normalize import clean_id, norm_dims
 from parsers.dv_tags import DVTagsResult
 from parsers.ts_parser import REQ_NEW_PLACEMENT
-
-_DV_TOKEN = re.compile(r"\bdv\b", re.IGNORECASE)
 
 
 @dataclass
@@ -96,7 +88,7 @@ def reconcile_dv_tags(
         record = worked_dv[placement_id]
         vendor_raw = " | ".join(sorted(record["vendor_raw"]))
 
-        if not _DV_TOKEN.search(vendor_raw):
+        if not is_dv(vendor_raw):
             continue
 
         # El archivo de DV Pinnacle solo se descarga para placements
@@ -111,6 +103,19 @@ def reconcile_dv_tags(
         # display y video la exigencia de DV se valida como pixel en el
         # export (PIX-002), no como archivo de Pinnacle.
         if record["dims"] != "1x1":
+            continue
+
+        # El archivo de Pinnacle es especificamente la implementacion
+        # de DV Monitoring en 1x1. Omni no lo usa: va por columna en
+        # el archivo de tags de Innovid (DV-003), no por aqui.
+        subtype = dv_subtype(vendor_raw)
+
+        if subtype != MONITORING:
+            # OMNI, MONITORING_BLOCKING or UNDETERMINED on 1x1: none
+            # of those is this rule's job. DV-003 (dv_omni_reconciliation)
+            # owns the fallback "which DV check applies here" finding
+            # for every case this rule doesn't handle, so it isn't
+            # duplicated across both rules for the same placement.
             continue
 
         in_inventory = placement_id in tag_inventory.placement_ids
