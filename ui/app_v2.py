@@ -1878,6 +1878,11 @@ with tempfile.TemporaryDirectory(
                         finding.finding_id
                         for finding in findings_buffer._items
                     }
+        else:
+            st.caption(
+                "📝 QA1 → QA2 review handoff: no REVIEW items on this "
+                "run, so there's nothing to approve here."
+            )
 
         scorecard = findings_buffer.scorecard()
 
