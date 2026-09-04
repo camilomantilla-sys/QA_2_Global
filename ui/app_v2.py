@@ -242,8 +242,19 @@ def roster_pick_selector(label: str, account: str, target_key: str) -> None:
     same plain text_input everywhere else (ReportMeta, session
     bundles, review-approval stamping) and this is purely additive.
     """
-    names = names_for_account(load_roster(), account) if account else []
+    if not account:
+        st.caption(
+            f"{label}: pick an Account / Campaign above to see "
+            "quick-pick suggestions from that team's roster."
+        )
+        return
+
+    names = names_for_account(load_roster(), account)
     if not names:
+        st.caption(
+            f"{label}: no one's listed for {account} yet in "
+            "\"Team by account\" above."
+        )
         return
 
     pick_key = f"{target_key}_pick"
