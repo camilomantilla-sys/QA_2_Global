@@ -41,6 +41,7 @@ from core.adobe_pixel_reconciliation import (
 )
 from core.dv_reconciliation import reconcile_dv_tags
 from core.dv_omni_reconciliation import reconcile_dv_omni
+from core.team_roster import ROLES as TEAM_ROLES, load_team_rows, save_team_rows
 from core.pixel_reconciliation import (
     F_1X1,
     F_DISPLAY,
@@ -916,6 +917,55 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
             "config/vendor_pixels_adobe.json."
         )
 
+with st.expander("👥 Team by account"):
+    st.caption(
+        "Reference directory -- who's the Implementer / QA2 / QA3 "
+        "for each account. Doesn't fill in or gate anything yet; "
+        "Implemented By / QA2 By stay manual for now. Add a row per "
+        "person -- an account can have more than one QA2, for "
+        "example."
+    )
+
+    _team_rows = load_team_rows()
+    _team_df = pd.DataFrame(
+        [
+            {
+                "Account": r.get("account", ""),
+                "Role": r.get("role", ""),
+                "Name": r.get("name", ""),
+            }
+            for r in _team_rows
+        ]
+    )
+
+    _edited_team_df = st.data_editor(
+        _team_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "Role": st.column_config.SelectboxColumn(
+                options=list(TEAM_ROLES)
+            ),
+        },
+        key="qa2_team_editor",
+    )
+
+    if st.button("Save team roster", key="qa2_team_save"):
+        _new_team_rows = [
+            {
+                "account": str(_row.get("Account") or "").strip(),
+                "role": str(_row.get("Role") or "").strip(),
+                "name": str(_row.get("Name") or "").strip(),
+            }
+            for _, _row in _edited_team_df.iterrows()
+            if str(_row.get("Account") or "").strip()
+        ]
+        save_team_rows(_new_team_rows)
+        st.success(
+            f"Saved {len(_new_team_rows)} entr{'y' if len(_new_team_rows) == 1 else 'ies'} "
+            "to config/team_roster.json."
+        )
+
 
 # ============================================================
 # Sidebar
@@ -1188,13 +1238,10 @@ with st.sidebar:
             value=None,
             key="qa2_record_impl_date",
         )
-        record_qa2_by = st.text_input(
-            "QA2 By", key="qa2_record_qa2_by"
-        )
-        record_qa2_date = st.date_input(
-            "QA2 Date",
-            value=None,
-            key="qa2_record_qa2_date",
+        st.caption(
+            "QA2 By / QA2 Date have moved -- fill those in the "
+            "QA2 Review section below the results, right where "
+            "you approve."
         )
         record_qa3_by = st.text_input(
             "QA3 By", key="qa2_record_qa3_by"
@@ -1931,6 +1978,24 @@ with tempfile.TemporaryDirectory(
             )
 
         # ----------------------------------------------------
+        # Who's doing this QA2 pass -- asked once, up front, right
+        # where it's used: stamps approvals below and gates the QA2
+        # Sign-off checkbox further down.
+        # ----------------------------------------------------
+
+        st.subheader("QA2 Review")
+
+        _qa2_by_cols = st.columns(2)
+        record_qa2_by = _qa2_by_cols[0].text_input(
+            "QA2 By", key="qa2_record_qa2_by"
+        )
+        record_qa2_date = _qa2_by_cols[1].date_input(
+            "QA2 Date",
+            value=None,
+            key="qa2_record_qa2_date",
+        )
+
+        # ----------------------------------------------------
         # Review approval: REVIEW -> PASS
         #
         # A REVIEW finding is a callout, not a blocker (e.g. the TS
@@ -2052,8 +2117,8 @@ with tempfile.TemporaryDirectory(
 
         if not record_qa2_by.strip():
             st.caption(
-                "Fill in \"QA2 By\" in the sidebar (Implementation "
-                "Record) to enable sign-off."
+                "Fill in \"QA2 By\" above (QA2 Review) to enable "
+                "sign-off."
             )
         elif qa2_signed_off:
             st.success(
