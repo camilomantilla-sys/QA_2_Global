@@ -26,6 +26,23 @@ installed automatically by the launcher into `.venv`, so it never touches
 your system Python. No internet connection is needed after the first
 install — QA2 runs entirely on your machine.
 
+### Windows, no visible console window (experimental)
+
+`run_qa2.bat` deliberately keeps its console window open (so it's obvious
+QA2 is still running, and closing it is how you stop QA2). If you'd
+rather it not show a window at all:
+
+1. Double-click **`Launch QA2 (Silent).vbs`**. On a first-time setup
+   you'll get a one-time popup saying it may take a minute; after that,
+   your browser opens automatically with no window ever appearing.
+2. When you're done, double-click **`Stop QA2.vbs`** — since there's no
+   window to close, this is how you shut QA2 down (it stops whatever's
+   listening on port 8501).
+
+This is a first test of that flow, not yet the final packaging — if
+anything about it misbehaves, `run_qa2.bat` is still there as the
+known-working fallback.
+
 ### Manual run (if you prefer a terminal)
 
 ```bash
