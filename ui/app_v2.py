@@ -765,18 +765,26 @@ st.markdown(
 
 with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     st.caption(
-        "Vendor pixel rules PIX-002 checks against Innovid, for "
-        "Unilever / Wendy's / BlackRock. Leave Account blank for a "
-        "vendor shared across all three; set it (e.g. \"Wendy's\") "
-        "for one that only applies to that account -- pick the "
-        "matching Account in the sidebar when you run QA2. Official "
-        "pixel is optional: paste the vendor's current reference URL "
-        "(with its macros, e.g. [%placementID%]) and QA2 will flag "
-        "REVIEW if what's implemented in Innovid doesn't match it "
-        "anymore -- a vendor rotating its pixel, caught instead of "
-        "silently missed. Saved to config/vendor_pixels.json; applies "
-        "on the next QA2 run for everyone who pulls this repo after "
-        "the file is committed."
+        "Vendor pixel rules PIX-002/DV-001/DV-003 check against "
+        "Innovid, for Unilever / Wendy's / BlackRock. DV is split "
+        "into its 4 real flavors -- Monitoring, Blocking, Integration, "
+        "Omni -- each verified differently; only Monitoring uses a "
+        "placement-level pixel, the others are read straight from "
+        "their own row by name, so they don't need Host terms/Column/"
+        "Format filled in at all."
+    )
+    st.caption(
+        "**Official pixel** is the one field that matters: paste the "
+        "vendor's current reference (with its macros, e.g. "
+        "[%placementID%]) and QA2 flags REVIEW if what's implemented "
+        "in Innovid doesn't match it anymore. Fill it and you can "
+        "leave Host terms blank -- the domain is derived from the "
+        "pixel automatically. Leave Account blank for a vendor shared "
+        "across all three WPP accounts; set it (e.g. \"Wendy's\") for "
+        "one that only applies to that account -- pick the matching "
+        "Account in the sidebar when you run QA2. Saved to "
+        "config/vendor_pixels.json; applies on the next QA2 run for "
+        "everyone who pulls this repo after the file is committed."
     )
 
     _vendor_rows = load_vendor_rows()
@@ -863,7 +871,13 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
         "presence (that's still a broad search across Third Party "
         "Impression, Third Party Survey, Clicktag and the tag files) "
         "-- it only flags when a pixel IS found but doesn't match the "
-        "reference below. Leave blank to skip that check for now."
+        "reference below. These are Third Party placements, and the "
+        "pixel varies by Adobe campaign (Acrobat, Firefly, STE, PGA, "
+        "MLB, Adelaide, Express...), not just by vendor -- leave "
+        "Campaign blank for a reference that applies everywhere, or "
+        "add one row per campaign with its own pixel and pick the "
+        "matching Account / Campaign in the sidebar. Leave the pixel "
+        "blank to skip the check for a given row."
     )
 
     _adobe_vendor_rows = load_adobe_vendor_rows()
@@ -871,6 +885,7 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
         [
             {
                 "Vendor": r.get("name", ""),
+                "Campaign": r.get("campaign", ""),
                 "Official pixel": r.get("official_pixel", ""),
                 "Note": r.get("note", ""),
             }
@@ -889,6 +904,7 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
         _new_adobe_rows = [
             {
                 "name": str(_row.get("Vendor") or "").strip(),
+                "campaign": str(_row.get("Campaign") or "").strip(),
                 "official_pixel": str(_row.get("Official pixel") or "").strip(),
                 "note": str(_row.get("Note") or ""),
             }
@@ -1118,16 +1134,24 @@ with st.sidebar:
             for row in load_vendor_rows()
             if row.get("account", "").strip()
         }
+        | {
+            row.get("campaign", "").strip()
+            for row in load_adobe_vendor_rows()
+            if row.get("campaign", "").strip()
+        }
     )
     selected_account = st.selectbox(
-        "Account",
+        "Account / Campaign",
         options=_account_options,
         index=0,
         help=(
-            "Some vendor pixel rules only apply to one account (e.g. "
-            "Inmarket and DISQO are Wendy's-only). Pick the account "
-            "this Traffic Sheet belongs to so PIX-002 applies the "
-            "right rows from the Pixels by account panel."
+            "Some vendor pixel rules only apply to one account or "
+            "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
+            "Adobe's official pixels vary per campaign -- Acrobat, "
+            "Firefly, STE...). Pick the one this Traffic Sheet "
+            "belongs to so PIX-002/PIX-A01 apply the right rows from "
+            "the Pixels by account panels. Add new options there by "
+            "filling Account (WPP) or Campaign (Adobe) on a row."
         ),
     )
     if selected_account == "All / unknown":
@@ -1625,6 +1649,7 @@ with tempfile.TemporaryDirectory(
                         ts_result,
                         pl_result,
                         tag_inventory,
+                        selected_account,
                     )
                 )
 

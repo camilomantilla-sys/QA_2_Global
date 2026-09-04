@@ -18,6 +18,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from core.dv_subtype import MONITORING, MONITORING_BLOCKING, OMNI, dv_subtype
 from core.normalize import clean_id, norm_compare, norm_dims
@@ -66,13 +67,24 @@ def pixel_matches_official(found: str, official: str) -> bool:
     return _pixel_skeleton(found) == _pixel_skeleton(official)
 
 
+def _host_from_pixel(url: str) -> str:
+    """El dominio de una URL de pixel, para derivar host_terms automaticamente."""
+    try:
+        return urlsplit(str(url or "").strip()).netloc.casefold()
+    except ValueError:
+        return ""
+
+
 @dataclass(frozen=True)
 class Vendor:
     """
     name            nombre legible que se muestra en el hallazgo
-    account         cuenta a la que aplica esta fila ("" = todas)
+    account         cuenta/campana a la que aplica esta fila ("" = todas)
     ts_terms        como aparece nombrado en "Vendors / Pixels"
-    host_terms      como se reconoce su pixel dentro del tag
+    host_terms      como se reconoce su pixel dentro del tag. Si se
+                    deja vacio y hay official_pixel, se deriva solo
+                    del dominio de esa URL -- no hace falta llenar
+                    los dos.
     column          donde debe estar cargado
     formats         formatos a los que aplica
     note            por que no aplica a los formatos que quedan fuera
@@ -81,8 +93,8 @@ class Vendor:
     official_pixel  la URL de referencia vigente (con macros), tal
                     como Camilo la mantiene actualizada. Si esta
                     presente, un pixel encontrado se compara contra
-                    ella ademas de contra host_terms -- ver
-                    pixel_matches_official().
+                    ella -- ver pixel_matches_official() -- y de ahi
+                    tambien se deriva host_terms si no se lleno.
     """
     name: str
     ts_terms: tuple[str, ...]
@@ -96,15 +108,16 @@ class Vendor:
 
 
 _DEFAULT_VENDORS: tuple[Vendor, ...] = (
-    # DoubleVerify: solo cubre aqui el sub-tipo Monitoring (solo o con
-    # Blocking) en Display, que es el unico que exige un pixel a nivel
-    # de placement. Omni no lo usa (va por columna en el archivo de
-    # tags, ver DV-003) y ningun sub-tipo lo exige en Video ni 1x1
-    # (1x1 Monitoring va por el archivo de DV Pinnacle, ver DV-001).
-    # El chequeo real se resuelve en _reconcile_double_verify, no por
-    # la tabla generica de abajo.
+    # DV se parte en sus 4 sabores reales en vez de una sola fila
+    # "DoubleVerify" -- cada uno se verifica distinto y Camilo quiere
+    # ver los 4 en la tabla, con el pixel oficial de cada uno.
+    #
+    # DV Monitoring, Display: el unico que exige un pixel a nivel de
+    # placement (Third_Party_Survey), asi que es el unico que participa
+    # en el chequeo generico de abajo. Su host se deriva de
+    # official_pixel una vez lo llenes -- no hace falta host_terms.
     Vendor(
-        name="DoubleVerify",
+        name="DV Monitoring",
         ts_terms=("dv", "doubleverify"),
         host_terms=("doubleverify.com",),
         column=SURVEY,
@@ -116,9 +129,55 @@ _DEFAULT_VENDORS: tuple[Vendor, ...] = (
         # account" panel only once you've confirmed with DV which
         # part of the URL is actually fixed for a given account.
         note=(
-            "Monitoring on 1x1 is delivered as a wrapped tag from DV "
-            "Pinnacle (DV-001), not as a placement-level pixel. Omni "
-            "is verified through the Innovid tag file (DV-003)."
+            "Placement-level pixel, Display only. On 1x1, Monitoring "
+            "is delivered as a wrapped tag from DV Pinnacle (DV-001) "
+            "instead -- no pixel to compare here."
+        ),
+    ),
+    # DV Blocking (Monitoring/Blocking): su pixel vive en la columna
+    # doubleverify_html del archivo de tags (Display) o
+    # doubleverify_vast (Video, combinacion inusual) -- no es un pixel
+    # de placement, asi que esta fila no participa en el chequeo
+    # generico de abajo. DV-003 lee su official_pixel directamente.
+    Vendor(
+        name="DV Blocking",
+        ts_terms=(),
+        host_terms=(),
+        column=IMPRESSION,
+        formats=frozenset(),
+        note=(
+            "Column in the tag file (doubleverify_html for Display), "
+            "not a placement pixel -- checked by DV-003, not here. "
+            "Paste the reference tag/wrapper content, not just a URL."
+        ),
+    ),
+    # DV Integration (1x1): no hay pixel que comparar -- solo hace
+    # falta que los tags se descarguen normal (TAG-013). Fila de
+    # referencia, sin chequeo activo.
+    Vendor(
+        name="DV Integration",
+        ts_terms=(),
+        host_terms=(),
+        column=IMPRESSION,
+        formats=frozenset(),
+        note=(
+            "No Pinnacle wrapping, no placement pixel, no tag-file "
+            "column -- just needs the regular tags delivered "
+            "(TAG-013 checks that). Nothing to validate here."
+        ),
+    ),
+    # DV Omni (1x1, Video): su pixel vive en la columna
+    # doubleverify_vast del archivo de tags -- tampoco es un pixel de
+    # placement. DV-003 lee su official_pixel directamente.
+    Vendor(
+        name="DV Omni",
+        ts_terms=(),
+        host_terms=(),
+        column=IMPRESSION,
+        formats=frozenset(),
+        note=(
+            "Column in the tag file (doubleverify_vast), not a "
+            "placement pixel -- checked by DV-003, not here."
         ),
     ),
     Vendor(
@@ -206,16 +265,28 @@ def _vendor_to_dict(vendor: Vendor) -> dict:
 
 
 def _dict_to_vendor(data: dict) -> Vendor:
+    official_pixel = str(data.get("official_pixel") or "").strip()
+    host_terms = tuple(
+        str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()
+    )
+
+    if not host_terms and official_pixel:
+        # No hace falta llenar host_terms a mano si ya se dio el pixel
+        # oficial completo -- se deriva su dominio.
+        derived_host = _host_from_pixel(official_pixel)
+        if derived_host:
+            host_terms = (derived_host,)
+
     return Vendor(
         account=str(data.get("account") or "").strip(),
         name=str(data.get("name") or "").strip(),
         ts_terms=tuple(str(t).strip() for t in (data.get("ts_terms") or []) if str(t).strip()),
-        host_terms=tuple(str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()),
+        host_terms=host_terms,
         column=str(data.get("column") or IMPRESSION).strip(),
         formats=frozenset(
             f for f in (data.get("formats") or []) if f in (F_1X1, F_DISPLAY, F_VIDEO)
         ),
-        official_pixel=str(data.get("official_pixel") or "").strip(),
+        official_pixel=official_pixel,
         note=str(data.get("note") or ""),
         site_exceptions=frozenset(
             norm_compare(s) for s in (data.get("site_exceptions") or []) if str(s).strip()
@@ -252,11 +323,44 @@ def save_vendor_rows(rows: list[dict]) -> None:
 
 
 def load_vendors() -> tuple[Vendor, ...]:
-    """Vendor table reconcile_pixels() actually uses: config file, else defaults."""
+    """
+    Vendor table reconcile_pixels() actually uses: config file, else
+    defaults. Rows without ts_terms/host_terms (DV Blocking, DV
+    Integration, DV Omni) are kept -- they're reference-only rows read
+    directly by name (see official_pixel_for()), not matched in the
+    generic per-vendor loop below.
+    """
     rows = load_vendor_rows()
     vendors = [_dict_to_vendor(row) for row in rows]
-    vendors = [v for v in vendors if v.name and v.ts_terms and v.host_terms]
+    vendors = [v for v in vendors if v.name]
     return tuple(vendors) if vendors else _DEFAULT_VENDORS
+
+
+def official_pixel_for(name: str, account: str = "") -> str:
+    """
+    The official_pixel value configured for a vendor row by name, e.g.
+    official_pixel_for("DV Omni"). Used by DV-003 to fetch the
+    reference for a subtype that isn't in the generic PIX-002 loop.
+
+    If `account` is given and more than one row shares that name
+    (e.g. the same DV Omni reference split per account), the
+    account-scoped row wins; otherwise the first unscoped row is used.
+    """
+    candidates = [v for v in load_vendors() if v.name == name]
+
+    if account:
+        scoped = next(
+            (v for v in candidates if norm_compare(v.account) == norm_compare(account)),
+            None,
+        )
+        if scoped:
+            return scoped.official_pixel
+
+    unscoped = next((v for v in candidates if not v.account), None)
+    if unscoped:
+        return unscoped.official_pixel
+
+    return candidates[0].official_pixel if candidates else ""
 
 
 @dataclass
@@ -351,7 +455,7 @@ def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelRecon
             if vendor.account and norm_compare(vendor.account) != norm_compare(account):
                 continue
 
-            if vendor.name == "DoubleVerify":
+            if vendor.name == "DV Monitoring":
                 subtype = dv_subtype(vendor_raw)
 
                 if subtype == OMNI:
