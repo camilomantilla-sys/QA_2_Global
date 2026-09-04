@@ -319,28 +319,6 @@ def findings_dataframe(findings) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def load_review_notes(uploaded_file) -> tuple[str, dict[str, str]]:
-    """
-    Reads a QA1 review-notes .json (from the "Save review notes"
-    button below) into (campaign, {finding_id: note}). Best-effort:
-    any parse failure returns ("", {}) so a malformed file never
-    blocks the run -- it just means QA2 sees an empty Observation
-    column instead of QA1's notes.
-    """
-    if uploaded_file is None:
-        return "", {}
-    try:
-        data = json.loads(uploaded_file.getvalue().decode("utf-8"))
-        notes = data.get("notes", {})
-        return str(data.get("campaign", "")), {
-            str(finding_id): str(entry.get("note", ""))
-            for finding_id, entry in notes.items()
-            if str(entry.get("note", "")).strip()
-        }
-    except Exception:
-        return "", {}
-
-
 def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
     """
     Turns an approved REVIEW finding into PASS, carrying the QA's
@@ -1053,26 +1031,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    uploaded_review_notes = st.file_uploader(
-        "7. Upload QA1 Review Notes",
-        type=["json"],
-        accept_multiple_files=False,
-        key="qa2_review_notes_upload",
-    )
-
-    st.markdown(
-        """
-        <div class="upload-help">
-            Optional. The .json file the implementer (QA1) downloads
-            from the "Approve REVIEW items" panel after leaving their
-            notes -- drop it in the same SharePoint folder as the TS
-            and tags, then upload it here so QA2 sees those notes
-            next to each REVIEW item before approving.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     st.divider()
 
     with st.expander("Implementation Record (optional)"):
@@ -1773,48 +1731,20 @@ with tempfile.TemporaryDirectory(
             if finding.status.value == "REVIEW"
         ]
 
-        _notes_campaign, _loaded_review_notes = load_review_notes(
-            uploaded_review_notes
-        )
-
-        if (
-            uploaded_review_notes is not None
-            and _notes_campaign.strip()
-            and record_campaign.strip()
-            and norm_compare(_notes_campaign) != norm_compare(record_campaign)
-        ):
-            st.warning(
-                f"The uploaded QA1 review notes were saved for "
-                f"campaign \"{_notes_campaign}\", but this run is "
-                f"\"{record_campaign}\" -- double-check this is the "
-                "right file before approving anything."
-            )
-
         if review_findings:
             with st.expander(
-                f"📝 Approve REVIEW items ({len(review_findings)})",
-                expanded=bool(_loaded_review_notes),
+                f"📝 QA2 Review ({len(review_findings)})",
+                expanded=True,
             ):
                 st.caption(
-                    "Two-step handoff, matching how this already moves "
-                    "through email/Wrike + SharePoint: **QA1** (the "
-                    "implementer) fills the Observation column with "
-                    "why a flagged item is fine, then downloads the "
-                    "notes below and drops the file in the same "
-                    "SharePoint folder as the TS and tags -- no "
-                    "Approve needed from QA1. **QA2** uploads that "
-                    "file (sidebar, \"7. Upload QA1 Review Notes\"), "
-                    "sees QA1's reasoning already filled in here, and "
-                    "is the one who checks Approve -- only then does "
-                    "the finding become PASS below, with the "
-                    "observation kept in the record."
+                    "QA2 is mandatory: whoever does the second-pass "
+                    "review goes through each item below, writes why "
+                    "it's fine in Observation (based on the campaign "
+                    "context -- the email/Wrike callouts, etc.), and "
+                    "checks Approve. Only then does the finding become "
+                    "PASS below, with the observation kept in the "
+                    "record."
                 )
-
-                if _loaded_review_notes:
-                    st.caption(
-                        f"Loaded {len(_loaded_review_notes)} note(s) "
-                        "from the uploaded QA1 file."
-                    )
 
                 _review_base_df = pd.DataFrame(
                     [
@@ -1824,9 +1754,7 @@ with tempfile.TemporaryDirectory(
                             "Placement ID": finding.placement_id,
                             "Creative ID": finding.creative_id,
                             "Finding": finding.message,
-                            "Observation": _loaded_review_notes.get(
-                                finding.finding_id, ""
-                            ),
+                            "Observation": "",
                         }
                         for finding in review_findings
                     ]
@@ -1843,39 +1771,15 @@ with tempfile.TemporaryDirectory(
                 )
 
                 review_overrides: dict[str, dict] = {}
-                _notes_export = {}
 
                 for finding, (_, _row) in zip(
                     review_findings, _edited_review_df.iterrows()
                 ):
-                    _note = str(_row.get("Observation") or "").strip()
-
-                    if _note:
-                        _notes_export[finding.finding_id] = {"note": _note}
-
                     if bool(_row.get("Approve")):
                         review_overrides[finding.finding_id] = {
                             "approved": True,
-                            "note": _note,
+                            "note": str(_row.get("Observation") or "").strip(),
                         }
-
-                st.download_button(
-                    "💾 Save review notes (for QA2)",
-                    data=json.dumps(
-                        {
-                            "campaign": record_campaign,
-                            "saved_at": datetime.now().isoformat(
-                                timespec="seconds"
-                            ),
-                            "notes": _notes_export,
-                        },
-                        indent=2,
-                    ),
-                    file_name="qa2_review_notes.json",
-                    mime="application/json",
-                    disabled=not _notes_export,
-                    use_container_width=True,
-                )
 
                 if review_overrides:
                     st.info(
@@ -1895,8 +1799,8 @@ with tempfile.TemporaryDirectory(
                     }
         else:
             st.caption(
-                "📝 QA1 → QA2 review handoff: no REVIEW items on this "
-                "run, so there's nothing to approve here."
+                "📝 QA2 Review: no REVIEW items on this run, so "
+                "there's nothing to approve here."
             )
 
         scorecard = findings_buffer.scorecard()
