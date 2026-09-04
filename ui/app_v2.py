@@ -319,26 +319,26 @@ def findings_dataframe(findings) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def load_review_notes(uploaded_file) -> dict[str, str]:
+def load_review_notes(uploaded_file) -> tuple[str, dict[str, str]]:
     """
     Reads a QA1 review-notes .json (from the "Save review notes"
-    button below) into {finding_id: note}. Best-effort: any parse
-    failure returns {} so a malformed file never blocks the run --
-    it just means QA2 sees an empty Observation column instead of
-    QA1's notes.
+    button below) into (campaign, {finding_id: note}). Best-effort:
+    any parse failure returns ("", {}) so a malformed file never
+    blocks the run -- it just means QA2 sees an empty Observation
+    column instead of QA1's notes.
     """
     if uploaded_file is None:
-        return {}
+        return "", {}
     try:
         data = json.loads(uploaded_file.getvalue().decode("utf-8"))
         notes = data.get("notes", {})
-        return {
+        return str(data.get("campaign", "")), {
             str(finding_id): str(entry.get("note", ""))
             for finding_id, entry in notes.items()
             if str(entry.get("note", "")).strip()
         }
     except Exception:
-        return {}
+        return "", {}
 
 
 def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
@@ -1773,7 +1773,22 @@ with tempfile.TemporaryDirectory(
             if finding.status.value == "REVIEW"
         ]
 
-        _loaded_review_notes = load_review_notes(uploaded_review_notes)
+        _notes_campaign, _loaded_review_notes = load_review_notes(
+            uploaded_review_notes
+        )
+
+        if (
+            uploaded_review_notes is not None
+            and _notes_campaign.strip()
+            and record_campaign.strip()
+            and norm_compare(_notes_campaign) != norm_compare(record_campaign)
+        ):
+            st.warning(
+                f"The uploaded QA1 review notes were saved for "
+                f"campaign \"{_notes_campaign}\", but this run is "
+                f"\"{record_campaign}\" -- double-check this is the "
+                "right file before approving anything."
+            )
 
         if review_findings:
             with st.expander(
