@@ -154,7 +154,46 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         ),
         bold=True, size=12,
     )
-    row += 2
+    row += 1
+
+    signoff_label = (
+        f"QA2 Sign-off: Approved by {meta.qa2_by or 'QA2'}"
+        + (f" on {meta.qa2_date.isoformat()}" if meta.qa2_date else "")
+        if meta.qa2_signed_off
+        else "QA2 Sign-off: PENDING"
+    )
+    signoff_cell = ws.cell(row=row, column=1, value=signoff_label)
+    signoff_cell.font = Font(
+        color=STATUS_FONT_COLORS.get(
+            "PASS" if meta.qa2_signed_off else "REVIEW", WPP_INK
+        ),
+        bold=True, size=11,
+    )
+    signoff_cell.fill = PatternFill(
+        "solid",
+        fgColor=STATUS_FILLS["PASS" if meta.qa2_signed_off else "REVIEW"],
+    )
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    row += 1
+
+    if not meta.qa2_signed_off:
+        ws.cell(
+            row=row, column=1,
+            value=(
+                "This is the record of QA2 approval for this campaign "
+                "-- to approve, edit the cell above directly here in "
+                "SharePoint/Excel Web, e.g. \"QA2 Sign-off: Approved "
+                "by Camilo Mantilla on 2026-09-05\"."
+            ),
+        ).font = Font(color=WPP_MUTED, italic=True, size=9)
+        row += 1
+
+    if meta.qa2_signoff_note:
+        ws.cell(row=row, column=1, value=meta.qa2_signoff_note).font = (
+            BODY_FONT
+        )
+        row += 1
+    row += 1
 
     info_rows = [
         ("Profile used", meta.profile_used),
