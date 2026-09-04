@@ -41,7 +41,12 @@ from core.adobe_pixel_reconciliation import (
 )
 from core.dv_reconciliation import reconcile_dv_tags
 from core.dv_omni_reconciliation import reconcile_dv_omni
-from core.team_roster import ROLES as TEAM_ROLES, load_team_rows, save_team_rows
+from core.team_roster import (
+    ACCOUNTS as TEAM_ACCOUNTS,
+    load_roster,
+    names_for_account,
+    save_roster,
+)
 from core.pixel_reconciliation import (
     F_1X1,
     F_DISPLAY,
@@ -186,20 +191,78 @@ class _RestoredUpload:
         return self._data
 
 
-def save_upload(
-    uploaded_file,
-    directory: Path,
-    prefix: str,
-) -> Path:
+@st.cache_data(show_spinner=False)
+def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None):
     """
-    Saves an UploadedFile to the temporary folder.
+    Cached by file content + profile -- every widget interaction
+    after the first run used to re-parse the whole TS from scratch
+    (openpyxl is slow on a large workbook), even for something as
+    unrelated as ticking a checkbox. Keyed on the file's own bytes
+    (not a temp path, which changes every rerun) so a cache hit
+    survives across reruns as long as neither the file nor the
+    profile choice changed.
+    """
+    with tempfile.TemporaryDirectory(prefix="qa2_cache_ts_") as directory:
+        path = Path(directory) / Path(file_name).name
+        path.write_bytes(file_bytes)
+        detected_profile, detection_evidence = detect_profile(path)
+        ts_result = parse_ts(path, profile_name=profile_name)
+        return detected_profile, detection_evidence, ts_result
 
-    The prefix avoids collisions when two files share the same name.
+
+@st.cache_data(show_spinner=False)
+def cached_parse_innovid_export(file_bytes: bytes, file_name: str):
+    with tempfile.TemporaryDirectory(prefix="qa2_cache_exp_") as directory:
+        path = Path(directory) / Path(file_name).name
+        path.write_bytes(file_bytes)
+        return parse_innovid_export(path)
+
+
+@st.cache_data(show_spinner=False)
+def cached_parse_innovid_tags(file_bytes: bytes, file_name: str):
+    with tempfile.TemporaryDirectory(prefix="qa2_cache_tags_") as directory:
+        path = Path(directory) / Path(file_name).name
+        path.write_bytes(file_bytes)
+        return parse_innovid_tags(path)
+
+
+@st.cache_data(show_spinner=False)
+def cached_parse_dv_tags(file_bytes: bytes, file_name: str):
+    with tempfile.TemporaryDirectory(prefix="qa2_cache_dv_") as directory:
+        path = Path(directory) / Path(file_name).name
+        path.write_bytes(file_bytes)
+        return parse_dv_tags(path)
+
+
+def roster_pick_selector(label: str, account: str, target_key: str) -> None:
     """
-    safe_name = Path(uploaded_file.name).name
-    destination = directory / f"{prefix}{safe_name}"
-    destination.write_bytes(uploaded_file.getbuffer())
-    return destination
+    A small "pick from the team roster" selectbox that copies its
+    choice into another widget's value (target_key) instead of being
+    the field itself -- so Implemented By / QA2 By / QA3 By stay the
+    same plain text_input everywhere else (ReportMeta, session
+    bundles, review-approval stamping) and this is purely additive.
+    """
+    names = names_for_account(load_roster(), account) if account else []
+    if not names:
+        return
+
+    pick_key = f"{target_key}_pick"
+    options = [""] + names
+    if st.session_state.get(pick_key) not in options:
+        st.session_state[pick_key] = ""
+
+    def _apply_pick():
+        picked = st.session_state.get(pick_key, "")
+        if picked:
+            st.session_state[target_key] = picked
+
+    st.selectbox(
+        label,
+        options=options,
+        key=pick_key,
+        on_change=_apply_pick,
+        help=f"Picks from {account}'s team roster below.",
+    )
 
 
 def peek_campaign_name(uploaded_file) -> str:
@@ -919,51 +982,49 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
 
 with st.expander("👥 Team by account"):
     st.caption(
-        "Reference directory -- who's the Implementer / QA2 / QA3 "
-        "for each account. Doesn't fill in or gate anything yet; "
-        "Implemented By / QA2 By stay manual for now. Add a row per "
-        "person -- an account can have more than one QA2, for "
-        "example."
+        "Who's on each account's team -- one column per account, "
+        "list every member below it. No fixed role: anyone listed "
+        "can act as Implementer, QA2 or QA3 depending on the task, "
+        "and this same list is what feeds the \"By\" fields below "
+        "(pick from the account's team, or type a name not listed). "
+        "Support is for people from other accounts who sometimes "
+        "pitch in -- they show up as an option on every account."
     )
 
-    _team_rows = load_team_rows()
+    _roster = load_roster()
+    _team_col_count = max(1, max(len(_roster[a]) for a in TEAM_ACCOUNTS))
     _team_df = pd.DataFrame(
-        [
-            {
-                "Account": r.get("account", ""),
-                "Role": r.get("role", ""),
-                "Name": r.get("name", ""),
-            }
-            for r in _team_rows
-        ]
+        {
+            account: (
+                _roster[account]
+                + [""] * (_team_col_count - len(_roster[account]))
+            )
+            for account in TEAM_ACCOUNTS
+        }
     )
 
     _edited_team_df = st.data_editor(
         _team_df,
         num_rows="dynamic",
         use_container_width=True,
-        column_config={
-            "Role": st.column_config.SelectboxColumn(
-                options=list(TEAM_ROLES)
-            ),
-        },
         key="qa2_team_editor",
     )
 
     if st.button("Save team roster", key="qa2_team_save"):
-        _new_team_rows = [
-            {
-                "account": str(_row.get("Account") or "").strip(),
-                "role": str(_row.get("Role") or "").strip(),
-                "name": str(_row.get("Name") or "").strip(),
-            }
-            for _, _row in _edited_team_df.iterrows()
-            if str(_row.get("Account") or "").strip()
-        ]
-        save_team_rows(_new_team_rows)
+        _new_roster = {
+            account: [
+                str(name).strip()
+                for name in _edited_team_df[account].tolist()
+                if str(name).strip()
+            ]
+            for account in TEAM_ACCOUNTS
+        }
+        save_roster(_new_roster)
+        _total_people = sum(len(v) for v in _new_roster.values())
         st.success(
-            f"Saved {len(_new_team_rows)} entr{'y' if len(_new_team_rows) == 1 else 'ies'} "
-            "to config/team_roster.json."
+            f"Saved {_total_people} team member entr"
+            f"{'y' if _total_people == 1 else 'ies'} to "
+            "config/team_roster.json."
         )
 
 
@@ -1212,6 +1273,41 @@ with st.sidebar:
 
     st.divider()
 
+    _account_options = ["All / unknown"] + sorted(
+        {
+            row.get("account", "").strip()
+            for row in load_vendor_rows()
+            if row.get("account", "").strip()
+        }
+        | {
+            row.get("campaign", "").strip()
+            for row in load_adobe_vendor_rows()
+            if row.get("campaign", "").strip()
+        }
+        | {account for account in TEAM_ACCOUNTS if account != "Support"}
+    )
+    selected_account = st.selectbox(
+        "Account / Campaign",
+        options=_account_options,
+        index=0,
+        key="qa2_account_select",
+        help=(
+            "Some vendor pixel rules only apply to one account or "
+            "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
+            "Adobe's official pixels vary per campaign -- Acrobat, "
+            "Firefly, STE...). Pick the one this Traffic Sheet "
+            "belongs to so PIX-002/PIX-A01 apply the right rows from "
+            "the Pixels by account panels. Add new options there by "
+            "filling Account (WPP) or Campaign (Adobe) on a row. "
+            "Picked here first so Implemented By / QA3 By below can "
+            "suggest names from that account's team roster."
+        ),
+    )
+    if selected_account == "All / unknown":
+        selected_account = ""
+
+    st.divider()
+
     with st.expander("Implementation Record (optional)"):
         st.caption(
             "Included in the PDF report. Leave blank to fill by hand."
@@ -1230,6 +1326,9 @@ with st.sidebar:
         record_wrike_id = st.text_input(
             "Wrike ID", key="qa2_record_wrike"
         )
+        roster_pick_selector(
+            "Quick-pick Implemented By", selected_account, "qa2_record_impl_by"
+        )
         record_implemented_by = st.text_input(
             "Implemented By", key="qa2_record_impl_by"
         )
@@ -1242,6 +1341,9 @@ with st.sidebar:
             "QA2 By / QA2 Date have moved -- fill those in the "
             "QA2 Review section below the results, right where "
             "you approve."
+        )
+        roster_pick_selector(
+            "Quick-pick QA3 By", selected_account, "qa2_record_qa3_by"
         )
         record_qa3_by = st.text_input(
             "QA3 By", key="qa2_record_qa3_by"
@@ -1261,36 +1363,6 @@ with st.sidebar:
         )
 
     st.divider()
-
-    _account_options = ["All / unknown"] + sorted(
-        {
-            row.get("account", "").strip()
-            for row in load_vendor_rows()
-            if row.get("account", "").strip()
-        }
-        | {
-            row.get("campaign", "").strip()
-            for row in load_adobe_vendor_rows()
-            if row.get("campaign", "").strip()
-        }
-    )
-    selected_account = st.selectbox(
-        "Account / Campaign",
-        options=_account_options,
-        index=0,
-        key="qa2_account_select",
-        help=(
-            "Some vendor pixel rules only apply to one account or "
-            "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
-            "Adobe's official pixels vary per campaign -- Acrobat, "
-            "Firefly, STE...). Pick the one this Traffic Sheet "
-            "belongs to so PIX-002/PIX-A01 apply the right rows from "
-            "the Pixels by account panels. Add new options there by "
-            "filling Account (WPP) or Campaign (Adobe) on a row."
-        ),
-    )
-    if selected_account == "All / unknown":
-        selected_account = ""
 
     selected_profile = st.selectbox(
         "Traffic Sheet Profile",
@@ -1467,81 +1539,37 @@ if uploaded_ts is None or uploaded_pc is None:
 # Processing
 # ============================================================
 
-with tempfile.TemporaryDirectory(
-    prefix="qa2_v2_"
-) as temporary_directory:
-    temporary_path = Path(temporary_directory)
-
-    ts_path = save_upload(
-        uploaded_ts,
-        temporary_path,
-        "ts_",
-    )
-
-    pc_path = save_upload(
-        uploaded_pc,
-        temporary_path,
-        "pc_",
-    )
-
-    pl_path = (
-        save_upload(
-            uploaded_pl,
-            temporary_path,
-            "pl_",
-        )
-        if uploaded_pl is not None
-        else None
-    )
-
-    dv_path = (
-        save_upload(
-            uploaded_dv,
-            temporary_path,
-            "dv_",
-        )
-        if uploaded_dv is not None
-        else None
-    )
-
-    tag_paths = []
-
-    for index, uploaded_tag in enumerate(
-        uploaded_tags or [],
-        start=1,
-    ):
-        tag_paths.append(
-            (
-                uploaded_tag.name,
-                save_upload(
-                    uploaded_tag,
-                    temporary_path,
-                    f"tag_{index}_",
-                ),
-            )
-        )
-
+# Parsing now happens inside cached_parse_* (each opens its own
+# short-lived temp file only on a cache miss), so this block no
+# longer needs a temp directory of its own -- kept as a plain `if`
+# to leave the indentation of everything below it untouched.
+if True:
     try:
         # ----------------------------------------------------
         # Traffic Sheet
         # ----------------------------------------------------
+        #
+        # Every parse call below is content-hashed and cached
+        # (cached_parse_*, defined near the top of the file) --
+        # only re-parses when the file bytes or profile actually
+        # change, not on every unrelated widget interaction.
+        # ----------------------------------------------------
+
+        forced_profile = (
+            None
+            if selected_profile == "AUTO"
+            else selected_profile
+        )
 
         with st.spinner(
             "Reading and parsing the Traffic Sheet..."
         ):
-            detected_profile, detection_evidence = (
-                detect_profile(ts_path)
-            )
-
-            forced_profile = (
-                None
-                if selected_profile == "AUTO"
-                else selected_profile
-            )
-
-            ts_result = parse_ts(
-                ts_path,
-                profile_name=forced_profile,
+            detected_profile, detection_evidence, ts_result = (
+                cached_parse_ts(
+                    uploaded_ts.getvalue(),
+                    uploaded_ts.name,
+                    forced_profile,
+                )
             )
 
         # ----------------------------------------------------
@@ -1551,7 +1579,9 @@ with tempfile.TemporaryDirectory(
         with st.spinner(
             "Reading Innovid Placement-Creative View..."
         ):
-            pc_result = parse_innovid_export(pc_path)
+            pc_result = cached_parse_innovid_export(
+                uploaded_pc.getvalue(), uploaded_pc.name
+            )
 
         # ----------------------------------------------------
         # Placement View
@@ -1559,11 +1589,13 @@ with tempfile.TemporaryDirectory(
 
         pl_result = None
 
-        if pl_path is not None:
+        if uploaded_pl is not None:
             with st.spinner(
                 "Reading Innovid Placement View..."
             ):
-                pl_result = parse_innovid_export(pl_path)
+                pl_result = cached_parse_innovid_export(
+                    uploaded_pl.getvalue(), uploaded_pl.name
+                )
 
         # ----------------------------------------------------
         # Tags
@@ -1571,15 +1603,18 @@ with tempfile.TemporaryDirectory(
 
         tags_results = []
 
-        if tag_paths:
+        if uploaded_tags:
             with st.spinner(
-                f"Reading {len(tag_paths)} tag file(s)..."
+                f"Reading {len(uploaded_tags)} tag file(s)..."
             ):
-                for original_name, tag_path in tag_paths:
+                for uploaded_tag in uploaded_tags:
                     tags_results.append(
                         (
-                            original_name,
-                            parse_innovid_tags(tag_path),
+                            uploaded_tag.name,
+                            cached_parse_innovid_tags(
+                                uploaded_tag.getvalue(),
+                                uploaded_tag.name,
+                            ),
                         )
                     )
 
@@ -1589,11 +1624,13 @@ with tempfile.TemporaryDirectory(
 
         dv_result = None
 
-        if dv_path is not None:
+        if uploaded_dv is not None:
             with st.spinner(
                 "Reading DV Pinnacle Tags..."
             ):
-                dv_result = parse_dv_tags(dv_path)
+                dv_result = cached_parse_dv_tags(
+                    uploaded_dv.getvalue(), uploaded_dv.name
+                )
 
         # ----------------------------------------------------
         # File understanding
@@ -1985,6 +2022,9 @@ with tempfile.TemporaryDirectory(
 
         st.subheader("QA2 Review")
 
+        roster_pick_selector(
+            "Quick-pick QA2 By", selected_account, "qa2_record_qa2_by"
+        )
         _qa2_by_cols = st.columns(2)
         record_qa2_by = _qa2_by_cols[0].text_input(
             "QA2 By", key="qa2_record_qa2_by"

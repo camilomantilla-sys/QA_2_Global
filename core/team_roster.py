@@ -1,10 +1,14 @@
 """
-Team roster: who does Implementer / QA2 / QA3 for each account.
+Team roster: who's on each account's team.
 
-Pure reference data, editable in-app the same way the Pixels by
-account tables are (config/team_roster.json, re-read on every load).
-Starts seeded with the four known accounts so they always show up in
-the table even before anyone's been assigned.
+One flat list of people per account (Unilever / Wendy's / BlackRock /
+Adobe), plus a Support column for people from other accounts who
+sometimes pitch in. No fixed role per person -- anyone listed under
+an account can act as Implementer, QA2 or QA3 depending on the task,
+so the same roster feeds all three "By" fields in the app.
+
+Editable in-app (config/team_roster.json, re-read on every load) the
+same way the Pixels by account tables are.
 """
 from __future__ import annotations
 
@@ -15,34 +19,52 @@ TEAM_ROSTER_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "team_roster.json"
 )
 
-ROLES = ("Implementer", "QA2", "QA3")
-
-_DEFAULT_ROWS = (
-    {"account": "Unilever", "role": "", "name": ""},
-    {"account": "Wendy's", "role": "", "name": ""},
-    {"account": "BlackRock", "role": "", "name": ""},
-    {"account": "Adobe", "role": "QA2", "name": "Camilo Mantilla"},
-)
+ACCOUNTS = ("Unilever", "Wendy's", "BlackRock", "Adobe", "Support")
 
 
-def default_team_rows() -> list[dict]:
-    return [dict(row) for row in _DEFAULT_ROWS]
+def default_roster() -> dict[str, list[str]]:
+    roster = {account: [] for account in ACCOUNTS}
+    roster["Adobe"] = ["Camilo Mantilla"]
+    return roster
 
 
-def load_team_rows() -> list[dict]:
+def load_roster() -> dict[str, list[str]]:
+    roster = default_roster()
     if not TEAM_ROSTER_PATH.exists():
-        return default_team_rows()
+        return roster
     try:
         data = json.loads(TEAM_ROSTER_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, list) and data:
-            return data
+        if isinstance(data, dict):
+            for account in ACCOUNTS:
+                names = data.get(account, [])
+                if isinstance(names, list):
+                    roster[account] = [
+                        str(n).strip() for n in names if str(n).strip()
+                    ]
     except Exception:
         pass
-    return default_team_rows()
+    return roster
 
 
-def save_team_rows(rows: list[dict]) -> None:
+def save_roster(roster: dict[str, list[str]]) -> None:
     TEAM_ROSTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    clean = {
+        account: [
+            str(n).strip()
+            for n in roster.get(account, [])
+            if str(n).strip()
+        ]
+        for account in ACCOUNTS
+    }
     TEAM_ROSTER_PATH.write_text(
-        json.dumps(rows, indent=2), encoding="utf-8"
+        json.dumps(clean, indent=2), encoding="utf-8"
     )
+
+
+def names_for_account(roster: dict[str, list[str]], account: str) -> list[str]:
+    """Roster for one account plus Support, deduped, order preserved."""
+    names: list[str] = []
+    for name in roster.get(account, []) + roster.get("Support", []):
+        if name and name not in names:
+            names.append(name)
+    return names
