@@ -6,10 +6,11 @@ import json
 import sys
 import tempfile
 import warnings
+import zipfile
 from io import BytesIO
 from collections import Counter, defaultdict
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd  # type: ignore
@@ -163,6 +164,26 @@ VERDICT_COLORS = {
 # ============================================================
 # File helpers
 # ============================================================
+
+class _RestoredUpload:
+    """
+    Stand-in for Streamlit's UploadedFile, built from bytes stored in
+    a QA2 session bundle -- exposes just the surface the app actually
+    touches (.name, .size, .getbuffer(), .getvalue()) so a restored
+    file can be passed anywhere a live upload is expected.
+    """
+
+    def __init__(self, name: str, data: bytes):
+        self.name = name
+        self.size = len(data)
+        self._data = data
+
+    def getbuffer(self) -> bytes:
+        return self._data
+
+    def getvalue(self) -> bytes:
+        return self._data
+
 
 def save_upload(
     uploaded_file,
@@ -917,12 +938,118 @@ with st.sidebar:
 
     st.header("QA2 Files")
 
+    with st.expander("📂 Load a saved session (optional)"):
+        st.caption(
+            "If the implementer already ran QA2 and used \"Save "
+            "session bundle\" below, load that .zip here (same "
+            "SharePoint folder as the TS) to skip re-uploading the "
+            "same files -- you'll only need to review and check "
+            "QA2 Sign-off. You can still swap any file below by "
+            "uploading a different one over it."
+        )
+        uploaded_bundle = st.file_uploader(
+            "Session bundle (.zip)",
+            type=["zip"],
+            key="qa2_session_bundle",
+        )
+
+    _restored: dict = {}
+
+    if uploaded_bundle is not None:
+        _bundle_source = (uploaded_bundle.name, uploaded_bundle.size)
+        _is_new_bundle = (
+            st.session_state.get("_session_bundle_source")
+            != _bundle_source
+        )
+
+        try:
+            with zipfile.ZipFile(
+                BytesIO(uploaded_bundle.getvalue())
+            ) as _zf:
+                _manifest = json.loads(
+                    _zf.read("manifest.json").decode("utf-8")
+                )
+                _manifest_files = _manifest.get("files", {})
+
+                def _read_bundle_file(rel_path: str) -> bytes | None:
+                    try:
+                        return _zf.read(rel_path)
+                    except KeyError:
+                        return None
+
+                for _slot in ("ts", "pc", "pl", "dv"):
+                    _name = _manifest_files.get(_slot)
+                    if not _name:
+                        continue
+                    _data = _read_bundle_file(f"files/{_slot}/{_name}")
+                    if _data is not None:
+                        _restored[_slot] = _RestoredUpload(_name, _data)
+
+                _restored_tags = []
+                for _entry in _manifest_files.get("tags", []):
+                    _stored_as = _entry.get("stored_as")
+                    _orig_name = _entry.get("name")
+                    if not _stored_as or not _orig_name:
+                        continue
+                    _data = _read_bundle_file(f"files/tags/{_stored_as}")
+                    if _data is not None:
+                        _restored_tags.append(
+                            _RestoredUpload(_orig_name, _data)
+                        )
+                if _restored_tags:
+                    _restored["tags"] = _restored_tags
+
+                if _is_new_bundle:
+                    if _manifest.get("profile") in PROFILE_LABELS:
+                        st.session_state["qa2_profile_select"] = (
+                            _manifest["profile"]
+                        )
+                    _valid_accounts = {
+                        row.get("account", "").strip()
+                        for row in load_vendor_rows()
+                        if row.get("account", "").strip()
+                    } | {
+                        row.get("campaign", "").strip()
+                        for row in load_adobe_vendor_rows()
+                        if row.get("campaign", "").strip()
+                    }
+                    if _manifest.get("account") in _valid_accounts:
+                        st.session_state["qa2_account_select"] = (
+                            _manifest["account"]
+                        )
+                    for _field_key, _meta_key in (
+                        ("qa2_record_campaign", "campaign"),
+                        ("qa2_record_request_type", "request_type"),
+                        ("qa2_record_wrike", "wrike_id"),
+                        ("qa2_record_impl_by", "implemented_by"),
+                    ):
+                        if _manifest.get(_meta_key):
+                            st.session_state[_field_key] = (
+                                _manifest[_meta_key]
+                            )
+                    if _manifest.get("implementation_date"):
+                        st.session_state["qa2_record_impl_date"] = (
+                            date.fromisoformat(
+                                _manifest["implementation_date"]
+                            )
+                        )
+                    st.session_state["_session_bundle_source"] = (
+                        _bundle_source
+                    )
+
+            st.success(
+                f"Loaded session bundle -- {len(_restored)} file "
+                "slot(s) restored below."
+            )
+        except Exception as exc:
+            st.error(f"Couldn't read this session bundle: {exc}")
+
     uploaded_ts = st.file_uploader(
         "1. Upload Traffic Sheet",
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_ts",
-    )
+    ) or _restored.get("ts")
 
     if uploaded_ts is not None:
         # Prefills the Implementation Record's Campaign field from the
@@ -951,7 +1078,7 @@ with st.sidebar:
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_pc",
-    )
+    ) or _restored.get("pc")
 
     st.markdown(
         """
@@ -968,7 +1095,7 @@ with st.sidebar:
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_pl",
-    )
+    ) or _restored.get("pl")
 
     st.markdown(
         """
@@ -986,6 +1113,8 @@ with st.sidebar:
         accept_multiple_files=True,
         key="qa2_tags",
     )
+    if not uploaded_tags and _restored.get("tags"):
+        uploaded_tags = _restored["tags"]
 
     st.markdown(
         """
@@ -1019,7 +1148,7 @@ with st.sidebar:
         type=["xlsx", "xlsm"],
         accept_multiple_files=False,
         key="qa2_dv",
-    )
+    ) or _restored.get("dv")
 
     st.markdown(
         """
@@ -1102,6 +1231,7 @@ with st.sidebar:
         "Account / Campaign",
         options=_account_options,
         index=0,
+        key="qa2_account_select",
         help=(
             "Some vendor pixel rules only apply to one account or "
             "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
@@ -1120,6 +1250,7 @@ with st.sidebar:
         options=list(PROFILE_LABELS),
         format_func=lambda value: PROFILE_LABELS[value],
         index=0,
+        key="qa2_profile_select",
     )
 
     analyze_button = st.button(
@@ -1139,6 +1270,93 @@ with st.sidebar:
 
     if analyze_button:
         st.session_state.qa2_has_run = True
+
+    st.divider()
+
+    _can_bundle = uploaded_ts is not None and uploaded_pc is not None
+
+    if _can_bundle:
+        _bundle_buffer = BytesIO()
+        with zipfile.ZipFile(
+            _bundle_buffer, "w", zipfile.ZIP_DEFLATED
+        ) as _zf:
+            _files_manifest: dict = {}
+
+            _ts_name = Path(uploaded_ts.name).name
+            _zf.writestr(f"files/ts/{_ts_name}", uploaded_ts.getbuffer())
+            _files_manifest["ts"] = _ts_name
+
+            _pc_name = Path(uploaded_pc.name).name
+            _zf.writestr(f"files/pc/{_pc_name}", uploaded_pc.getbuffer())
+            _files_manifest["pc"] = _pc_name
+
+            if uploaded_pl is not None:
+                _pl_name = Path(uploaded_pl.name).name
+                _zf.writestr(
+                    f"files/pl/{_pl_name}", uploaded_pl.getbuffer()
+                )
+                _files_manifest["pl"] = _pl_name
+
+            if uploaded_dv is not None:
+                _dv_name = Path(uploaded_dv.name).name
+                _zf.writestr(
+                    f"files/dv/{_dv_name}", uploaded_dv.getbuffer()
+                )
+                _files_manifest["dv"] = _dv_name
+
+            _tag_entries = []
+            for _index, _tag_file in enumerate(uploaded_tags or [], start=1):
+                _stored_as = f"{_index}_{Path(_tag_file.name).name}"
+                _zf.writestr(
+                    f"files/tags/{_stored_as}", _tag_file.getbuffer()
+                )
+                _tag_entries.append(
+                    {
+                        "name": Path(_tag_file.name).name,
+                        "stored_as": _stored_as,
+                    }
+                )
+            if _tag_entries:
+                _files_manifest["tags"] = _tag_entries
+
+            _manifest_out = {
+                "profile": selected_profile,
+                "account": selected_account,
+                "campaign": record_campaign,
+                "request_type": record_request_type,
+                "wrike_id": record_wrike_id,
+                "implemented_by": record_implemented_by,
+                "implementation_date": (
+                    record_implementation_date.isoformat()
+                    if record_implementation_date else ""
+                ),
+                "saved_at": datetime.now().isoformat(timespec="seconds"),
+                "files": _files_manifest,
+            }
+            _zf.writestr(
+                "manifest.json", json.dumps(_manifest_out, indent=2)
+            )
+
+        st.download_button(
+            "💾 Save session bundle (for QA2)",
+            data=_bundle_buffer.getvalue(),
+            file_name="qa2_session_bundle.zip",
+            mime="application/zip",
+            use_container_width=True,
+            help=(
+                "Bundles the uploaded TS, Innovid exports and tag "
+                "files plus your Campaign/Profile/Account picks into "
+                "one .zip. Drop it in the same SharePoint folder as "
+                "the TS -- QA2 loads it from \"Load a saved session\" "
+                "above and skips re-uploading everything, straight "
+                "to reviewing and checking QA2 Sign-off."
+            ),
+        )
+    else:
+        st.caption(
+            "Upload the Traffic Sheet and Placement-Creative View "
+            "to enable \"Save session bundle\"."
+        )
 
 
 # ============================================================
