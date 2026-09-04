@@ -42,6 +42,7 @@ from core.dv_subtype import (
     is_dv,
 )
 from core.normalize import clean_id, norm_compare, norm_dims
+from core.pixel_reconciliation import official_pixel_for, pixel_matches_official
 from core.tag_inventory import TagInventory
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
@@ -83,12 +84,13 @@ class DVOmniReconciliation:
     checks: list[DVOmniCheck] = field(default_factory=list)
 
 
-def _column_has_content(inventory: TagInventory, placement_id: str, tag_type: str) -> bool:
+def _column_content(inventory: TagInventory, placement_id: str, tag_type: str) -> str:
+    """Raw content of the placement's doubleverify_vast/html cell, or ""."""
     for source in inventory.by_placement.get(placement_id, []):
         for tag in source.row.tags:
             if tag.tag_type == tag_type and str(tag.raw or "").strip():
-                return True
-    return False
+                return str(tag.raw).strip()
+    return ""
 
 
 def _has_any_row(inventory: TagInventory, placement_id: str) -> bool:
@@ -214,17 +216,41 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
             )
             continue
 
-        if _column_has_content(tag_inventory, placement_id, tag_type):
-            out.checks.append(
-                DVOmniCheck(
-                    result="PASS",
-                    message=(
-                        callout
-                        + f"The {column_label} column has content in the tag file."
-                    ),
-                    **common,
-                )
+        _content = _column_content(tag_inventory, placement_id, tag_type)
+
+        if _content:
+            _official = official_pixel_for(
+                "DV Omni" if subtype == OMNI else "DV Blocking"
             )
+
+            if _official and not pixel_matches_official(_content, _official):
+                out.checks.append(
+                    DVOmniCheck(
+                        result="REVIEW",
+                        message=(
+                            callout
+                            + f"The {column_label} column has content, but it "
+                            "doesn't match the official pixel on record."
+                        ),
+                        recommended_action=(
+                            "Confirm with the team whether the vendor rotated "
+                            "its tag -- if so, update the official pixel in "
+                            "the Pixels by account panel."
+                        ),
+                        **{**common, "expected_column": _official},
+                    )
+                )
+            else:
+                out.checks.append(
+                    DVOmniCheck(
+                        result="PASS",
+                        message=(
+                            callout
+                            + f"The {column_label} column has content in the tag file."
+                        ),
+                        **common,
+                    )
+                )
         else:
             out.checks.append(
                 DVOmniCheck(

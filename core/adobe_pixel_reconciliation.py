@@ -56,8 +56,8 @@ ADOBE_VENDOR_CONFIG_PATH = (
 
 def _default_adobe_vendor_rows() -> list[dict]:
     return [
-        {"name": "DISQO", "official_pixel": "", "note": ""},
-        {"name": "iSpot", "official_pixel": "", "note": ""},
+        {"name": "DISQO", "campaign": "", "official_pixel": "", "note": ""},
+        {"name": "iSpot", "campaign": "", "official_pixel": "", "note": ""},
     ]
 
 
@@ -79,13 +79,30 @@ def save_adobe_vendor_rows(rows: list[dict]) -> None:
         f.write("\n")
 
 
-def _official_pixels() -> dict[str, str]:
-    """{vendor name -> official pixel}, skipping blanks."""
-    return {
-        str(row.get("name") or "").strip(): str(row.get("official_pixel") or "").strip()
-        for row in load_adobe_vendor_rows()
-        if str(row.get("official_pixel") or "").strip()
-    }
+def _official_pixels(campaign: str = "") -> dict[str, str]:
+    """
+    {vendor name -> official pixel}, skipping blanks. Adobe's own
+    official pixel varies per Adobe campaign (Acrobat, Firefly, STE,
+    PGA...), not just per vendor -- when `campaign` is given, a row
+    scoped to it wins over an unscoped row for the same vendor name.
+    """
+    unscoped: dict[str, str] = {}
+    scoped: dict[str, str] = {}
+
+    for row in load_adobe_vendor_rows():
+        name = str(row.get("name") or "").strip()
+        pixel = str(row.get("official_pixel") or "").strip()
+        row_campaign = str(row.get("campaign") or "").strip()
+
+        if not name or not pixel:
+            continue
+
+        if not row_campaign:
+            unscoped[name] = pixel
+        elif campaign and norm_compare(row_campaign) == norm_compare(campaign):
+            scoped[name] = pixel
+
+    return {**unscoped, **scoped}
 
 
 def _evidence_value(evidence_line: str) -> str:
@@ -466,6 +483,7 @@ def reconcile_adobe_pixels(
     ts_result,
     placement_export,
     tag_inventory: TagInventory,
+    campaign: str = "",
 ) -> AdobePixelReconciliation:
     """
     Reconcile Adobe pixel requirements by worked Placement ID.
@@ -681,11 +699,12 @@ def reconcile_adobe_pixels(
             )
         )
 
-    return _flag_official_pixel_drift(result)
+    return _flag_official_pixel_drift(result, campaign)
 
 
 def _flag_official_pixel_drift(
     result: AdobePixelReconciliation,
+    campaign: str = "",
 ) -> AdobePixelReconciliation:
     """
     Downgrades a PASS to REVIEW when the evidence that made it pass
@@ -694,7 +713,7 @@ def _flag_official_pixel_drift(
     result untouched -- this only adds a narrower check on top of the
     existing presence check, it never overrides a FAIL/REVIEW/N/A.
     """
-    official_by_vendor = _official_pixels()
+    official_by_vendor = _official_pixels(campaign)
 
     if not official_by_vendor:
         return result
