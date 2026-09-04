@@ -16,4 +16,4 @@ call .venv\Scripts\activate.bat
 python -m pip install --quiet --upgrade pip
 python -m pip install --quiet -r requirements.txt
 
-streamlit run ui\app_v2.py --server.headless false
+python -m streamlit run ui\app_v2.py --server.headless false

@@ -20,6 +20,6 @@ echo Starting QA2. Your browser will open automatically.
 echo Keep this window open while you work - closing it stops QA2.
 echo.
 
-streamlit run ui\app_v2.py
+python -m streamlit run ui\app_v2.py
 
 pause
