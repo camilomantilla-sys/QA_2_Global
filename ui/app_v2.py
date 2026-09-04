@@ -1188,13 +1188,10 @@ with st.sidebar:
             value=None,
             key="qa2_record_impl_date",
         )
-        record_qa2_by = st.text_input(
-            "QA2 By", key="qa2_record_qa2_by"
-        )
-        record_qa2_date = st.date_input(
-            "QA2 Date",
-            value=None,
-            key="qa2_record_qa2_date",
+        st.caption(
+            "QA2 By / QA2 Date have moved -- fill those in the "
+            "QA2 Review section below the results, right where "
+            "you approve."
         )
         record_qa3_by = st.text_input(
             "QA3 By", key="qa2_record_qa3_by"
@@ -1931,6 +1928,24 @@ with tempfile.TemporaryDirectory(
             )
 
         # ----------------------------------------------------
+        # Who's doing this QA2 pass -- asked once, up front, right
+        # where it's used: stamps approvals below and gates the QA2
+        # Sign-off checkbox further down.
+        # ----------------------------------------------------
+
+        st.subheader("QA2 Review")
+
+        _qa2_by_cols = st.columns(2)
+        record_qa2_by = _qa2_by_cols[0].text_input(
+            "QA2 By", key="qa2_record_qa2_by"
+        )
+        record_qa2_date = _qa2_by_cols[1].date_input(
+            "QA2 Date",
+            value=None,
+            key="qa2_record_qa2_date",
+        )
+
+        # ----------------------------------------------------
         # Review approval: REVIEW -> PASS
         #
         # A REVIEW finding is a callout, not a blocker (e.g. the TS
@@ -2052,8 +2067,8 @@ with tempfile.TemporaryDirectory(
 
         if not record_qa2_by.strip():
             st.caption(
-                "Fill in \"QA2 By\" in the sidebar (Implementation "
-                "Record) to enable sign-off."
+                "Fill in \"QA2 By\" above (QA2 Review) to enable "
+                "sign-off."
             )
         elif qa2_signed_off:
             st.success(
