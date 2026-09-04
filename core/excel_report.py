@@ -154,7 +154,27 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         ),
         bold=True, size=12,
     )
-    row += 2
+    row += 1
+
+    signoff_label = (
+        f"QA2 Sign-off: Approved by {meta.qa2_by or 'QA2'}"
+        + (f" on {meta.qa2_date.isoformat()}" if meta.qa2_date else "")
+        if meta.qa2_signed_off
+        else "QA2 Sign-off: PENDING -- not yet approved by QA2"
+    )
+    ws.cell(row=row, column=1, value=signoff_label).font = Font(
+        color=STATUS_FONT_COLORS.get(
+            "PASS" if meta.qa2_signed_off else "REVIEW", WPP_INK
+        ),
+        bold=True, size=11,
+    )
+    row += 1
+    if meta.qa2_signoff_note:
+        ws.cell(row=row, column=1, value=meta.qa2_signoff_note).font = (
+            BODY_FONT
+        )
+        row += 1
+    row += 1
 
     info_rows = [
         ("Profile used", meta.profile_used),

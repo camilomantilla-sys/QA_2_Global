@@ -88,6 +88,12 @@ class ReportMeta:
     qa3_date: date | None = None
     notes: str = ""
 
+    # Mandatory QA2 sign-off -- separate from the automated verdict.
+    # Every campaign needs a human QA2 approval on record, even one
+    # the automated checks found no issues with.
+    qa2_signed_off: bool = False
+    qa2_signoff_note: str = ""
+
 
 def _styles():
     base = getSampleStyleSheet()
@@ -182,6 +188,37 @@ def _verdict_flowable(meta: ReportMeta, styles):
                 ("LEFTPADDING", (0, 0), (-1, -1), 14),
                 ("TOPPADDING", (0, 0), (-1, -1), 8),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return t
+
+
+def _signoff_flowable(meta: ReportMeta, styles):
+    if meta.qa2_signed_off:
+        color = HexColor("#15803D")
+        label = f"QA2 SIGN-OFF: Approved by {_esc(meta.qa2_by) or 'QA2'}"
+        if meta.qa2_date:
+            label += f" on {meta.qa2_date.strftime('%Y-%m-%d')}"
+    else:
+        color = HexColor("#D97706")
+        label = "QA2 SIGN-OFF: PENDING -- not yet approved by QA2"
+
+    lines = [f'<font color="{color.hexval()}"><b>{label}</b></font>']
+    if meta.qa2_signoff_note:
+        lines.append(_esc(meta.qa2_signoff_note))
+
+    para = Paragraph("<br/>".join(lines), styles["body"])
+    t = Table([[para]], colWidths=[170 * mm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.75, WPP_BORDER),
+                ("LINEBEFORE", (0, 0), (0, -1), 4, color),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
@@ -488,6 +525,8 @@ def build_pdf_report(
     story = []
     story += _header_flowables(meta, styles, logo_path)
     story.append(_verdict_flowable(meta, styles))
+    story.append(Spacer(1, 10))
+    story.append(_signoff_flowable(meta, styles))
     story.append(Spacer(1, 10))
     story.append(_info_flowable(meta, styles))
     story.append(Spacer(1, 10))

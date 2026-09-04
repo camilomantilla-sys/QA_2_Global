@@ -1811,6 +1811,43 @@ with tempfile.TemporaryDirectory(
 
         show_verdict(scorecard.verdict)
 
+        # ----------------------------------------------------
+        # QA2 sign-off gate -- separate from the automated verdict.
+        # Company policy: every campaign, PASSED or not, needs a
+        # human QA2 approval on record before it's considered done.
+        # ----------------------------------------------------
+
+        qa2_signoff_note = st.text_area(
+            "QA2 sign-off note (optional)",
+            key="qa2_signoff_note",
+            placeholder=(
+                "e.g. Reviewed placements, tags and pixels against "
+                "the TS -- approved for delivery."
+            ),
+        )
+        qa2_signed_off = st.checkbox(
+            "I reviewed this QA2 run and approve it"
+            + (f" -- {record_qa2_by}" if record_qa2_by.strip() else ""),
+            key="qa2_signoff_checkbox",
+            disabled=not record_qa2_by.strip(),
+        )
+
+        if not record_qa2_by.strip():
+            st.caption(
+                "Fill in \"QA2 By\" in the sidebar (Implementation "
+                "Record) to enable sign-off."
+            )
+        elif qa2_signed_off:
+            st.success(
+                f"✅ Approved by {record_qa2_by} -- this run is "
+                "cleared for delivery."
+            )
+        else:
+            st.warning(
+                "⏳ QA2 Sign-off pending -- every campaign needs this, "
+                "even when the automated result is PASSED."
+            )
+
         st.markdown(
             f"""
             <div class="profile-card">
@@ -2306,6 +2343,8 @@ with tempfile.TemporaryDirectory(
                 qa3_by=record_qa3_by,
                 qa3_date=record_qa3_date,
                 notes=record_notes,
+                qa2_signed_off=qa2_signed_off,
+                qa2_signoff_note=qa2_signoff_note,
             ),
             findings_df=findings_dataframe(
                 [
@@ -2385,6 +2424,8 @@ with tempfile.TemporaryDirectory(
                 qa3_by=record_qa3_by,
                 qa3_date=record_qa3_date,
                 notes=record_notes,
+                qa2_signed_off=qa2_signed_off,
+                qa2_signoff_note=qa2_signoff_note,
             ),
             findings_df=findings_dataframe(findings_buffer.findings),
             rules_df=rule_summary_dataframe(findings_buffer),
