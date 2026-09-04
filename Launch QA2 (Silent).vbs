@@ -6,11 +6,26 @@
 ' window to close since this one is silent.
 Option Explicit
 
-Dim fso, shell, scriptDir, venvPath
+Dim fso, shell, scriptDir, venvPath, launcherPath
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set shell = CreateObject("WScript.Shell")
+
+launcherPath = scriptDir & "\run_qa2_silent.bat"
+
+If Not fso.FileExists(launcherPath) Then
+    MsgBox "Can't find run_qa2_silent.bat next to this file." & vbCrLf & _
+           vbCrLf & _
+           "This launcher needs to stay inside the QA2 project " & _
+           "folder, alongside run_qa2_silent.bat, requirements.txt " & _
+           "and the ui/ folder -- if you copied or downloaded just " & _
+           "this .vbs file on its own (e.g. from a SharePoint link " & _
+           "to this single file), move it back into that folder, " & _
+           "or share/download the whole project folder instead.", _
+           16, "QA2 -- can't start"
+    WScript.Quit
+End If
 
 venvPath = scriptDir & "\.venv"
 
