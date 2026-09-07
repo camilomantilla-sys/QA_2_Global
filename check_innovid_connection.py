@@ -107,9 +107,13 @@ def main() -> int:
         print("Problems:")
         for error in result.errors:
             print(f"  - {error}")
-        # Anything below would be guesswork: the run already knows why
-        # it stopped, and adding "maybe the campaign ID is wrong" here
-        # only sends people looking in the wrong place.
+        print()
+
+    # Only stop here when nothing came back. A partial failure --
+    # placements read, some decision sets refused -- still has a
+    # report worth seeing, and hiding it behind the errors throws away
+    # the part that worked.
+    if result.errors and not result.placements:
         return 1
 
     if not result.placements:

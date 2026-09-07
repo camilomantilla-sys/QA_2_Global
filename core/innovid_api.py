@@ -68,6 +68,11 @@ SUMMARY_FIELDS = (
 SUMMARY_PAGE_SIZE = 500
 MAX_SUMMARY_PAGES = 40
 
+# When decision set lookups keep failing the same way, the next one
+# will too. Stopping keeps QA2 from firing dozens of doomed requests
+# at an internal API that rate limits.
+GIVE_UP_AFTER_FAILED_LOOKUPS = 3
+
 # A saved sign-in, so QA2 doesn't have to log in again each run.
 # Holds session cookies, which are as good as the password until they
 # expire -- gitignored, same as the credentials.
@@ -444,6 +449,37 @@ def _summary_url(campaign_id: str) -> str:
     )
 
 
+def _summarise_dset_failures(
+    failures: list[tuple[str, str]], attempted: int
+) -> list[str]:
+    """
+    Collapses per-decision-set failures into one line per kind of
+    failure, with a few example ids.
+
+    Fifty lines saying the same thing hide the one line that differs,
+    and the ids matter far less than the reason.
+    """
+    if not failures:
+        return []
+
+    by_reason: dict[str, list[str]] = {}
+    for dset_id, reason in failures:
+        # The id appears inside the message; strip it so the same
+        # failure on different ids groups together.
+        shape = reason.replace(str(dset_id), "{id}")
+        by_reason.setdefault(shape, []).append(dset_id)
+
+    messages = []
+    for shape, ids in sorted(by_reason.items(), key=lambda kv: -len(kv[1])):
+        examples = ", ".join(ids[:3])
+        more = f" (and {len(ids) - 3} more)" if len(ids) > 3 else ""
+        messages.append(
+            f"{len(ids)} of {attempted} decision set(s) could not be "
+            f"read. Ids: {examples}{more}. Reason: {shape}"
+        )
+    return messages
+
+
 def _dset_mismatch(dset: dict, asked_for: str, expected_name: str) -> str:
     """
     Describes how a decision set response fails to be the one asked
@@ -783,35 +819,80 @@ def fetch_campaign(
             # than trusted -- reading the wrong decision set would
             # hand QA2 another creative's flight dates, which is worse
             # than reading none.
-            wanted_dsets: dict[str, str] = {}
+            # Modern ids first: those are what this endpoint is for.
+            # Legacy ids are tried afterwards and give up early,
+            # because if the endpoint rejects the first few it will
+            # reject all of them, and firing fifty more doomed
+            # requests at a rate-limited internal API is rude and
+            # slow for no information.
+            modern: dict[str, str] = {}
+            legacy: dict[str, str] = {}
             for row in result.placements:
                 if wanted and row.placement_id not in wanted:
                     continue
-                for dset_id, dset_name in (
-                    (row.dtree_id, row.dtree_name),
-                    (row.legacy_dset_id, row.legacy_dset_name),
-                ):
-                    if dset_id:
-                        wanted_dsets.setdefault(dset_id, dset_name)
+                if row.dtree_id:
+                    modern.setdefault(row.dtree_id, row.dtree_name)
+                if row.legacy_dset_id:
+                    legacy.setdefault(row.legacy_dset_id, row.legacy_dset_name)
 
-            for dset_id in sorted(wanted_dsets):
+            # An id that exists in both places only needs asking once.
+            for dset_id in modern:
+                legacy.pop(dset_id, None)
+
+            wanted_dsets = dict(modern)
+            wanted_dsets.update(legacy)
+
+            # Failures are collected rather than appended one by one:
+            # a campaign whose decision sets all fail the same way
+            # produced fifty identical lines, which buries every other
+            # problem in the run.
+            failures: list[tuple[str, str]] = []
+            skipped_legacy = 0
+            legacy_shapes: set[str] = set()
+
+            order = sorted(modern) + sorted(legacy)
+            for index, dset_id in enumerate(order):
+                is_legacy = dset_id in legacy
+
+                if is_legacy and len(legacy_shapes) == 1 and len(failures) >= (
+                    GIVE_UP_AFTER_FAILED_LOOKUPS
+                ):
+                    skipped_legacy += 1
+                    continue
+
                 expected_name = wanted_dsets[dset_id]
                 try:
                     dset = _api_get_json(
                         page, _dset_url(dset_id), csrf_token["value"]
                     )
                 except Exception as exc:
-                    result.errors.append(
-                        f"Decision set {dset_id} could not be read: {exc}"
-                    )
+                    failures.append((dset_id, str(exc)))
+                    if is_legacy:
+                        legacy_shapes.add(str(exc).replace(dset_id, "{id}"))
                     continue
 
                 problem = _dset_mismatch(dset, dset_id, expected_name)
                 if problem:
-                    result.errors.append(problem)
+                    failures.append((dset_id, problem))
+                    if is_legacy:
+                        legacy_shapes.add(problem.replace(dset_id, "{id}"))
                     continue
 
                 result.creative_nodes.extend(parse_dset_response(dset))
+
+            for message in _summarise_dset_failures(failures, len(wanted_dsets)):
+                result.errors.append(message)
+
+            if skipped_legacy:
+                result.errors.append(
+                    f"Stopped after {GIVE_UP_AFTER_FAILED_LOOKUPS} "
+                    f"identical failures and skipped {skipped_legacy} "
+                    "more decision set(s). These ids come from "
+                    "decisionSetId, which this endpoint does not "
+                    "accept -- it reads the modern id "
+                    "(placementModernDtreeId), which this campaign's "
+                    "summary did not return."
+                )
 
         except InnovidAuthError as exc:
             result.errors.append(str(exc))
