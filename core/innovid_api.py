@@ -612,9 +612,12 @@ SAFE_QUERY_PARAMS = frozenset({
 
 # Hosts that only ever handle signing in. Nothing there tells QA2
 # anything about campaigns, and everything there is credential-shaped.
-AUTH_HOSTS = ("uam-login.mediaocean.com", "auth0.com")
+AUTH_HOSTS = ("uam-login.mediaocean.com", "auth0.com", "mediaocean.com")
 
-AUTH_PATHS = ("/oauth2/", "/login/oauth", "/authorize", "/uilogin")
+AUTH_PATHS = (
+    "/oauth2", "/oauth", "/authorize", "/uilogin", "/login?", "/signin",
+    "/saml", "/sso",
+)
 
 
 def redact_url(url: str) -> str:
@@ -631,13 +634,17 @@ def redact_url(url: str) -> str:
 
     Returns "" for anything that should not be recorded at all.
     """
-    if not url or _API_HOST not in url:
-        if any(host in url for host in AUTH_HOSTS):
-            return ""
-        if _API_HOST not in url:
-            return ""
-
-    if any(marker in url for marker in AUTH_PATHS):
+    # Flat and in order, deliberately. An earlier version nested the
+    # host check inside another condition and a sign-in URL still came
+    # through on a real run; nothing about a credential filter should
+    # depend on reading branching correctly.
+    if not url:
+        return ""
+    if any(host in url.lower() for host in AUTH_HOSTS):
+        return ""
+    if any(marker in url.lower() for marker in AUTH_PATHS):
+        return ""
+    if _API_HOST not in url:
         return ""
 
     base, _, query = url.partition("?")
@@ -650,8 +657,12 @@ def redact_url(url: str) -> str:
         if not sep:
             kept.append(name)
         elif name in SAFE_QUERY_PARAMS:
-            # Long id lists say nothing extra after the first few.
-            if len(value) > 80:
+            # `fields` is never truncated: which columns Innovid asks
+            # for is the entire reason for reading these URLs, and
+            # cutting it at 80 characters hid the answer on the first
+            # run that found it. Long id lists still get cut, since
+            # the hundredth id says nothing the first three didn't.
+            if name != "fields" and len(value) > 80:
                 value = value[:80] + "...(truncated)"
             kept.append(f"{name}={value}")
         else:

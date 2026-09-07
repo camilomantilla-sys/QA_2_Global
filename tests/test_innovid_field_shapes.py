@@ -377,6 +377,79 @@ def test_anything_off_innovid_is_ignored():
     assert redact_url("https://example.com/whatever?a=b") == ""
     assert redact_url("") == ""
 
+# Every sign-in address seen across two real --record runs, verbatim.
+# The mediaocean one survived a run it should not have, so it is here
+# in full rather than shortened.
+REAL_SIGN_IN_URLS = (
+    "https://uam-login.mediaocean.com/login?state=hKFo2SA5TjY3UzNMR3Rh"
+    "M2I3Q2pOWnZMcWNyQUR0dnFkeWJ2SaFupWxvZ2luo3RpZNkgMnVROWhpYXJwT2R0"
+    "dnptWXItNU5yTG5zeXRaUDlmczSjY2lk2SBZemVuYkxVNHkxRUl2UDFkWGRYTEtN"
+    "ZjJPbFpxVGh4aA&client=YzenbLU4y1EIvP1dXdXLKMf2OlZqThxh"
+    "&protocol=oauth2&audience=https%3A%2F%2Fapi.4cinsights.io%2F"
+    "&response_type=code&scope=openid%20profile%20email%20offline_access"
+    "&redirect_uri=https%3A%2F%2Fapi.flashtalking.net%2Flogin%2Foauth2"
+    "%2Fcode%2Fauth0&nonce=1P6sVS2fxHN5AngI206M0QNvQ2qSvDXBPdVrDyHTg9M",
+
+    "https://uam-login.mediaocean.com/authorize/?audience=https://api."
+    "4cinsights.io/&response_type=code&client_id=YzenbLU4y1EIvP1dXdXL"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D",
+
+    "https://api.flashtalking.net/login/oauth2/code/auth0"
+    "?code=7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D",
+
+    "https://api.flashtalking.net/oauth2/authorization/auth0",
+    "https://api.flashtalking.net/uilogin"
+    "?uri=https://campaign-manager.flashtalking.net",
+)
+
+
+def test_no_sign_in_address_from_a_real_run_survives():
+    for url in REAL_SIGN_IN_URLS:
+        assert redact_url(url) == "", url
+
+
+def test_no_credential_value_appears_in_any_redacted_output():
+    # Belt and braces: whatever the filter decides, these strings must
+    # not come out the other side.
+    secrets = (
+        "7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI",
+        "AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc",
+        "1P6sVS2fxHN5AngI206M0QNvQ2qSvDXBPdVrDyHTg9M",
+        "hKFo2SA5TjY3UzNMR3RhM2I3Q2pOWnZMcWNyQUR0dnFkeWJ2Sa",
+    )
+    for url in REAL_SIGN_IN_URLS:
+        out = redact_url(url)
+        for secret in secrets:
+            assert secret not in out
+
+
+def test_the_fields_list_is_never_truncated():
+    """
+    Which columns Innovid asks for is the answer being hunted, and
+    truncating it at 80 characters hid it on the run that found it.
+    """
+    fields = (
+        "dimensions,placementName,clickTag1,bookedUnits,startDate,"
+        "endDate,prismaPlacementId,verificationPartner,verificationStatus,"
+        "placementModernDtreeId,modernDtreeName,decisionSetId"
+    )
+    kept = redact_url(
+        "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+        f"?fields={fields}"
+    )
+
+    assert fields in kept
+    assert "truncated" not in kept
+
+
+def test_long_id_lists_are_still_truncated():
+    ids = ",".join(str(10964000 + n) for n in range(200))
+    kept = redact_url(
+        f"https://api.flashtalking.net/twr/v1/x?placementIds={ids}"
+    )
+    assert "truncated" in kept
+
 
 if __name__ == "__main__":
     passed = failed = 0
