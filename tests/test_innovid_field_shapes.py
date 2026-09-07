@@ -830,6 +830,99 @@ def test_a_placement_without_dates_is_unchecked_not_clean():
     assert found["checked"] == []
     assert len(found["unchecked"]) == 1
 
+# ---------------------------------------------------------------
+# `serving` names the creative a node runs.
+#
+# Found by counting node field names on a real run: id, serving and
+# startTimestamp on all 17 nodes, endTimestamp and weight on 11,
+# isDefault on 6. Its exact shape is unconfirmed, so all three
+# plausible ones are handled.
+# ---------------------------------------------------------------
+
+def test_a_node_names_its_creative_through_serving():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "Display 300x600", "servingMethod": "Rotation",
+        "nodes": [
+            {"id": 3, "serving": {"id": 6389150,
+                                  "name": "PC_40938_..._V2_300x600.jpg"},
+             "startTimestamp": "2026-09-14 00:00:00",
+             "endTimestamp": "2026-09-26 23:59:00", "weight": 1},
+        ],
+    })
+
+    assert nodes[0].node_id == "3", "the rotation slot"
+    assert nodes[0].creative_id == "6389150"
+    assert nodes[0].creative_name == "PC_40938_..._V2_300x600.jpg"
+
+
+def test_a_bare_serving_id_still_gives_a_creative():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "d", "servingMethod": "Rotation",
+        "nodes": [{"id": 3, "serving": 6389150,
+                   "startTimestamp": "2026-09-14 00:00:00"}],
+    })
+
+    assert nodes[0].creative_id == "6389150"
+    assert nodes[0].creative_name == "", "no name to invent"
+
+
+def test_a_missing_serving_is_not_an_error():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "d", "servingMethod": "Rotation",
+        "nodes": [{"id": 3, "startTimestamp": "2026-09-14 00:00:00"}],
+    })
+
+    assert nodes[0].creative_id == ""
+    assert nodes[0].creative_name == ""
+    assert nodes[0].node_id == "3"
+
+
+def test_the_same_creative_in_two_decision_sets_stays_distinct():
+    """
+    Camilo's case: two decision sets can share one creative. The
+    nodes must stay tied to their own decision set, or a finding
+    would be attributed to the wrong placement.
+    """
+    shared = {"id": 6389150, "name": "shared_300x600.jpg"}
+    first = parse_dset_response({
+        "id": 40316, "name": "Set A", "servingMethod": "Rotation",
+        "nodes": [{"id": 1, "serving": shared,
+                   "startTimestamp": "2026-09-14 00:00:00",
+                   "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+    })
+    second = parse_dset_response({
+        "id": 40320, "name": "Set B", "servingMethod": "Rotation",
+        "nodes": [{"id": 1, "serving": shared,
+                   "startTimestamp": "2026-09-27 00:00:00",
+                   "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+    })
+
+    result = InnovidFetchResult(
+        campaign_id="327957",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+            {"placementId": 2, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 2, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40320},
+        ]}),
+        creative_nodes=first + second,
+    )
+
+    # Same creative, same id, two schedules -- each stays with its own
+    # placement rather than both being seen everywhere.
+    assert len(result.nodes_for_placement("1")) == 1
+    assert len(result.nodes_for_placement("2")) == 1
+    assert result.nodes_for_placement("1")[0].dtree_id == "40316"
+    assert result.nodes_for_placement("2")[0].dtree_id == "40320"
+
+    # And only the one that genuinely starts late is a gap.
+    found = result.creative_flight_gaps()
+    assert [g["placement"].placement_id for g in found["gaps"]] == ["2"]
+
 
 if __name__ == "__main__":
     passed = failed = 0

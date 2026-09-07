@@ -177,6 +177,11 @@ class InnovidCreativeNode:
     dtree_name: str = ""
     node_id: str = ""
     creative_id: str = ""
+
+    # The filename, which is the only identifier a Traffic Sheet and
+    # Innovid have in common: Innovid's creative id doesn't exist
+    # until someone traffics the creative.
+    creative_name: str = ""
     start_timestamp: str = ""
     end_timestamp: str = ""
     weight: str = ""
@@ -619,6 +624,25 @@ def count_node_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
     return into
 
 
+def _serving_id(serving) -> str:
+    """
+    The creative id out of a node's `serving`.
+
+    Shape unconfirmed -- the field is present on every node, and
+    `defaultServing` next to it is {id, name, adType}, so `serving` is
+    read the same way while tolerating a bare id.
+    """
+    if isinstance(serving, dict):
+        return _text(serving.get("id"))
+    return _text(serving)
+
+
+def _serving_name(serving) -> str:
+    if isinstance(serving, dict):
+        return _text(serving.get("name") or serving.get("fileName"))
+    return ""
+
+
 def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
     """
     Turns a /dset/{id} response into one row per creative node.
@@ -652,14 +676,12 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
                 dtree_name=dtree_name,
                 # A node's `id` is the node, not the creative it
                 # serves -- node 1 with weight 1 is a rotation slot.
-                # The creative is named separately where the response
-                # says so, and the default node points at it.
+                # `serving` is what names the creative, on every node.
                 node_id=_text(node.get("id")),
-                creative_id=_text(
-                    node.get("creativeId")
-                    or node.get("servingId")
-                    or (default_creative if node.get("isDefault") else "")
+                creative_id=_serving_id(node.get("serving")) or _text(
+                    default_creative if node.get("isDefault") else ""
                 ),
+                creative_name=_serving_name(node.get("serving")),
                 start_timestamp=_text(node.get("startTimestamp")),
                 end_timestamp=_text(node.get("endTimestamp")),
                 weight=_text(node.get("weight")),

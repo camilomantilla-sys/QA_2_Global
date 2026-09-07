@@ -309,7 +309,7 @@ def main() -> int:
         print("\nFirst few decision-set nodes:")
         for node in result.creative_nodes[:5]:
             print(
-                f"  {node.creative_id or 'node ' + node.node_id}"
+                f"  {node.creative_name or node.creative_id or 'node ' + node.node_id}"
                 f"  {node.start_timestamp or '-'} -> "
                 f"{node.end_timestamp or '(ongoing)'}"
                 f"  | weight {node.weight or '-'}"
