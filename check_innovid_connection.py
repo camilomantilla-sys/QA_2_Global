@@ -346,9 +346,28 @@ def main() -> int:
         found = result.creative_flight_gaps()
         gaps = found["gaps"]
 
-        print(f"{linked} creative(s) across "
-              f"{len(result.placement_rows())} placement(s), compared "
-              "as a whole decision set rather than one at a time.\n")
+        checked = found["checked"]
+        unchecked = found["unchecked"]
+        all_placements = len(result.placement_rows())
+
+        print(f"{len(checked)} of {all_placements} placement(s) were "
+              "checked, comparing each decision set's creatives as a "
+              "whole rather than one at a time.")
+
+        if unchecked:
+            # Said before the verdict, so a clean result can never be
+            # read as covering placements that were never examined.
+            print(f"\n{len(unchecked)} placement(s) could NOT be "
+                  "checked -- treat these as unverified:")
+            reasons: dict[str, int] = {}
+            for row, why in unchecked:
+                reasons[why] = reasons.get(why, 0) + 1
+            for why, count in sorted(reasons.items(), key=lambda kv: -kv[1]):
+                print(f"  {count} -- {why}")
+            for row, why in unchecked[:5]:
+                print(f"    {row.placement_id}  {row.start_date} -> "
+                      f"{row.end_date or '(ongoing)'}")
+        print()
 
         if gaps:
             print(f"{len(gaps)} GAP(S) -- days the placement is live "
@@ -367,9 +386,12 @@ def main() -> int:
                 )
             if len(gaps) > 15:
                 print(f"  ... and {len(gaps) - 15} more")
+        elif checked:
+            print(f"No gaps in those {len(checked)}: some creative is "
+                  "scheduled for every day of the flight.")
         else:
-            print("No gaps: in every placement, some creative is "
-                  "scheduled for every day of its flight.")
+            print("Nothing was checked, so nothing can be said about "
+                  "gaps.")
 
         if found["default_only"]:
             print(f"\n{len(found['default_only'])} placement(s) have "

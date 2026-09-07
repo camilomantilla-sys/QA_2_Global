@@ -776,6 +776,60 @@ def test_unreadable_placement_dates_are_skipped_not_guessed():
     found = _result_for(("", ""), SEQUENTIAL)
     assert found["gaps"] == []
 
+def test_a_placement_with_no_decision_set_is_reported_as_unchecked():
+    """
+    The reassurance trap, one level up.
+
+    A placement whose decision set could not be read has no nodes, and
+    skipping it quietly turns "no gaps found" into a pass over
+    placements nobody looked at.
+    """
+    result = InnovidFetchResult(
+        campaign_id="327957",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 2, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+            # Placement 2's decision set was never fetched.
+        ]}),
+        creative_nodes=parse_dset_response({
+            "id": 40316, "name": "Display 300x600",
+            "servingMethod": "Weighted Rotation",
+            "nodes": [{"id": 3, "startTimestamp": "2026-09-14 00:00:00",
+                       "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+        }),
+    )
+
+    found = result.creative_flight_gaps()
+
+    assert found["gaps"] == []
+    assert [p.placement_id for p in found["checked"]] == ["1"]
+    assert [p.placement_id for p, _ in found["unchecked"]] == ["2"]
+
+
+def test_a_placement_without_dates_is_unchecked_not_clean():
+    result = InnovidFetchResult(
+        campaign_id="x",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "", "endDate": ""},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+        ]}),
+        creative_nodes=parse_dset_response({
+            "id": 40316, "name": "d", "servingMethod": "Rotation",
+            "nodes": [{"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+                       "endTimestamp": None, "weight": 1}],
+        }),
+    )
+
+    found = result.creative_flight_gaps()
+    assert found["checked"] == []
+    assert len(found["unchecked"]) == 1
+
 
 if __name__ == "__main__":
     passed = failed = 0

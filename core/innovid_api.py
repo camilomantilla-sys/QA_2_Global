@@ -265,16 +265,25 @@ class InnovidFetchResult:
         gaps: list[dict] = []
         overflow: list[dict] = []
         default_only: list[InnovidPlacement] = []
+        checked: list[InnovidPlacement] = []
+        unchecked: list[tuple[InnovidPlacement, str]] = []
 
         for placement in self.placement_rows():
             p_start = _as_date(placement.start_date)
             p_end = _as_date(placement.end_date)
             if not p_start or not p_end or p_end < p_start:
+                unchecked.append((placement, "no readable flight dates"))
                 continue
 
             nodes = self.nodes_for_placement(placement.placement_id)
             if not nodes:
+                # Skipping this quietly is how "no gaps found" comes
+                # to mean "no gaps found in the ones I looked at",
+                # which reads as a pass over unexamined placements.
+                unchecked.append((placement, "no decision set could be read"))
                 continue
+
+            checked.append(placement)
 
             has_default = any(n.is_default for n in nodes)
             windows = []
@@ -326,6 +335,8 @@ class InnovidFetchResult:
             "gaps": gaps,
             "overflow": overflow,
             "default_only": default_only,
+            "checked": checked,
+            "unchecked": unchecked,
         }
 
     def linked_node_count(self) -> int:
