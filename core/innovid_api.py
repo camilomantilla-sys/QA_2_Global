@@ -444,6 +444,26 @@ def establish_session(
     return str(target)
 
 
+def _wait_for_csrf(page, captured: dict, timeout_ms: int) -> bool:
+    """
+    Waits for the app to make an API call of its own, which is where
+    the CSRF token comes from.
+
+    Not fatal when it never arrives: the session cookie alone is
+    sometimes enough, and a real HTTP status from the API says far
+    more than a guess made here would.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if captured.get("value"):
+            return True
+        try:
+            page.wait_for_timeout(250)
+        except Exception:
+            return False
+    return False
+
+
 def _looks_like_sign_in(page) -> bool:
     """
     True when the browser is showing a sign-in rather than the app --
@@ -563,9 +583,15 @@ def fetch_campaign(
 
             # Visiting the campaign makes the app issue its own API
             # calls, which is what surfaces the CSRF token.
+            #
+            # Deliberately not waiting for the network to go quiet:
+            # the campaign manager polls, and when Innovid is having
+            # trouble it retries in a loop that never goes quiet at
+            # all. That turned a bad day at Innovid into a 60-second
+            # timeout with nothing useful said about it.
             page.goto(
                 f"{APP_ORIGIN}/campaign/{campaign_id}",
-                wait_until="networkidle",
+                wait_until="domcontentloaded",
                 timeout=timeout_ms,
             )
 
@@ -573,6 +599,10 @@ def fetch_campaign(
             # campaign page quietly becomes a login page. Without this
             # check the run would report an empty campaign instead of
             # an expired sign-in.
+            # The token rides on the app's own API calls, so it only
+            # exists once the page has made one.
+            _wait_for_csrf(page, csrf_token, timeout_ms=min(timeout_ms, 30_000))
+
             if using_saved_session and _looks_like_sign_in(page):
                 raise InnovidAuthError(
                     "The saved Innovid session has expired. Run the "
@@ -917,6 +947,16 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
 
     status = outcome.get("status")
     text = outcome.get("text") or ""
+
+    if isinstance(status, int) and 500 <= status < 600:
+        # Worth separating out: nothing about QA2 or the sign-in can
+        # fix this one, and Innovid does have bad days.
+        raise RuntimeError(
+            f"Innovid returned a server error (HTTP {status}). That is "
+            "a problem on their side, not with the sign-in or with "
+            "QA2 -- if their own campaign manager is also showing "
+            "errors, the thing to do is wait and try later."
+        )
 
     if status != 200:
         raise RuntimeError(f"{url} returned HTTP {status}")
