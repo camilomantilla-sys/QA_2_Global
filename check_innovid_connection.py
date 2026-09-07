@@ -292,53 +292,70 @@ def main() -> int:
         print("\nFirst few decision-set nodes:")
         for node in result.creative_nodes[:5]:
             print(
-                f"  creative {node.creative_id}"
+                f"  {node.creative_id or 'node ' + node.node_id}"
                 f"  {node.start_timestamp or '-'} -> "
                 f"{node.end_timestamp or '(ongoing)'}"
                 f"  | weight {node.weight or '-'}"
                 f"{'  | DEFAULT' if node.is_default else ''}"
             )
 
-    # Creative flight dates are NOT in the summary. The creative rows
-    # repeat their placement's dates, so comparing them here would
-    # pass every time -- including on the very case this is for.
+    # Creative flight dates are NOT in the summary -- the creative
+    # rows repeat their placement's dates. They only exist inside the
+    # decision set, so this section reports on what was read there.
     print()
-    if result.creative_nodes:
+    linked = result.linked_node_count()
+
+    if not result.creative_nodes:
+        modern = sum(1 for r in result.placements if r.dtree_id)
+        by_id = sum(1 for r in result.placements if r.dset_id)
+        print("Creative flight dates were NOT checked -- no decision "
+              "set could be opened.")
+        print(f"  Rows naming a modern dtree id: {modern}")
+        print(f"  Rows naming a decisionSetId:   {by_id}")
+    elif not linked:
+        # The dangerous case. Saying "no differences found" here would
+        # be a pass over a comparison that never happened.
+        print(
+            f"{len(result.creative_nodes)} creative node(s) were read, "
+            "but NONE could be tied back to a placement, so NO dates "
+            "were compared."
+        )
+        print(
+            "  This is not a clean result -- treat it as unchecked. "
+            "The decision sets and the placements are not naming each "
+            "other with the same id."
+        )
+    else:
         mismatches = []
         for row in placement_level:
             for node in result.nodes_for_placement(row.placement_id):
-                if node.is_default or not node.start_timestamp or not row.start_date:
+                if node.is_default or not node.start_timestamp:
+                    continue
+                if not row.start_date:
                     continue
                 if node.start_timestamp[:10] != row.start_date[:10]:
                     mismatches.append((row, node))
+
+        print(f"{linked} creative(s) compared against their placement.")
         if mismatches:
-            print(f"{len(mismatches)} creative(s) starting on a different "
-                  "day than their placement:")
+            print(f"\n{len(mismatches)} start on a different day:")
             for row, node in mismatches[:15]:
+                who = node.creative_id or f"node {node.node_id}"
                 print(
-                    f"  placement {row.placement_id} starts {row.start_date}"
-                    f"  ->  creative {node.creative_id} starts "
+                    f"  placement {row.placement_id} starts "
+                    f"{row.start_date}  ->  creative {who} starts "
                     f"{node.start_timestamp[:10]}"
                 )
         else:
-            print("Every creative in the decision sets read starts the "
-                  "same day as its placement.")
-    else:
-        modern = sum(1 for r in result.placements if r.dtree_id)
-        legacy = sum(1 for r in result.placements if r.dset_id)
-        print("Creative flight dates were NOT checked.")
-        print(
-            "  They live inside the decision set, not in the summary "
-            "-- the dates on the creative rows above are the "
-            "placement's, repeated."
-        )
-        print(f"  Modern decision sets in this campaign: {modern} row(s)")
-        print(f"  Legacy decision sets in this campaign: {legacy} row(s)")
-        if legacy and not modern:
-            print(
-                "  Only legacy decision sets here, and QA2 does not "
-                "know that endpoint yet, so nothing could be opened."
-            )
+            print("None of them starts on a different day than its "
+                  "placement.")
+
+    # Decision sets that were read but belong to no placement QA2
+    # knows about are worth naming: they are the gap, not a success.
+    orphans = len(result.creative_nodes) - linked
+    if result.creative_nodes and orphans > 0:
+        print(f"\n{orphans} creative node(s) came from decision sets "
+              "that no placement row claims.")
 
     print("\nConnection works.")
     return 0

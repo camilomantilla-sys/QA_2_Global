@@ -22,6 +22,7 @@ from core.innovid_api import (  # noqa: E402
     redact_url,
     count_filled_fields,
     count_levels,
+    InnovidCreativeNode,
     parse_dset_response,
     parse_summary_response,
     summary_field_names,
@@ -553,6 +554,87 @@ def test_a_row_with_only_a_link_id_yields_no_decision_set():
 
     assert row.dset_id == ""
     assert row.dset_link_id == "73088"
+
+# ---------------------------------------------------------------
+# Linking decision sets back to placements.
+#
+# The run that first read decision sets reported "every creative
+# starts the same day as its placement" while linking nothing at all:
+# nodes were matched on the modern dtree id, which that campaign does
+# not have. An empty comparison read as a clean pass.
+# ---------------------------------------------------------------
+
+LINK_ROWS = {"items": [
+    {"placementId": 10988717, "level": "PLACEMENT",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
+     "decisionSetId": 38808, "decisionSetName": "Frosty GM Display 320x50",
+     "placementDecisionSetId": 73087},
+]}
+
+DSET_WITH_LATE_CREATIVE = {
+    "id": 38808,
+    "name": "Frosty GM Display 320x50",
+    "servingMethod": "Rotation",
+    "defaultServing": {"id": 6312751, "name": "320x50.jpg"},
+    "nodes": [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": None, "weight": 1},
+        {"id": 6312751, "startTimestamp": "2026-07-21 10:02:11",
+         "endTimestamp": None, "isDefault": True},
+    ],
+}
+
+
+def _linked_result():
+    return InnovidFetchResult(
+        campaign_id="323492",
+        placements=parse_summary_response(LINK_ROWS),
+        creative_nodes=parse_dset_response(DSET_WITH_LATE_CREATIVE),
+    )
+
+
+def test_nodes_link_by_decision_set_id_not_only_the_modern_id():
+    result = _linked_result()
+
+    nodes = result.nodes_for_placement("10988717")
+    assert len(nodes) == 2, "the campaign has no modern dtree id at all"
+
+
+def test_the_late_creative_is_found_once_linking_works():
+    result = _linked_result()
+
+    late = [
+        n for n in result.nodes_for_placement("10988717")
+        if not n.is_default and n.start_timestamp.startswith("2026-07-24")
+    ]
+    assert late, "20 July placement, 24 July creative"
+
+
+def test_linked_count_distinguishes_no_differences_from_no_comparison():
+    result = _linked_result()
+    assert result.linked_node_count() == 2
+
+    # Same nodes, but nothing claims them.
+    orphaned = InnovidFetchResult(
+        campaign_id="323492",
+        placements=parse_summary_response({"items": [
+            {"placementId": 999, "level": "PLACEMENT",
+             "startDate": "2026-07-20"},
+        ]}),
+        creative_nodes=parse_dset_response(DSET_WITH_LATE_CREATIVE),
+    )
+    assert orphaned.creative_nodes, "nodes were read"
+    assert orphaned.linked_node_count() == 0, "but none belong to a placement"
+
+
+def test_a_node_id_is_not_mistaken_for_a_creative_id():
+    # Node 1 with weight 1 is a rotation slot; 6312751 is the file.
+    nodes = parse_dset_response(DSET_WITH_LATE_CREATIVE)
+
+    assert nodes[0].node_id == "1"
+    assert nodes[0].creative_id == "", "no creative named on that node"
+    assert nodes[1].creative_id == "6312751", "the default one names it"
 
 
 if __name__ == "__main__":

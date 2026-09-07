@@ -175,6 +175,7 @@ class InnovidCreativeNode:
 
     dtree_id: str = ""
     dtree_name: str = ""
+    node_id: str = ""
     creative_id: str = ""
     start_timestamp: str = ""
     end_timestamp: str = ""
@@ -214,12 +215,42 @@ class InnovidFetchResult:
     levels: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
-        dtree_ids = {
-            p.dtree_id
-            for p in self.placements
-            if p.placement_id == str(placement_id).strip() and p.dtree_id
-        }
-        return [n for n in self.creative_nodes if n.dtree_id in dtree_ids]
+        """
+        The creative nodes belonging to one placement.
+
+        Matches on every id a decision set can be named by. Keying on
+        the modern id alone linked nothing at all in a campaign that
+        has none -- and a comparison over nothing reports that
+        everything agrees, which is the failure this whole client
+        exists to prevent.
+        """
+        wanted = str(placement_id).strip()
+        dset_ids = set()
+        for row in self.placements:
+            if row.placement_id != wanted:
+                continue
+            for candidate in (row.dtree_id, row.dset_id):
+                if candidate:
+                    dset_ids.add(candidate)
+        return [n for n in self.creative_nodes if n.dtree_id in dset_ids]
+
+    def linked_node_count(self) -> int:
+        """
+        How many creative nodes could actually be tied to a placement.
+
+        Reported alongside any date comparison, because "no
+        differences found" and "nothing was compared" look identical
+        otherwise.
+        """
+        # Counted per distinct placement: the same placement appears
+        # as several rows (its own, plus one per creative), and
+        # counting rows would multiply every node by that.
+        return sum(
+            len(self.nodes_for_placement(placement_id))
+            for placement_id in {
+                r.placement_id for r in self.placements if r.placement_id
+            }
+        )
 
     def placement_rows(self) -> list[InnovidPlacement]:
         """The placement-level rows only."""
@@ -467,6 +498,10 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
     dtree_id = _text(payload.get("id"))
     dtree_name = _text(payload.get("name"))
     serving_method = _text(payload.get("servingMethod"))
+    default_creative = ""
+    default_serving = payload.get("defaultServing")
+    if isinstance(default_serving, dict):
+        default_creative = _text(default_serving.get("id"))
 
     nodes = payload.get("nodes")
     if not isinstance(nodes, list):
@@ -480,7 +515,16 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
             InnovidCreativeNode(
                 dtree_id=dtree_id,
                 dtree_name=dtree_name,
-                creative_id=_text(node.get("id")),
+                # A node's `id` is the node, not the creative it
+                # serves -- node 1 with weight 1 is a rotation slot.
+                # The creative is named separately where the response
+                # says so, and the default node points at it.
+                node_id=_text(node.get("id")),
+                creative_id=_text(
+                    node.get("creativeId")
+                    or node.get("servingId")
+                    or (default_creative if node.get("isDefault") else "")
+                ),
                 start_timestamp=_text(node.get("startTimestamp")),
                 end_timestamp=_text(node.get("endTimestamp")),
                 weight=_text(node.get("weight")),
