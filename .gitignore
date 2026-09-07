@@ -71,3 +71,6 @@ current_disqo_function.txt
 tag_inventory_coverage*.txt
 *_integration_context.txt
 *_requirements.txt
+
+# Innovid credentials -- never leaves the machine running QA2
+config/innovid_credentials.env
