@@ -32,14 +32,71 @@ from reportlab.platypus import (
 
 PAGE_W, PAGE_H = letter
 
-WPP_INDIGO = HexColor("#4B5EEA")
-WPP_INDIGO_DARK = HexColor("#2C36A8")
-WPP_CYAN = HexColor("#17B4DE")
-WPP_MINT = HexColor("#0FA97C")
-WPP_INK = HexColor("#171B2E")
-WPP_MUTED = HexColor("#64748B")
-WPP_BORDER = HexColor("#E2E6FB")
-WPP_BG = HexColor("#F5F7FD")
+FONT_DIR = Path(__file__).resolve().parents[1] / "ui" / "assets" / "fonts"
+
+
+def _register_brand_fonts() -> tuple[str, str]:
+    """
+    Registers the WPP typeface with ReportLab and returns the
+    (regular, bold) font names to use. ReportLab can't read .woff2,
+    so each one is converted to TTF in memory first.
+
+    Falls back to Helvetica whenever the fonts aren't shipped (or
+    fontTools isn't installed), so the report always renders.
+    """
+    regular = FONT_DIR / "WPP-Regular.woff2"
+    bold = FONT_DIR / "WPP-Bold.woff2"
+
+    if not (regular.exists() and bold.exists()):
+        return "Helvetica", "Helvetica-Bold"
+
+    try:
+        from fontTools.ttLib import TTFont as _FTFont
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont as _RLFont
+
+        for path, name in ((regular, "WPP"), (bold, "WPP-Bold")):
+            buffer = io.BytesIO()
+            font = _FTFont(str(path))
+            font.flavor = None
+            font.save(buffer)
+            buffer.seek(0)
+            pdfmetrics.registerFont(_RLFont(name, buffer))
+
+        pdfmetrics.registerFontFamily(
+            "WPP", normal="WPP", bold="WPP-Bold",
+            italic="WPP", boldItalic="WPP-Bold",
+        )
+        return "WPP", "WPP-Bold"
+    except Exception:
+        # A malformed or unreadable font file must never take the
+        # whole report down -- Helvetica is a perfectly good report.
+        return "Helvetica", "Helvetica-Bold"
+
+
+BODY_FONT, BOLD_FONT = _register_brand_fonts()
+
+# WPP Media Brand Guidelines 2025 v1.0 -- primary palette (WPP Navy,
+# Lime Green, Pantone 629, White) plus the secondary accents. Navy and
+# white are the brand's neutrals; lime is the signature pop.
+WPP_NAVY = HexColor("#000050")
+WPP_LIME = HexColor("#B0F467")
+WPP_PANTONE_629 = HexColor("#93DFE3")
+WPP_CORNFLOWER = HexColor("#5465FF")
+WPP_PERIWINKLE = HexColor("#788BFF")
+WPP_TEAL = HexColor("#00DBEE")
+
+WPP_INDIGO = WPP_CORNFLOWER
+WPP_INDIGO_DARK = WPP_NAVY
+WPP_CYAN = WPP_TEAL
+WPP_INK = WPP_NAVY
+WPP_MUTED = HexColor("#6B7194")
+WPP_BORDER = HexColor("#DDE0F0")
+WPP_BG = HexColor("#F6F8FC")
+
+# Status colours stay semantic (a failure has to read as a failure),
+# just tuned to sit next to the brand palette.
+WPP_MINT = HexColor("#0E9A6E")
 
 STATUS_COLORS = {
     "PASS": WPP_MINT,
@@ -88,11 +145,9 @@ class ReportMeta:
     qa3_date: date | None = None
     notes: str = ""
 
-    # Mandatory QA2 sign-off -- separate from the automated verdict.
-    # Every campaign needs a human QA2 approval on record, even one
-    # the automated checks found no issues with.
-    qa2_signed_off: bool = False
-    qa2_signoff_note: str = ""
+    # QA2 approval is recorded on the delivered Excel itself (edited
+    # in SharePoint), not in the app -- these reports just carry the
+    # line QA2 fills in.
 
 
 def _styles():
@@ -100,31 +155,31 @@ def _styles():
     return {
         "title": ParagraphStyle(
             "QA2Title", parent=base["Title"], textColor=colors.white,
-            fontSize=20, leading=24, alignment=0,
+            fontSize=20, leading=24, alignment=0, fontName=BOLD_FONT,
         ),
         "subtitle": ParagraphStyle(
             "QA2Subtitle", parent=base["Normal"], textColor=colors.white,
-            fontSize=9.5, leading=13, alignment=0,
+            fontSize=9.5, leading=13, alignment=0, fontName=BODY_FONT,
         ),
         "h2": ParagraphStyle(
             "QA2H2", parent=base["Heading2"], textColor=WPP_INK,
-            fontSize=13, spaceBefore=14, spaceAfter=6,
+            fontSize=13, spaceBefore=14, spaceAfter=6, fontName=BOLD_FONT,
         ),
         "body": ParagraphStyle(
             "QA2Body", parent=base["Normal"], textColor=WPP_INK,
-            fontSize=9, leading=13,
+            fontSize=9, leading=13, fontName=BODY_FONT,
         ),
         "muted": ParagraphStyle(
             "QA2Muted", parent=base["Normal"], textColor=WPP_MUTED,
-            fontSize=8, leading=11,
+            fontSize=8, leading=11, fontName=BODY_FONT,
         ),
         "cell": ParagraphStyle(
             "QA2Cell", parent=base["Normal"], textColor=WPP_INK,
-            fontSize=7.6, leading=10,
+            fontSize=7.6, leading=10, fontName=BODY_FONT,
         ),
         "cell_head": ParagraphStyle(
             "QA2CellHead", parent=base["Normal"], textColor=colors.white,
-            fontSize=7.8, leading=10, fontName="Helvetica-Bold",
+            fontSize=7.8, leading=10, fontName=BOLD_FONT,
         ),
     }
 
@@ -195,18 +250,11 @@ def _verdict_flowable(meta: ReportMeta, styles):
 
 
 def _signoff_flowable(meta: ReportMeta, styles):
-    if meta.qa2_signed_off:
-        color = HexColor("#15803D")
-        label = f"QA2 SIGN-OFF: Approved by {_esc(meta.qa2_by) or 'QA2'}"
-        if meta.qa2_date:
-            label += f" on {meta.qa2_date.strftime('%Y-%m-%d')}"
-    else:
-        color = HexColor("#D97706")
-        label = "QA2 SIGN-OFF: PENDING -- not yet approved by QA2"
-
-    lines = [f'<font color="{color.hexval()}"><b>{label}</b></font>']
-    if meta.qa2_signoff_note:
-        lines.append(_esc(meta.qa2_signoff_note))
+    color = HexColor("#D97706")
+    lines = [
+        f'<font color="{color.hexval()}"><b>QA2 APPROVAL:</b></font> '
+        f"{_blank(meta.qa2_by, 30)} &mdash; {_blank_date(meta.qa2_date)}"
+    ]
 
     para = Paragraph("<br/>".join(lines), styles["body"])
     t = Table([[para]], colWidths=[170 * mm])
@@ -354,7 +402,7 @@ def _metrics_flowable(meta: ReportMeta, styles):
     for label, value in items:
         cell_style = ParagraphStyle(
             "metricValue", parent=styles["body"], fontSize=15,
-            fontName="Helvetica-Bold", textColor=WPP_INDIGO_DARK,
+            fontName=BOLD_FONT, textColor=WPP_INDIGO_DARK,
         )
         cells.append(
             [
@@ -485,7 +533,7 @@ def _evidence_flowables(
 
 def _footer(canvas, doc):
     canvas.saveState()
-    canvas.setFont("Helvetica", 7.5)
+    canvas.setFont(BODY_FONT, 7.5)
     canvas.setFillColor(WPP_MUTED)
     canvas.drawString(
         20 * mm, 10 * mm, "WPP Media · Innovid QA2 Automation"

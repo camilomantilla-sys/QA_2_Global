@@ -266,8 +266,12 @@ def _vendor_to_dict(vendor: Vendor) -> dict:
 
 def _dict_to_vendor(data: dict) -> Vendor:
     official_pixel = str(data.get("official_pixel") or "").strip()
+    name = str(data.get("name") or "").strip()
     host_terms = tuple(
         str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()
+    )
+    ts_terms = tuple(
+        str(t).strip() for t in (data.get("ts_terms") or []) if str(t).strip()
     )
 
     if not host_terms and official_pixel:
@@ -277,10 +281,17 @@ def _dict_to_vendor(data: dict) -> Vendor:
         if derived_host:
             host_terms = (derived_host,)
 
+    if not ts_terms and name:
+        # Ni ts_terms: el nombre del vendor es el termino que se busca
+        # en "Vendors / Pixels" de la TS. Asi la tabla editable solo
+        # necesita mostrar Vendor, y una fila nueva funciona sin que
+        # nadie llene columnas tecnicas.
+        ts_terms = (name.casefold(),)
+
     return Vendor(
         account=str(data.get("account") or "").strip(),
-        name=str(data.get("name") or "").strip(),
-        ts_terms=tuple(str(t).strip() for t in (data.get("ts_terms") or []) if str(t).strip()),
+        name=name,
+        ts_terms=ts_terms,
         host_terms=host_terms,
         column=str(data.get("column") or IMPRESSION).strip(),
         formats=frozenset(

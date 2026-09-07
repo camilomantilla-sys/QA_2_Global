@@ -19,11 +19,17 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from core.pdf_report import ReportMeta
 
-WPP_INDIGO = "4B5EEA"
-WPP_INDIGO_DARK = "2C36A8"
-WPP_INK = "171B2E"
-WPP_MUTED = "64748B"
-WPP_BG = "F5F7FD"
+# WPP Media Brand Guidelines 2025 v1.0 (openpyxl wants RRGGBB, no #).
+WPP_NAVY = "000050"
+WPP_LIME = "B0F467"
+WPP_PANTONE_629 = "93DFE3"
+WPP_CORNFLOWER = "5465FF"
+
+WPP_INDIGO = WPP_CORNFLOWER
+WPP_INDIGO_DARK = WPP_NAVY
+WPP_INK = WPP_NAVY
+WPP_MUTED = "6B7194"
+WPP_BG = "F6F8FC"
 
 STATUS_FILLS = {
     "PASS": "D9F7EC",
@@ -156,44 +162,39 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
     )
     row += 1
 
-    signoff_label = (
-        f"QA2 Sign-off: Approved by {meta.qa2_by or 'QA2'}"
-        + (f" on {meta.qa2_date.isoformat()}" if meta.qa2_date else "")
-        if meta.qa2_signed_off
-        else "QA2 Sign-off: PENDING"
+    # QA2 approval lives here, on the delivered file: QA2 edits this
+    # cell in SharePoint/Excel Web and that edit is the record.
+    signoff_cell = ws.cell(
+        row=row, column=1,
+        value=(
+            f"QA2 Approval: {meta.qa2_by}"
+            + (f" -- {meta.qa2_date.isoformat()}" if meta.qa2_date else "")
+            if meta.qa2_by
+            else "QA2 Approval: pending -- edit this cell to sign off"
+        ),
     )
-    signoff_cell = ws.cell(row=row, column=1, value=signoff_label)
     signoff_cell.font = Font(
         color=STATUS_FONT_COLORS.get(
-            "PASS" if meta.qa2_signed_off else "REVIEW", WPP_INK
+            "PASS" if meta.qa2_by else "REVIEW", WPP_INK
         ),
         bold=True, size=11,
     )
     signoff_cell.fill = PatternFill(
         "solid",
-        fgColor=STATUS_FILLS["PASS" if meta.qa2_signed_off else "REVIEW"],
+        fgColor=STATUS_FILLS["PASS" if meta.qa2_by else "REVIEW"],
     )
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
     row += 1
 
-    if not meta.qa2_signed_off:
-        ws.cell(
-            row=row, column=1,
-            value=(
-                "This is the record of QA2 approval for this campaign "
-                "-- to approve, edit the cell above directly here in "
-                "SharePoint/Excel Web, e.g. \"QA2 Sign-off: Approved "
-                "by Camilo Mantilla on 2026-09-05\"."
-            ),
-        ).font = Font(color=WPP_MUTED, italic=True, size=9)
-        row += 1
-
-    if meta.qa2_signoff_note:
-        ws.cell(row=row, column=1, value=meta.qa2_signoff_note).font = (
-            BODY_FONT
-        )
-        row += 1
-    row += 1
+    ws.cell(
+        row=row, column=1,
+        value=(
+            "This cell is the record of QA2 approval for this campaign "
+            "-- confirm or update it directly here in SharePoint/Excel "
+            "Web, e.g. \"QA2 Approval: Camilo Mantilla -- 2026-09-05\"."
+        ),
+    ).font = Font(color=WPP_MUTED, italic=True, size=9)
+    row += 2
 
     info_rows = [
         ("Profile used", meta.profile_used),

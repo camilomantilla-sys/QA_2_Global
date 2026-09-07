@@ -234,46 +234,64 @@ def cached_parse_dv_tags(file_bytes: bytes, file_name: str):
         return parse_dv_tags(path)
 
 
-def roster_pick_selector(label: str, account: str, target_key: str) -> None:
+OTHER_PERSON = "Other / type a name"
+
+
+def person_selector(label: str, account: str, state_key: str) -> str:
     """
-    A small "pick from the team roster" selectbox that copies its
-    choice into another widget's value (target_key) instead of being
-    the field itself -- so Implemented By / QA2 By / QA3 By stay the
-    same plain text_input everywhere else (ReportMeta, session
-    bundles, review-approval stamping) and this is purely additive.
+    Dropdown of who did this, straight from "Team by account" -- so
+    nobody has to type a teammate's name by hand. Scoped to the picked
+    account (plus Support); with no account picked yet it offers
+    everyone on the roster rather than showing nothing.
+
+    Returns the chosen name, and mirrors it into session_state under
+    `state_key` so session bundles can pre-fill it by name.
     """
-    if not account:
-        st.caption(
-            f"{label}: pick an Account / Campaign above to see "
-            "quick-pick suggestions from that team's roster."
-        )
-        return
+    roster = load_roster()
 
-    names = names_for_account(load_roster(), account)
-    if not names:
-        st.caption(
-            f"{label}: no one's listed for {account} yet in "
-            "\"Team by account\" above."
-        )
-        return
+    if account:
+        names = names_for_account(roster, account)
+    else:
+        names = []
+        for team_account in TEAM_ACCOUNTS:
+            for name in roster.get(team_account, []):
+                if name not in names:
+                    names.append(name)
 
-    pick_key = f"{target_key}_pick"
-    options = [""] + names
-    if st.session_state.get(pick_key) not in options:
-        st.session_state[pick_key] = ""
+    options = [""] + names + [OTHER_PERSON]
+    preset = str(st.session_state.get(state_key) or "").strip()
 
-    def _apply_pick():
-        picked = st.session_state.get(pick_key, "")
-        if picked:
-            st.session_state[target_key] = picked
+    if preset and preset in names:
+        default_index = options.index(preset)
+    elif preset:
+        default_index = options.index(OTHER_PERSON)
+    else:
+        default_index = 0
 
-    st.selectbox(
+    picked = st.selectbox(
         label,
         options=options,
-        key=pick_key,
-        on_change=_apply_pick,
-        help=f"Picks from {account}'s team roster below.",
+        index=default_index,
+        key=f"{state_key}_select",
+        help=(
+            f"From {account}'s team in \"Team by account\"."
+            if account
+            else "Everyone on the roster -- pick an Account / Campaign "
+            "to narrow this to that team."
+        ),
     )
+
+    if picked == OTHER_PERSON:
+        value = st.text_input(
+            f"{label} -- name",
+            value="" if preset in names else preset,
+            key=f"{state_key}_free",
+        ).strip()
+    else:
+        value = picked
+
+    st.session_state[state_key] = value
+    return value
 
 
 def peek_campaign_name(uploaded_file) -> str:
@@ -622,16 +640,108 @@ st.set_page_config(
 )
 
 
+FONT_DIR = PROJECT_ROOT / "ui" / "assets" / "fonts"
+FONT_STACK = (
+    "'WPP', 'Segoe UI', -apple-system, BlinkMacSystemFont, "
+    "Roboto, Helvetica, Arial, sans-serif"
+)
+# Per the brand guidelines: Bold for headlines, Regular for body.
+BRAND_FONT_WEIGHTS = (
+    ("WPP-Regular.woff2", 400),
+    ("WPP-Medium.woff2", 500),
+    ("WPP-Bold.woff2", 700),
+)
+
+
+@st.cache_data(show_spinner=False)
+def brand_font_css() -> str:
+    """
+    @font-face rules for the WPP typeface, embedded as base64 so
+    Streamlit doesn't need to serve the files. Returns "" when the
+    fonts aren't present -- the stack then falls through to the
+    system sans-serif and the app looks the same as before.
+
+    Cached because the app re-runs top to bottom on every interaction
+    and these are ~150KB of font to re-read and re-encode otherwise.
+    """
+    faces = []
+
+    for file_name, weight in BRAND_FONT_WEIGHTS:
+        path = FONT_DIR / file_name
+        if not path.exists():
+            continue
+        encoded = base64.b64encode(path.read_bytes()).decode()
+        faces.append(
+            f"""
+        @font-face {{
+            font-family: 'WPP';
+            src: url(data:font/woff2;base64,{encoded}) format('woff2');
+            font-weight: {weight};
+            font-style: normal;
+            font-display: swap;
+        }}"""
+        )
+
+    return "".join(faces)
+
+
+st.markdown(
+    f"""
+    <style>
+        {brand_font_css()}
+
+        html, body, .stApp,
+        button, input, select, textarea,
+        h1, h2, h3, h4, h5, h6, p, li, label, span, div,
+        [data-testid="stHeading"], [data-testid="stMarkdownContainer"],
+        [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {{
+            font-family: {FONT_STACK};
+        }}
+
+        /*
+         * Streamlit draws its icons as ligatures in the Material
+         * Symbols font -- forcing WPP on those spans turns every icon
+         * into raw text ("keyboard_arrow_right", "upload"), so they
+         * have to keep their own family.
+         */
+        [data-testid="stIconMaterial"],
+        .material-symbols-rounded,
+        span[class*="material-symbols"],
+        [class*="material-icons"] {{
+            font-family: 'Material Symbols Rounded',
+                'Material Icons' !important;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 st.markdown(
     """
     <style>
+        /*
+         * WPP Media Brand Guidelines 2025 v1.0.
+         * Primary: WPP Navy #000050, Lime Green #B0F467,
+         * Pantone 629 #93DFE3, White. Secondary: Cornflower Blue
+         * #5465FF, Periwinkle #788BFF, Teal #00DBEE, Yellow #FCFE67.
+         * Navy and white are the neutrals; lime is the signature pop
+         * and stays an accent, never a background.
+         */
         :root {
-            --wpp-indigo: #4B5EEA;
-            --wpp-indigo-dark: #2C36A8;
-            --wpp-cyan: #17B4DE;
-            --wpp-mint: #0FA97C;
-            --wpp-ink: #171B2E;
-            --wpp-bg: #F5F7FD;
+            --wpp-navy: #000050;
+            --wpp-cornflower: #5465FF;
+            --wpp-periwinkle: #788BFF;
+            --wpp-teal: #00DBEE;
+            --wpp-pantone629: #93DFE3;
+            --wpp-lime: #B0F467;
+
+            --wpp-indigo: var(--wpp-cornflower);
+            --wpp-indigo-dark: var(--wpp-navy);
+            --wpp-cyan: var(--wpp-teal);
+            --wpp-mint: var(--wpp-pantone629);
+            --wpp-ink: #000050;
+            --wpp-bg: #F6F8FC;
         }
 
         .stApp {
@@ -647,31 +757,31 @@ st.markdown(
         section[data-testid="stSidebar"] {
             background: linear-gradient(
                 180deg,
-                #EEF1FE 0%,
-                #F5F7FD 55%
+                #EDF0FF 0%,
+                #F6F8FC 55%
             );
-            border-right: 1px solid #E2E6FB;
+            border-right: 1px solid #DDE0F0;
         }
 
         .wpp-logo-wrap {
             border-radius: 14px;
             overflow: hidden;
             margin-bottom: 18px;
-            box-shadow: 0 6px 16px rgba(43, 54, 168, 0.18);
+            box-shadow: 0 6px 16px rgba(0, 0, 80, 0.18);
         }
 
         .qa-header {
             color: white;
             background: linear-gradient(
                 120deg,
-                var(--wpp-indigo-dark) 0%,
-                var(--wpp-indigo) 45%,
-                var(--wpp-cyan) 80%,
-                var(--wpp-mint) 115%
+                var(--wpp-navy) 0%,
+                var(--wpp-cornflower) 50%,
+                var(--wpp-teal) 88%,
+                var(--wpp-pantone629) 118%
             );
             padding: 28px 32px;
             border-radius: 18px;
-            box-shadow: 0 14px 34px rgba(43, 54, 168, 0.25);
+            box-shadow: 0 14px 34px rgba(0, 0, 80, 0.25);
             margin-bottom: 20px;
             position: relative;
             overflow: hidden;
@@ -693,8 +803,12 @@ st.markdown(
             margin: 0;
             padding: 0;
             font-size: 2.1rem;
-            font-weight: 900;
+            /* WPP Bold is the heaviest weight we ship; 900 would make
+               the browser synthesise a fake bold on top of it. */
+            font-weight: 700;
             letter-spacing: -0.01em;
+            font-family: 'WPP', 'Segoe UI', -apple-system,
+                BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
         }
 
         .qa-header p {
@@ -708,7 +822,7 @@ st.markdown(
             border-radius: 16px;
             padding: 20px 24px;
             margin: 10px 0 18px 0;
-            box-shadow: 0 6px 20px rgba(23, 27, 46, 0.07);
+            box-shadow: 0 6px 20px rgba(0, 0, 80, 0.07);
         }
 
         .verdict-caption {
@@ -726,15 +840,15 @@ st.markdown(
 
         div[data-testid="stMetric"] {
             background: white;
-            border: 1px solid #E5E9FA;
+            border: 1px solid #DFE3F4;
             border-radius: 14px;
             padding: 14px;
-            box-shadow: 0 3px 12px rgba(23, 27, 46, 0.05);
+            box-shadow: 0 3px 12px rgba(0, 0, 80, 0.05);
         }
 
         div[data-testid="stExpander"] {
             background: white;
-            border: 1px solid #E2E6FB;
+            border: 1px solid #DDE0F0;
             border-radius: 13px;
             margin-bottom: 8px;
             overflow: hidden;
@@ -743,7 +857,7 @@ st.markdown(
 
         div[data-testid="stExpander"]:hover {
             border-color: var(--wpp-indigo);
-            box-shadow: 0 4px 14px rgba(75, 94, 234, 0.12);
+            box-shadow: 0 4px 14px rgba(84, 101, 255, 0.12);
         }
 
         div[data-testid="stFileUploader"] {
@@ -762,7 +876,7 @@ st.markdown(
 
         .profile-card {
             background: white;
-            border: 1px solid #E2E6FB;
+            border: 1px solid #DDE0F0;
             border-radius: 13px;
             padding: 13px 16px;
             margin-bottom: 15px;
@@ -774,7 +888,7 @@ st.markdown(
         }
 
         .section-note {
-            background: #EEF1FE;
+            background: #EDF0FF;
             border-left: 5px solid var(--wpp-indigo);
             border-radius: 10px;
             padding: 11px 14px;
@@ -796,13 +910,13 @@ st.markdown(
                 var(--wpp-cyan) 130%
             );
             border: none;
-            box-shadow: 0 6px 16px rgba(75, 94, 234, 0.3);
+            box-shadow: 0 6px 16px rgba(84, 101, 255, 0.3);
             transition: transform 0.12s ease, box-shadow 0.12s ease;
         }
 
         .stButton > button[kind="primary"]:hover {
             transform: translateY(-1px);
-            box-shadow: 0 8px 20px rgba(75, 94, 234, 0.4);
+            box-shadow: 0 8px 20px rgba(84, 101, 255, 0.4);
         }
 
         button[role="tab"][aria-selected="true"] {
@@ -844,16 +958,17 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
         "into its 4 real flavors -- Monitoring, Blocking, Integration, "
         "Omni -- each verified differently; only Monitoring uses a "
         "placement-level pixel, the others are read straight from "
-        "their own row by name, so they don't need Host terms/Column/"
-        "Format filled in at all."
+        "their own row by name, so they don't need Column/Format "
+        "filled in at all."
     )
     st.caption(
         "**Official pixel** is the one field that matters: paste the "
         "vendor's current reference (with its macros, e.g. "
         "[%placementID%]) and QA2 flags REVIEW if what's implemented "
-        "in Innovid doesn't match it anymore. Fill it and you can "
-        "leave Host terms blank -- the domain is derived from the "
-        "pixel automatically. Leave Account blank for a vendor shared "
+        "in Innovid doesn't match it anymore. What QA2 searches for is "
+        "derived automatically -- the vendor name for the TS's "
+        "\"Vendors / Pixels\" column, and the official pixel's own "
+        "domain for Innovid. Leave Account blank for a vendor shared "
         "across all three WPP accounts; set it (e.g. \"Wendy's\") for "
         "one that only applies to that account -- pick the matching "
         "Account in the sidebar when you run QA2. Saved to "
@@ -867,8 +982,6 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
             {
                 "Account": r.get("account", ""),
                 "Vendor": r.get("name", ""),
-                "TS terms": ", ".join(r.get("ts_terms", [])),
-                "Host terms": ", ".join(r.get("host_terms", [])),
                 "Column": r.get("column", IMPRESSION),
                 "1x1": F_1X1 in (r.get("formats") or []),
                 "Display": F_DISPLAY in (r.get("formats") or []),
@@ -894,11 +1007,27 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     )
 
     if st.button("Save pixel table", key="qa2_vendor_save"):
+        # TS terms / Host terms aren't shown any more (they're derived
+        # from Vendor and Official pixel), but the rules still read
+        # them -- so carry whatever each row already had forward
+        # instead of wiping it on save.
+        _existing_terms = {
+            (
+                norm_compare(r.get("account", "")),
+                norm_compare(r.get("name", "")),
+            ): r
+            for r in _vendor_rows
+        }
+
         _new_vendor_rows = []
         for _, _row in _edited_vendor_df.iterrows():
             _name = str(_row.get("Vendor") or "").strip()
             if not _name:
                 continue
+            _account = str(_row.get("Account") or "").strip()
+            _previous = _existing_terms.get(
+                (norm_compare(_account), norm_compare(_name)), {}
+            )
             _formats = []
             if _row.get("1x1"):
                 _formats.append(F_1X1)
@@ -908,18 +1037,10 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
                 _formats.append(F_VIDEO)
             _new_vendor_rows.append(
                 {
-                    "account": str(_row.get("Account") or "").strip(),
+                    "account": _account,
                     "name": _name,
-                    "ts_terms": [
-                        t.strip()
-                        for t in str(_row.get("TS terms") or "").split(",")
-                        if t.strip()
-                    ],
-                    "host_terms": [
-                        t.strip()
-                        for t in str(_row.get("Host terms") or "").split(",")
-                        if t.strip()
-                    ],
+                    "ts_terms": list(_previous.get("ts_terms", [])),
+                    "host_terms": list(_previous.get("host_terms", [])),
                     "column": _row.get("Column") or IMPRESSION,
                     "formats": _formats,
                     "site_exceptions": [
@@ -1319,9 +1440,12 @@ with st.sidebar:
 
     st.divider()
 
-    with st.expander("Implementation Record (optional)"):
+    with st.expander("Implementation Record", expanded=True):
         st.caption(
-            "Included in the PDF report. Leave blank to fill by hand."
+            "Who did what on this request -- goes into the Excel and "
+            "PDF reports. The three \"By\" fields are dropdowns fed by "
+            "\"Team by account\"; pick the Account / Campaign above to "
+            "narrow them to that team."
         )
 
         record_campaign = st.text_input(
@@ -1337,27 +1461,24 @@ with st.sidebar:
         record_wrike_id = st.text_input(
             "Wrike ID", key="qa2_record_wrike"
         )
-        roster_pick_selector(
-            "Quick-pick Implemented By", selected_account, "qa2_record_impl_by"
-        )
-        record_implemented_by = st.text_input(
-            "Implemented By", key="qa2_record_impl_by"
+        record_implemented_by = person_selector(
+            "Implemented By (QA1)", selected_account, "qa2_record_impl_by"
         )
         record_implementation_date = st.date_input(
             "Implementation Date",
             value=None,
             key="qa2_record_impl_date",
         )
-        st.caption(
-            "QA2 By / QA2 Date have moved -- fill those in the "
-            "QA2 Review section below the results, right where "
-            "you approve."
+        record_qa2_by = person_selector(
+            "QA2 By", selected_account, "qa2_record_qa2_by"
         )
-        roster_pick_selector(
-            "Quick-pick QA3 By", selected_account, "qa2_record_qa3_by"
+        record_qa2_date = st.date_input(
+            "QA2 Date",
+            value=None,
+            key="qa2_record_qa2_date",
         )
-        record_qa3_by = st.text_input(
-            "QA3 By", key="qa2_record_qa3_by"
+        record_qa3_by = person_selector(
+            "QA3 By", selected_account, "qa2_record_qa3_by"
         )
         record_qa3_date = st.date_input(
             "QA3 Date",
@@ -2026,27 +2147,6 @@ if True:
             )
 
         # ----------------------------------------------------
-        # Who's doing this QA2 pass -- asked once, up front, right
-        # where it's used: stamps approvals below and gates the QA2
-        # Sign-off checkbox further down.
-        # ----------------------------------------------------
-
-        st.subheader("QA2 Review")
-
-        roster_pick_selector(
-            "Quick-pick QA2 By", selected_account, "qa2_record_qa2_by"
-        )
-        _qa2_by_cols = st.columns(2)
-        record_qa2_by = _qa2_by_cols[0].text_input(
-            "QA2 By", key="qa2_record_qa2_by"
-        )
-        record_qa2_date = _qa2_by_cols[1].date_input(
-            "QA2 Date",
-            value=None,
-            key="qa2_record_qa2_date",
-        )
-
-        # ----------------------------------------------------
         # Review approval: REVIEW -> PASS
         #
         # A REVIEW finding is a callout, not a blocker (e.g. the TS
@@ -2144,43 +2244,6 @@ if True:
         # ----------------------------------------------------
 
         show_verdict(scorecard.verdict)
-
-        # ----------------------------------------------------
-        # QA2 sign-off gate -- separate from the automated verdict.
-        # Company policy: every campaign, PASSED or not, needs a
-        # human QA2 approval on record before it's considered done.
-        # ----------------------------------------------------
-
-        qa2_signoff_note = st.text_area(
-            "QA2 sign-off note (optional)",
-            key="qa2_signoff_note",
-            placeholder=(
-                "e.g. Reviewed placements, tags and pixels against "
-                "the TS -- approved for delivery."
-            ),
-        )
-        qa2_signed_off = st.checkbox(
-            "I reviewed this QA2 run and approve it"
-            + (f" -- {record_qa2_by}" if record_qa2_by.strip() else ""),
-            key="qa2_signoff_checkbox",
-            disabled=not record_qa2_by.strip(),
-        )
-
-        if not record_qa2_by.strip():
-            st.caption(
-                "Fill in \"QA2 By\" above (QA2 Review) to enable "
-                "sign-off."
-            )
-        elif qa2_signed_off:
-            st.success(
-                f"✅ Approved by {record_qa2_by} -- this run is "
-                "cleared for delivery."
-            )
-        else:
-            st.warning(
-                "⏳ QA2 Sign-off pending -- every campaign needs this, "
-                "even when the automated result is PASSED."
-            )
 
         st.markdown(
             f"""
@@ -2677,8 +2740,6 @@ if True:
                 qa3_by=record_qa3_by,
                 qa3_date=record_qa3_date,
                 notes=record_notes,
-                qa2_signed_off=qa2_signed_off,
-                qa2_signoff_note=qa2_signoff_note,
             ),
             findings_df=findings_dataframe(
                 [
@@ -2758,8 +2819,6 @@ if True:
                 qa3_by=record_qa3_by,
                 qa3_date=record_qa3_date,
                 notes=record_notes,
-                qa2_signed_off=qa2_signed_off,
-                qa2_signoff_note=qa2_signoff_note,
             ),
             findings_df=findings_dataframe(findings_buffer.findings),
             rules_df=rule_summary_dataframe(findings_buffer),
