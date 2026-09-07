@@ -640,6 +640,83 @@ st.set_page_config(
 )
 
 
+FONT_DIR = PROJECT_ROOT / "ui" / "assets" / "fonts"
+FONT_STACK = (
+    "'WPP', 'Segoe UI', -apple-system, BlinkMacSystemFont, "
+    "Roboto, Helvetica, Arial, sans-serif"
+)
+# Per the brand guidelines: Bold for headlines, Regular for body.
+BRAND_FONT_WEIGHTS = (
+    ("WPP-Regular.woff2", 400),
+    ("WPP-Medium.woff2", 500),
+    ("WPP-Bold.woff2", 700),
+)
+
+
+@st.cache_data(show_spinner=False)
+def brand_font_css() -> str:
+    """
+    @font-face rules for the WPP typeface, embedded as base64 so
+    Streamlit doesn't need to serve the files. Returns "" when the
+    fonts aren't present -- the stack then falls through to the
+    system sans-serif and the app looks the same as before.
+
+    Cached because the app re-runs top to bottom on every interaction
+    and these are ~150KB of font to re-read and re-encode otherwise.
+    """
+    faces = []
+
+    for file_name, weight in BRAND_FONT_WEIGHTS:
+        path = FONT_DIR / file_name
+        if not path.exists():
+            continue
+        encoded = base64.b64encode(path.read_bytes()).decode()
+        faces.append(
+            f"""
+        @font-face {{
+            font-family: 'WPP';
+            src: url(data:font/woff2;base64,{encoded}) format('woff2');
+            font-weight: {weight};
+            font-style: normal;
+            font-display: swap;
+        }}"""
+        )
+
+    return "".join(faces)
+
+
+st.markdown(
+    f"""
+    <style>
+        {brand_font_css()}
+
+        html, body, .stApp,
+        button, input, select, textarea,
+        h1, h2, h3, h4, h5, h6, p, li, label, span, div,
+        [data-testid="stHeading"], [data-testid="stMarkdownContainer"],
+        [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {{
+            font-family: {FONT_STACK};
+        }}
+
+        /*
+         * Streamlit draws its icons as ligatures in the Material
+         * Symbols font -- forcing WPP on those spans turns every icon
+         * into raw text ("keyboard_arrow_right", "upload"), so they
+         * have to keep their own family.
+         */
+        [data-testid="stIconMaterial"],
+        .material-symbols-rounded,
+        span[class*="material-symbols"],
+        [class*="material-icons"] {{
+            font-family: 'Material Symbols Rounded',
+                'Material Icons' !important;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 st.markdown(
     """
     <style>
@@ -726,8 +803,12 @@ st.markdown(
             margin: 0;
             padding: 0;
             font-size: 2.1rem;
-            font-weight: 900;
+            /* WPP Bold is the heaviest weight we ship; 900 would make
+               the browser synthesise a fake bold on top of it. */
+            font-weight: 700;
             letter-spacing: -0.01em;
+            font-family: 'WPP', 'Segoe UI', -apple-system,
+                BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
         }
 
         .qa-header p {
