@@ -67,35 +67,38 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
         shape = re.sub(r"/\d+", "/{id}", path)
         shapes.setdefault(shape, []).append(url)
 
-    known = ("/summary", "/dset/")
-    # Anything to do with decision sets is the reason this exists.
-    interesting = ("dset", "dtree", "decision", "creative", "column")
+    # Decision sets are the reason this exists, and the summary's
+    # field list is how Innovid says which columns it wants.
+    interesting = ("dset", "dtree", "decision", "column", "summary")
 
-    print(f"{len(calls)} call(s) across {len(shapes)} endpoint(s):\n")
-    for shape in sorted(shapes):
-        if any(k in shape.lower() for k in interesting):
-            mark = "*    "
-        elif any(k in shape for k in known):
-            mark = "     "
-        else:
-            mark = "NEW  "
-        print(f"  {mark}{shape}   ({len(shapes[shape])} call(s))")
+    def _is_interesting(shape: str) -> bool:
+        return any(k in shape.lower() for k in interesting)
 
-    # Every address, including the endpoints QA2 already uses. The
-    # decision-set call is one of those, and its id is the thing most
-    # worth seeing -- suppressing it as "already known" hid exactly
-    # what this was run to find.
-    print("\nFull addresses:")
+    # The interesting ones print their full addresses right here.
+    # Listing shapes and putting the addresses in a separate section
+    # meant the ids -- the entire point -- were a scroll away, and the
+    # first person to read this report sent back the shapes alone.
+    highlights = sorted(s for s in shapes if _is_interesting(s))
+    if highlights:
+        print("THE PART THAT MATTERS -- send these lines:\n")
+        for shape in highlights:
+            for url in shapes[shape]:
+                print(f"  {url}")
+        print()
+
+    print(f"Everything else Innovid called "
+          f"({len(calls)} call(s), {len(shapes)} endpoint(s)):\n")
     for shape in sorted(shapes):
-        for url in shapes[shape][:3]:
+        if _is_interesting(shape):
+            continue
+        for url in shapes[shape][:2]:
             print(f"  {url}")
-        if len(shapes[shape]) > 3:
-            print(f"  ... and {len(shapes[shape]) - 3} more like it")
+        if len(shapes[shape]) > 2:
+            print(f"  ... and {len(shapes[shape]) - 2} more like it")
 
     print(
-        "\nThe lines marked * are the ones to send first. Sign-in "
-        "addresses are left out entirely, and query values are "
-        "hidden unless they describe the request -- but give it a "
+        "\nSign-in addresses are left out entirely, and query values "
+        "are hidden unless they describe the request -- but give it a "
         "glance anyway before pasting it anywhere."
     )
     return 0
