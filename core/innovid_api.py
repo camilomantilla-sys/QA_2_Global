@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -435,56 +436,212 @@ def fetch_campaign(
     return result
 
 
+USER_SELECTORS = (
+    "input[type='email']",
+    "input[name='username']",
+    "input[name='email']",
+    "input[name='loginfmt']",   # Microsoft sign-in
+    "input#username",
+    "input#email",
+    "input[autocomplete='username']",
+)
+
+PASS_SELECTORS = (
+    "input[type='password']",
+    "input[name='password']",
+    "input[name='passwd']",     # Microsoft sign-in
+    "input#password",
+    "input[autocomplete='current-password']",
+)
+
+# "Next" on a two-step sign-in, where the password only appears after
+# the address is submitted.
+NEXT_SELECTORS = (
+    "input[type='submit']",
+    "button[type='submit']",
+    "#idSIButton9",             # Microsoft's Next/Sign in button
+    "button:has-text('Next')",
+    "button:has-text('Continue')",
+    "button:has-text('Sign in')",
+)
+
+
 def _login(page, credentials: InnovidCredentials, timeout_ms: int) -> None:
     """
-    Drives the normal username/password login.
+    Drives the sign-in, handling both shapes we can hit: one page with
+    both boxes, and the two-step flow (address, Next, then password)
+    that corporate SSO uses.
 
-    Field names differ between login pages, so this tries the usual
-    selectors rather than assuming one, and fails loudly if none of
-    them match -- a silent non-login would otherwise look like an
-    empty campaign.
+    Fails loudly when neither shape appears -- a silent non-login would
+    otherwise look like an empty campaign.
     """
     page.goto(credentials.login_url, wait_until="domcontentloaded", timeout=timeout_ms)
 
-    user_selectors = (
-        "input[name='username']",
-        "input[name='email']",
-        "input[type='email']",
-        "input#username",
-    )
-    pass_selectors = (
-        "input[name='password']",
-        "input[type='password']",
-        "input#password",
-    )
+    # The sign-in form is rendered by JavaScript, so the elements
+    # aren't there when the document finishes loading. Wait for a box
+    # to actually exist before looking for it.
+    step_timeout = min(timeout_ms, 30_000)
+    try:
+        _wait_for_any(page, USER_SELECTORS + PASS_SELECTORS, step_timeout)
+    except Exception:
+        # Nothing to type into. Fall through: the check below turns
+        # this into a description of the page we actually landed on,
+        # which is far more use than a timeout stack trace.
+        pass
 
-    user_box = _first_visible(page, user_selectors)
-    pass_box = _first_visible(page, pass_selectors)
+    user_box = _first_visible(page, USER_SELECTORS)
+    pass_box = _first_visible(page, PASS_SELECTORS)
 
-    if user_box is None or pass_box is None:
+    if user_box is None and pass_box is None:
         raise InnovidAuthError(
-            "Couldn't find the username/password fields on "
-            f"{credentials.login_url}. If Innovid changed its login "
-            "page, run with headless=False to watch what happens."
+            "Couldn't find anywhere to type the username or password.\n"
+            f"  Ended up on: {page.url}\n"
+            f"  Page title:  {_safe_title(page)}\n"
+            f"  Fields found: {_describe_inputs(page)}\n"
+            "Send those three lines over -- they say which sign-in "
+            "page this is, which is all that's needed to teach QA2 "
+            "how to fill it in."
         )
 
-    user_box.fill(credentials.username)
+    if user_box is not None:
+        user_box.fill(credentials.username)
+
+    # Two-step sign-in: submit the address, then wait for the password
+    # box that appears on the next screen.
+    if pass_box is None:
+        _submit_step(page, user_box)
+        try:
+            _wait_for_any(page, PASS_SELECTORS, step_timeout)
+        except Exception:
+            raise InnovidAuthError(
+                "The username was accepted but no password box "
+                "appeared.\n"
+                f"  Ended up on: {page.url}\n"
+                f"  Page title:  {_safe_title(page)}\n"
+                f"  Fields found: {_describe_inputs(page)}\n"
+                "If that page is asking for a verification code, this "
+                "sign-in needs multi-factor auth and QA2 has to keep "
+                "a saved session instead of logging in each time."
+            )
+        pass_box = _first_visible(page, PASS_SELECTORS)
+        if pass_box is None:
+            raise InnovidAuthError(
+                f"A password box exists on {page.url} but isn't "
+                "visible. Run with --show to see what's covering it."
+            )
+
     pass_box.fill(credentials.password)
-    pass_box.press("Enter")
+    _submit_step(page, pass_box)
 
     try:
         page.wait_for_url(re.compile(r"campaign", re.I), timeout=timeout_ms)
     except Exception:
         # Landing somewhere other than a campaign page isn't proof of
-        # failure (Innovid may open a dashboard), so only treat a
-        # still-visible password box as a real login failure.
-        if _first_visible(page, pass_selectors) is not None:
+        # failure (Innovid may open a dashboard, or SSO may ask to
+        # stay signed in), so only a still-visible password box is
+        # treated as a real failure.
+        if _first_visible(page, PASS_SELECTORS) is not None:
             raise InnovidAuthError(
                 "Login didn't go through -- the password field is "
                 "still on screen. Check the credentials in "
                 "config/innovid_credentials.env (the password rotates "
-                "every few months)."
+                "every few months).\n"
+                f"  Ended up on: {page.url}"
             )
+
+
+def _submit_step(page, box) -> None:
+    """
+    Moves one step forward in the sign-in.
+
+    Enter submits most forms, but not all, so a button is the fallback
+    -- and the order matters. Clicking unconditionally after Enter
+    lands the click on the *next* screen's button, which on a two-step
+    sign-in submits the password screen before the password is typed.
+    So the button is only used once Enter has visibly done nothing.
+    """
+    before_url = page.url
+    try:
+        box.press("Enter")
+    except Exception:
+        pass
+
+    if _moved_on(page, box, before_url):
+        return
+
+    button = _first_visible(page, NEXT_SELECTORS)
+    if button is not None:
+        try:
+            button.click(timeout=3_000)
+        except Exception:
+            # The page moved between the check and the click. Not a
+            # problem -- that was the goal.
+            pass
+
+
+def _moved_on(page, box, before_url: str, timeout_ms: int = 4_000) -> bool:
+    """
+    True once the sign-in has advanced: either the browser navigated,
+    or the box that was just filled left the page (single-page forms
+    swap the screen without changing the URL).
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        try:
+            if page.url != before_url:
+                return True
+            if box.count() == 0 or not box.is_visible(timeout=500):
+                return True
+        except Exception:
+            # The element went away mid-check, which is itself the
+            # page having moved on.
+            return True
+        page.wait_for_timeout(200)
+    return False
+
+
+def _wait_for_any(page, selectors, timeout_ms: int):
+    """Waits until any one of `selectors` is attached to the page."""
+    page.wait_for_selector(", ".join(selectors), timeout=timeout_ms, state="attached")
+
+
+def _safe_title(page) -> str:
+    try:
+        return page.title() or "(no title)"
+    except Exception:
+        return "(unavailable)"
+
+
+def _describe_inputs(page) -> str:
+    """
+    Lists the input boxes on the page by their identifying attributes.
+
+    Deliberately never reads `value`: this text is meant to be pasted
+    into a chat or an email to work out which sign-in page we landed
+    on, so it must not be able to carry anything typed into the form.
+    """
+    script = """
+        () => Array.from(document.querySelectorAll('input, button'))
+            .filter(el => el.type !== 'hidden')
+            .slice(0, 25)
+            .map(el => {
+                const bits = [el.tagName.toLowerCase()];
+                for (const attr of ['type', 'name', 'id', 'placeholder',
+                                    'aria-label', 'autocomplete']) {
+                    const v = el.getAttribute(attr);
+                    if (v) bits.push(attr + '=' + v);
+                }
+                return bits.join(' ');
+            })
+    """
+    try:
+        found = page.evaluate(script)
+    except Exception as exc:
+        return f"(couldn't read the page: {exc})"
+
+    if not found:
+        return "(none -- the page may still be loading or is a redirect)"
+    return "\n    - " + "\n    - ".join(found)
 
 
 def _first_visible(page, selectors):
