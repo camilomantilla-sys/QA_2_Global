@@ -35,31 +35,47 @@ CM_BASE = "https://api.flashtalking.net/cm/v1/ui"
 DT_BASE = "https://api.flashtalking.net/dt/v1/ui"
 APP_ORIGIN = "https://campaign-manager.flashtalking.net"
 
-# Everything QA2 can use today, plus the two IDs that stitch the
-# placement level to the creative level. Asked for explicitly so the
-# result never depends on which column view the user has configured
-# in Innovid.
+# What Innovid's own summary grid asks for, taken from the request
+# its interface makes, plus the fields QA2 needs that its default
+# view doesn't request. Asking for a field Innovid doesn't recognise
+# is harmless -- it comes back absent rather than as an error -- and
+# the response carries about 130 fields regardless of this list, so
+# it is a floor rather than a filter.
 SUMMARY_FIELDS = (
+    # Innovid's own list, in its order.
+    "status",
+    "siteName",
     "placementId",
     "placementName",
-    "siteName",
+    "placementType",
     "dimensions",
-    "status",
+    "clickTag1",
     "startDate",
     "endDate",
+    "creativeDescription",
     "creativeId",
     "fileName",
-    "creativeDescription",
-    "clickTag1",
     "thirdPartySurvey1",
     "thirdPartyImpression1",
     "thirdPartyImpression2",
     "verificationPartner",
     "verificationStatus",
-    "rotationWeight",
     "bookedUnits",
+    "prismaPlacementId",
+
+    # QA2's additions. The decision set ids are what link a placement
+    # to its creatives' real flight dates; Innovid's grid gets them
+    # from the decision set's own row instead of asking for them.
+    "id",
+    "name",
+    "level",
+    "rotationWeight",
     "placementModernDtreeId",
+    "modernDtreeId",
     "modernDtreeName",
+    "placementDecisionSetId",
+    "decisionSetId",
+    "decisionSetName",
 )
 
 # Innovid caps a page of results; 500 is what its own interface asks
@@ -181,6 +197,13 @@ class InnovidFetchResult:
     # against the parsed placements -- otherwise a field present on
     # every row reads as "409 / 385", which looks like a bug.
     rows_seen: int = 0
+
+    # What each level of the flattened tree actually contains: how
+    # many rows, and which fields are filled in on at least one of
+    # them. The rows QA2 discards for having no placement id are in
+    # here too, which is the point -- a decision set arrives as its
+    # own row, and discarding it silently is how its id went missing.
+    levels: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
         dtree_ids = {
@@ -312,6 +335,33 @@ def summary_field_names(payload: dict) -> list[str]:
             if key not in names:
                 names.append(key)
     return sorted(names)
+
+
+def count_levels(payload: dict, into: dict[str, dict[str, int]]) -> dict:
+    """
+    Groups the response's rows by `level`, counting how many rows each
+    level has and which fields carry a value on them.
+
+    Names and counts only, never values.
+    """
+    if not isinstance(payload, dict):
+        return into
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return into
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        level = _text(item.get("level")) or "(no level)"
+        bucket = into.setdefault(level, {"_rows": 0})
+        bucket["_rows"] += 1
+        for key, value in item.items():
+            if key == "level":
+                continue
+            if _text(value):
+                bucket[key] = bucket.get(key, 0) + 1
+    return into
 
 
 def count_filled_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
@@ -791,6 +841,7 @@ def fetch_campaign(
                 if page_number == 1:
                     result.returned_fields = summary_field_names(summary)
                 count_filled_fields(summary, result.field_coverage)
+                count_levels(summary, result.levels)
                 items = summary.get("items") if isinstance(summary, dict) else None
                 result.rows_seen += len(items) if isinstance(items, list) else 0
 
