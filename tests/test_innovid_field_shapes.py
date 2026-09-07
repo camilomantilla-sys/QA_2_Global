@@ -637,114 +637,144 @@ def test_a_node_id_is_not_mistaken_for_a_creative_id():
     assert nodes[1].creative_id == "6312751", "the default one names it"
 
 # ---------------------------------------------------------------
-# Which date differences actually cost delivery.
+# Coverage, not per-creative comparison.
 #
-# The first working run found eight differences in campaign 323492,
-# in both directions: two creatives starting four days after their
-# placement (nothing serves for four days) and six ready a week
-# early (harmless -- the placement gates delivery). Reporting those
-# together would bury two real findings under six non-events.
+# Campaign 327957's decision sets rotate sequentially: one creative
+# runs 14-26 Sep, the next 27 Sep-31 Oct, together covering the
+# placement's whole flight. Comparing each creative against the
+# placement on its own reported the second as thirteen days late and
+# produced 45 findings where there were none.
 # ---------------------------------------------------------------
 
-REAL_CASES = {"items": [
-    # 10988717/8: placement 20 Jul, creative 24 Jul. A real gap.
-    {"placementId": 10988717, "level": "PLACEMENT",
-     "startDate": "2026-07-20", "endDate": "2026-08-23"},
-    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
-     "decisionSetId": 38808, "decisionSetName": "Frosty GM Display 320x50"},
-
-    # 10964170: placement 27 Jul, creative 20 Jul. Harmless.
-    {"placementId": 10964170, "level": "PLACEMENT",
-     "startDate": "2026-07-27", "endDate": "2026-08-23"},
-    {"placementId": 10964170, "level": "PLACEMENT-CREATIVE",
-     "decisionSetId": 44120, "decisionSetName": "Early Set"},
-]}
-
-LATE_DSET = {
-    "id": 38808, "name": "Frosty GM Display 320x50",
-    "servingMethod": "Rotation",
-    "nodes": [{"id": 1, "startTimestamp": "2026-07-24 00:00:00",
-               "endTimestamp": "2026-08-23 23:59:00", "weight": 1}],
-}
-EARLY_DSET = {
-    "id": 44120, "name": "Early Set", "servingMethod": "Rotation",
-    "nodes": [{"id": 1, "startTimestamp": "2026-07-20 00:00:00",
-               "endTimestamp": "2026-08-23 23:59:00", "weight": 1}],
-}
-
-
-def _real_result():
-    return InnovidFetchResult(
-        campaign_id="323492",
-        placements=parse_summary_response(REAL_CASES),
-        creative_nodes=(parse_dset_response(LATE_DSET)
-                        + parse_dset_response(EARLY_DSET)),
-    )
-
-
-def test_a_creative_starting_late_is_a_gap():
-    found = _real_result().creative_flight_gaps()
-
-    gaps = [(p.placement_id, days) for p, _, days in found["gaps"]]
-    assert ("10988717", 4) in gaps, "four days with nothing serving"
-
-
-def test_a_creative_ready_early_is_not_a_gap():
-    found = _real_result().creative_flight_gaps()
-
-    assert all(p.placement_id != "10964170" for p, _, _ in found["gaps"])
-    assert any(p.placement_id == "10964170" for p, _, _ in found["harmless"])
-
-
-def test_a_creative_ending_early_is_a_gap():
-    short = {
-        "id": 44121, "name": "Short Set", "servingMethod": "Rotation",
-        "nodes": [{"id": 1, "startTimestamp": "2026-07-20 00:00:00",
-                   "endTimestamp": "2026-08-01 23:59:00", "weight": 1}],
-    }
+def _result_for(placement_dates, nodes, dset_id=40316):
+    p_start, p_end = placement_dates
+    rows = parse_summary_response({"items": [
+        {"placementId": 11087616, "level": "PLACEMENT",
+         "startDate": p_start, "endDate": p_end},
+        {"placementId": 11087616, "level": "PLACEMENT-CREATIVE",
+         "decisionSetId": dset_id, "decisionSetName": "Display 300x600"},
+    ]})
+    dset = {"id": dset_id, "name": "Display 300x600",
+            "servingMethod": "Weighted Rotation", "nodes": nodes}
     result = InnovidFetchResult(
-        campaign_id="x",
-        placements=parse_summary_response({"items": [
-            {"placementId": 1, "level": "PLACEMENT",
-             "startDate": "2026-07-20", "endDate": "2026-08-23"},
-            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
-             "decisionSetId": 44121},
-        ]}),
-        creative_nodes=parse_dset_response(short),
+        campaign_id="327957", placements=rows,
+        creative_nodes=parse_dset_response(dset),
     )
-
-    found = result.creative_flight_gaps()
-    assert found["gaps"], "the placement outlives its creative"
-    assert found["gaps"][0][2] < 0, "negative days = ends short"
+    return result.creative_flight_gaps()
 
 
-def test_the_default_node_is_not_a_flight_date():
-    # A default creative's timestamp is when it was attached.
-    with_default = dict(LATE_DSET, nodes=[
-        {"id": 6312751, "startTimestamp": "2026-07-21 10:02:11",
+SEQUENTIAL = [
+    {"id": 3, "startTimestamp": "2026-09-14 00:00:00",
+     "endTimestamp": "2026-09-26 23:59:00", "weight": 1},
+    {"id": 4, "startTimestamp": "2026-09-27 00:00:00",
+     "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    {"id": 6389150, "startTimestamp": "2026-08-31 10:07:12",
+     "endTimestamp": None, "isDefault": True},
+]
+
+
+def test_sequential_rotation_is_not_a_gap():
+    """The 45 false findings this replaces."""
+    found = _result_for(("2026-09-14", "2026-10-31"), SEQUENTIAL)
+
+    assert found["gaps"] == [], "back-to-back creatives cover the flight"
+
+
+def test_a_real_hole_between_two_creatives_is_found():
+    # Same pair, but the second starts three days late.
+    late = [
+        dict(SEQUENTIAL[0]),
+        dict(SEQUENTIAL[1], startTimestamp="2026-09-30 00:00:00"),
+        dict(SEQUENTIAL[2]),
+    ]
+    found = _result_for(("2026-09-14", "2026-10-31"), late)
+
+    assert len(found["gaps"]) == 1
+    gap = found["gaps"][0]
+    assert str(gap["start"]) == "2026-09-27"
+    assert str(gap["end"]) == "2026-09-29"
+    assert gap["days"] == 3
+
+
+def test_the_frosty_case_is_still_caught():
+    # Placement 20 Jul, its only creative starts 24 Jul: four days
+    # at the front with nothing scheduled. Confirmed in Innovid.
+    found = _result_for(("2026-07-20", "2026-08-23"), [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": "2026-08-23 23:59:00", "weight": 1},
+        {"id": 6312749, "startTimestamp": "2026-07-21 10:02:11",
          "endTimestamp": None, "isDefault": True},
     ])
-    result = InnovidFetchResult(
-        campaign_id="x",
-        placements=parse_summary_response(REAL_CASES),
-        creative_nodes=parse_dset_response(with_default),
-    )
-    found = result.creative_flight_gaps()
-    assert not found["gaps"] and not found["harmless"]
+
+    assert len(found["gaps"]) == 1
+    assert found["gaps"][0]["days"] == 4
+    assert found["gaps"][0]["covered_by_default"] is True
 
 
-def test_unparseable_dates_are_skipped_not_guessed():
-    broken = dict(LATE_DSET, nodes=[
-        {"id": 1, "startTimestamp": "Ongoing", "endTimestamp": "",
-         "weight": 1},
+def test_a_gap_with_no_default_is_marked_as_serving_nothing():
+    found = _result_for(("2026-07-20", "2026-08-23"), [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": "2026-08-23 23:59:00", "weight": 1},
     ])
-    result = InnovidFetchResult(
-        campaign_id="x",
-        placements=parse_summary_response(REAL_CASES),
-        creative_nodes=parse_dset_response(broken),
-    )
-    found = result.creative_flight_gaps()
-    assert not found["gaps"]
+
+    assert found["gaps"][0]["covered_by_default"] is False
+
+
+def test_a_creative_stopping_before_the_placement_does_is_a_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": "2026-10-15 23:59:00", "weight": 1},
+    ])
+
+    assert len(found["gaps"]) == 1
+    assert str(found["gaps"][0]["start"]) == "2026-10-16"
+    assert found["gaps"][0]["days"] == 16
+
+
+def test_overlapping_creatives_leave_no_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": "2026-10-05 23:59:00", "weight": 1},
+        {"id": 2, "startTimestamp": "2026-09-20 00:00:00",
+         "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+
+
+def test_a_creative_ready_early_is_overflow_not_a_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-08-01 00:00:00",
+         "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+    assert len(found["overflow"]) == 1
+
+
+def test_an_ongoing_creative_covers_to_the_end():
+    # endTimestamp null means Ongoing, not "ends today".
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": None, "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+
+
+def test_a_placement_with_only_a_default_is_called_out():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 6389150, "startTimestamp": "2026-08-31 10:07:12",
+         "endTimestamp": None, "isDefault": True},
+    ])
+
+    assert found["gaps"] == []
+    assert len(found["default_only"]) == 1
+
+
+def test_unreadable_placement_dates_are_skipped_not_guessed():
+    found = _result_for(("", ""), SEQUENTIAL)
+    assert found["gaps"] == []
 
 
 if __name__ == "__main__":

@@ -215,22 +215,39 @@ def main() -> int:
     # Coverage across every row, not a sample. A field that is filled
     # in on the first five rows and empty on the other 404 is exactly
     # the kind of thing a sample hides.
+    # Each field belongs to a level, and dividing by every row makes
+    # a complete field look half missing: verificationPartner sits on
+    # all 54 placements, and reporting it as "54 / 207" is what made
+    # a correct result look broken.
+    PLACEMENT, CREATIVE = "placement", "creative"
     critical = {
-        "Verification Partner": lambda r: r.verification_partner,
-        "Decision set id (modern)": lambda r: r.dtree_id,
-        "decisionSetId": lambda r: r.dset_id,
-        "placementDecisionSetId": lambda r: r.dset_link_id,
-        "Start date": lambda r: r.start_date,
-        "End date": lambda r: r.end_date,
-        "Rotation weight": lambda r: r.rotation_weight,
+        "Verification Partner": (PLACEMENT, lambda r: r.verification_partner),
+        "Decision set id (modern)": (CREATIVE, lambda r: r.dtree_id),
+        "decisionSetId": (CREATIVE, lambda r: r.dset_id),
+        "placementDecisionSetId": (CREATIVE, lambda r: r.dset_link_id),
+        "Start date": (PLACEMENT, lambda r: r.start_date),
+        "End date": (PLACEMENT, lambda r: r.end_date),
+        "Rotation weight": (CREATIVE, lambda r: r.rotation_weight),
     }
-    total = len(result.placements)
-    print("How much of each field actually came back:")
+    rows_at = {
+        PLACEMENT: placement_level,
+        CREATIVE: creative_level,
+    }
+
+    print("How much of each field came back, counted against the rows "
+          "of its own level:")
     missing_entirely = []
-    for label, getter in critical.items():
-        filled = sum(1 for r in result.placements if getter(r))
-        flag = "" if filled else "   <-- nothing at all"
-        print(f"  {label:22} {filled:>4} / {total}{flag}")
+    for label, (level, getter) in critical.items():
+        rows = rows_at[level]
+        filled = sum(1 for r in rows if getter(r))
+        of = len(rows)
+        if not filled:
+            flag = "   <-- nothing at all"
+        elif filled == of:
+            flag = "   (all of them)"
+        else:
+            flag = ""
+        print(f"  {label:26} {filled:>4} / {of} {level} row(s){flag}")
         if not filled:
             missing_entirely.append(label)
 
@@ -327,49 +344,54 @@ def main() -> int:
         )
     else:
         found = result.creative_flight_gaps()
-        gaps, harmless = found["gaps"], found["harmless"]
+        gaps = found["gaps"]
 
-        print(f"{linked} creative(s) compared against their placement.\n")
+        print(f"{linked} creative(s) across "
+              f"{len(result.placement_rows())} placement(s), compared "
+              "as a whole decision set rather than one at a time.\n")
 
         if gaps:
-            print(f"{len(gaps)} GAP(S) -- the placement is live with "
-                  "nothing to serve:")
-            for row, node, days in gaps[:15]:
-                who = node.creative_id or f"node {node.node_id}"
-                late = f"{abs(days)} day(s)"
-                if days > 0:
-                    print(
-                        f"  placement {row.placement_id} starts "
-                        f"{row.start_date}, creative {who} only starts "
-                        f"{node.start_timestamp[:10]} -- {late} late"
-                    )
-                else:
-                    print(
-                        f"  placement {row.placement_id} runs to "
-                        f"{row.end_date}, creative {who} stops "
-                        f"{node.end_timestamp[:10]} -- {late} short"
-                    )
+            print(f"{len(gaps)} GAP(S) -- days the placement is live "
+                  "with no creative scheduled:")
+            for gap in gaps[:15]:
+                row = gap["placement"]
+                cover = (
+                    "the default creative fills it"
+                    if gap["covered_by_default"]
+                    else "nothing at all serves"
+                )
+                print(
+                    f"  placement {row.placement_id}: "
+                    f"{gap['start']} to {gap['end']} "
+                    f"({gap['days']} day(s)) -- {cover}"
+                )
             if len(gaps) > 15:
                 print(f"  ... and {len(gaps) - 15} more")
         else:
-            print("No gaps: every creative covers its placement's "
-                  "whole flight.")
+            print("No gaps: in every placement, some creative is "
+                  "scheduled for every day of its flight.")
 
-        if harmless:
-            print(f"\n{len(harmless)} creative(s) differ from their "
-                  "placement without costing delivery -- ready early "
-                  "or left running late, and the placement gates "
-                  "both:")
-            for row, node, days in harmless[:5]:
+        if found["default_only"]:
+            print(f"\n{len(found['default_only'])} placement(s) have "
+                  "only a default creative and nothing scheduled:")
+            for row in found["default_only"][:10]:
+                print(f"  {row.placement_id}  {row.start_date} -> "
+                      f"{row.end_date}")
+
+        if found["overflow"]:
+            print(f"\n{len(found['overflow'])} creative(s) are "
+                  "scheduled outside their placement's flight. The "
+                  "placement gates delivery, so this costs nothing:")
+            for item in found["overflow"][:5]:
+                row, node = item["placement"], item["node"]
                 who = node.creative_id or f"node {node.node_id}"
                 print(
-                    f"  placement {row.placement_id} {row.start_date} "
-                    f"-> {row.end_date or '(ongoing)'}, creative {who} "
-                    f"{node.start_timestamp[:10]} -> "
-                    f"{node.end_timestamp[:10] or '(ongoing)'}"
+                    f"  placement {row.placement_id} "
+                    f"{row.start_date} -> {row.end_date}, "
+                    f"creative {who} {item['start']} -> {item['end']}"
                 )
-            if len(harmless) > 5:
-                print(f"  ... and {len(harmless) - 5} more")
+            if len(found["overflow"]) > 5:
+                print(f"  ... and {len(found['overflow']) - 5} more")
 
     # Decision sets that were read but belong to no placement QA2
     # knows about are worth naming: they are the gap, not a success.

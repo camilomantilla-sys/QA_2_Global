@@ -234,58 +234,99 @@ class InnovidFetchResult:
                     dset_ids.add(candidate)
         return [n for n in self.creative_nodes if n.dtree_id in dset_ids]
 
-    def creative_flight_gaps(self) -> dict[str, list[tuple]]:
+    def creative_flight_gaps(self) -> dict[str, list]:
         """
-        Compares each creative's flight against its placement's, and
-        sorts the differences by whether they actually cost delivery.
+        Finds days when a placement is live with no creative scheduled.
 
-        The direction matters and lumping them together would bury the
-        real ones:
+        Creatives in a decision set are considered together, not one
+        at a time. Sequential rotation is normal and correct -- one
+        creative covering 14-26 Sep and another 27 Sep-31 Oct leaves
+        no hole -- so comparing each against the placement separately
+        reports the second one as two weeks late and buries any real
+        finding under dozens of non-events.
 
-        `gaps` -- the creative starts after the placement does, or
-        ends before it does. The placement is live with nothing to
-        serve in that window. This is the finding QA2 exists for.
+        A gap is therefore a stretch inside the placement's flight
+        that *no* creative covers. Each one records whether a default
+        creative exists, because a default still serves something --
+        usually a backup image rather than the intended creative, so
+        it is a lesser problem, not a non-problem.
 
-        `harmless` -- the creative is ready before the placement
-        starts, or runs past its end. The placement gates delivery, so
-        nothing is lost. Worth listing, never worth alarming about.
-
-        Returns (placement, node, days) tuples. Default nodes are
-        skipped: a default creative's timestamp is when it was
-        attached, not a flight date.
+        `overflow` lists creatives scheduled outside their placement's
+        flight. The placement gates delivery, so those cost nothing.
         """
-        from datetime import date
+        from datetime import date, timedelta
 
-        def _as_date(value: str):
+        def _as_date(value):
             try:
                 return date.fromisoformat(str(value)[:10])
             except (ValueError, TypeError):
                 return None
 
-        gaps: list[tuple] = []
-        harmless: list[tuple] = []
+        gaps: list[dict] = []
+        overflow: list[dict] = []
+        default_only: list[InnovidPlacement] = []
 
         for placement in self.placement_rows():
-            starts = _as_date(placement.start_date)
-            ends = _as_date(placement.end_date)
+            p_start = _as_date(placement.start_date)
+            p_end = _as_date(placement.end_date)
+            if not p_start or not p_end or p_end < p_start:
+                continue
 
-            for node in self.nodes_for_placement(placement.placement_id):
+            nodes = self.nodes_for_placement(placement.placement_id)
+            if not nodes:
+                continue
+
+            has_default = any(n.is_default for n in nodes)
+            windows = []
+            for node in nodes:
                 if node.is_default:
                     continue
+                # No start means it has always been scheduled; no end
+                # means Ongoing. Neither is missing data.
+                start = _as_date(node.start_timestamp) or p_start
+                end = _as_date(node.end_timestamp) or p_end
 
-                node_starts = _as_date(node.start_timestamp)
-                if starts and node_starts and node_starts != starts:
-                    days = (node_starts - starts).days
-                    bucket = gaps if days > 0 else harmless
-                    bucket.append((placement, node, days))
+                if start < p_start or end > p_end:
+                    overflow.append({
+                        "placement": placement, "node": node,
+                        "start": start, "end": end,
+                    })
 
-                node_ends = _as_date(node.end_timestamp)
-                if ends and node_ends and node_ends != ends:
-                    days = (node_ends - ends).days
-                    bucket = gaps if days < 0 else harmless
-                    bucket.append((placement, node, days))
+                windows.append((max(start, p_start), min(end, p_end)))
 
-        return {"gaps": gaps, "harmless": harmless}
+            windows = [w for w in windows if w[0] <= w[1]]
+            if not windows:
+                default_only.append(placement)
+                continue
+
+            # Walk the merged windows and note what they leave out.
+            windows.sort()
+            cursor = p_start
+            for start, end in windows:
+                if start > cursor:
+                    gaps.append({
+                        "placement": placement,
+                        "start": cursor,
+                        "end": start - timedelta(days=1),
+                        "days": (start - cursor).days,
+                        "covered_by_default": has_default,
+                    })
+                cursor = max(cursor, end + timedelta(days=1))
+
+            if cursor <= p_end:
+                gaps.append({
+                    "placement": placement,
+                    "start": cursor,
+                    "end": p_end,
+                    "days": (p_end - cursor).days + 1,
+                    "covered_by_default": has_default,
+                })
+
+        return {
+            "gaps": gaps,
+            "overflow": overflow,
+            "default_only": default_only,
+        }
 
     def linked_node_count(self) -> int:
         """
