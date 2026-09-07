@@ -61,14 +61,17 @@ def main() -> int:
         print("Problems:")
         for error in result.errors:
             print(f"  - {error}")
-        print()
+        # Anything below would be guesswork: the run already knows why
+        # it stopped, and adding "maybe the campaign ID is wrong" here
+        # only sends people looking in the wrong place.
+        return 1
 
     if not result.placements:
-        print("No placements came back.")
+        print("No placements came back, and nothing went wrong.")
         print(
-            "If there's no error above, the login probably went "
-            "through but the campaign ID may be wrong. Try again "
-            "with --show to watch what happens."
+            "The login worked, so the campaign ID is the thing to "
+            "check -- it's the number next to the campaign name in "
+            "Innovid. Run again with --show to watch it happen."
         )
         return 1
 
