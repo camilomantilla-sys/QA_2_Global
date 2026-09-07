@@ -444,6 +444,38 @@ def _summary_url(campaign_id: str) -> str:
     )
 
 
+def _dset_mismatch(dset: dict, asked_for: str, expected_name: str) -> str:
+    """
+    Describes how a decision set response fails to be the one asked
+    for, or "" when it matches.
+
+    Worth checking rather than assuming: Innovid holds two
+    generations of decision set in overlapping id spaces, so a lookup
+    can succeed and still return somebody else's creatives. Silently
+    wrong flight dates are worse than no flight dates.
+    """
+    if not isinstance(dset, dict):
+        return f"Decision set {asked_for} came back in an unexpected shape."
+
+    got_id = _text(dset.get("id"))
+    if got_id and got_id != str(asked_for).strip():
+        return (
+            f"Asked Innovid for decision set {asked_for} and it "
+            f"returned {got_id}. Ignoring it -- the creative dates in "
+            "it belong to a different decision set."
+        )
+
+    got_name = _text(dset.get("name"))
+    if expected_name and got_name and got_name != expected_name:
+        return (
+            f"Decision set {asked_for} is called {got_name!r} in this "
+            f"response but {expected_name!r} in the campaign summary. "
+            "Ignoring it rather than risking the wrong creatives."
+        )
+
+    return ""
+
+
 def _dset_url(dtree_id: str) -> str:
     return f"{DT_BASE}/dset/{dtree_id}"
 
@@ -743,25 +775,43 @@ def fetch_campaign(
                 page_number += 1
 
             wanted = {str(p).strip() for p in (placement_ids or set()) if str(p).strip()}
-            dtree_ids = sorted(
-                {
-                    row.dtree_id
-                    for row in result.placements
-                    if row.dtree_id
-                    and (not wanted or row.placement_id in wanted)
-                }
-            )
+            # Innovid names this id differently depending on the
+            # response: campaign 323492 returns it as decisionSetId
+            # while the same decision set appears as
+            # placementModernDtreeId elsewhere. Both are tried, and
+            # the answer is checked against what was asked for rather
+            # than trusted -- reading the wrong decision set would
+            # hand QA2 another creative's flight dates, which is worse
+            # than reading none.
+            wanted_dsets: dict[str, str] = {}
+            for row in result.placements:
+                if wanted and row.placement_id not in wanted:
+                    continue
+                for dset_id, dset_name in (
+                    (row.dtree_id, row.dtree_name),
+                    (row.legacy_dset_id, row.legacy_dset_name),
+                ):
+                    if dset_id:
+                        wanted_dsets.setdefault(dset_id, dset_name)
 
-            for dtree_id in dtree_ids:
+            for dset_id in sorted(wanted_dsets):
+                expected_name = wanted_dsets[dset_id]
                 try:
                     dset = _api_get_json(
-                        page, _dset_url(dtree_id), csrf_token["value"]
+                        page, _dset_url(dset_id), csrf_token["value"]
                     )
-                    result.creative_nodes.extend(parse_dset_response(dset))
                 except Exception as exc:
                     result.errors.append(
-                        f"Decision set {dtree_id} could not be read: {exc}"
+                        f"Decision set {dset_id} could not be read: {exc}"
                     )
+                    continue
+
+                problem = _dset_mismatch(dset, dset_id, expected_name)
+                if problem:
+                    result.errors.append(problem)
+                    continue
+
+                result.creative_nodes.extend(parse_dset_response(dset))
 
         except InnovidAuthError as exc:
             result.errors.append(str(exc))

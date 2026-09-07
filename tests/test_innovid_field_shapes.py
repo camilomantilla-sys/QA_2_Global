@@ -16,7 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.innovid_api import (  # noqa: E402
     InnovidFetchResult,
+    _dset_mismatch,
     count_filled_fields,
+    parse_dset_response,
     parse_summary_response,
     summary_field_names,
 )
@@ -171,6 +173,65 @@ def test_a_campaign_with_no_modern_dtree_yields_no_creative_nodes():
     result = _tree_result()
     assert result.creative_nodes == []
     assert all(not r.dtree_id for r in result.placements)
+
+# ---------------------------------------------------------------
+# Verifying a decision set is the one that was asked for.
+#
+# Innovid returned decision set 38808 under `decisionSetId` in
+# campaign 323492 and under `placementModernDtreeId` elsewhere, so
+# QA2 tries both names. Trying both means it can ask for the wrong
+# thing, and a decision set full of somebody else's creatives would
+# hand QA2 wrong flight dates -- which is worse than no dates.
+# ---------------------------------------------------------------
+
+DSET_38808 = {
+    "id": 38808,
+    "name": "Frosty GM Display 320x50",
+    "servingMethod": "Rotation",
+    "nodes": [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": None, "weight": 1},
+        {"id": 6312751, "startTimestamp": "2026-07-24 15:59:09",
+         "endTimestamp": None, "isDefault": True},
+    ],
+}
+
+
+def test_the_right_decision_set_passes():
+    assert _dset_mismatch(DSET_38808, "38808", "Frosty GM Display 320x50") == ""
+
+
+def test_a_different_decision_set_is_refused():
+    wrong = dict(DSET_38808, id=44120, name="Some Other Set")
+    problem = _dset_mismatch(wrong, "38808", "Frosty GM Display 320x50")
+
+    assert problem
+    assert "38808" in problem and "44120" in problem
+
+
+def test_a_name_that_disagrees_is_refused():
+    # Same id, different name: the id spaces overlap between the two
+    # generations, so this is the case that catches a collision.
+    renamed = dict(DSET_38808, name="Totally Different Set")
+    assert _dset_mismatch(renamed, "38808", "Frosty GM Display 320x50")
+
+
+def test_a_missing_name_in_the_summary_is_not_treated_as_a_mismatch():
+    # decisionSetName is empty on plenty of rows; that is not evidence
+    # of anything being wrong.
+    assert _dset_mismatch(DSET_38808, "38808", "") == ""
+
+
+def test_garbage_is_refused_rather_than_parsed():
+    assert _dset_mismatch(None, "38808", "")
+    assert _dset_mismatch("<html>error</html>", "38808", "")
+
+
+def test_the_verified_decision_set_carries_the_real_creative_date():
+    # 24 July, where the summary grid shows the placement's 20 July.
+    nodes = parse_dset_response(DSET_38808)
+    assert nodes[0].start_timestamp == "2026-07-24 00:00:00"
+    assert nodes[0].weight == "1"
 
 
 if __name__ == "__main__":
