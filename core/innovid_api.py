@@ -128,6 +128,14 @@ class InnovidPlacement:
     # the two can be told apart instead of being counted together.
     level: str = ""
 
+    @property
+    def is_placement_level(self) -> bool:
+        return self.level.strip().upper() == "PLACEMENT"
+
+    @property
+    def is_creative_level(self) -> bool:
+        return self.level.strip().upper() == "PLACEMENT-CREATIVE"
+
 
 @dataclass
 class InnovidCreativeNode:
@@ -163,6 +171,12 @@ class InnovidFetchResult:
     # working out why a column is empty.
     field_coverage: dict[str, int] = field(default_factory=dict)
 
+    # Every row Innovid sent, including the site-level rows that carry
+    # no placement. field_coverage is counted against this, not
+    # against the parsed placements -- otherwise a field present on
+    # every row reads as "409 / 385", which looks like a bug.
+    rows_seen: int = 0
+
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
         dtree_ids = {
             p.dtree_id
@@ -170,6 +184,37 @@ class InnovidFetchResult:
             if p.placement_id == str(placement_id).strip() and p.dtree_id
         }
         return [n for n in self.creative_nodes if n.dtree_id in dtree_ids]
+
+    def placement_rows(self) -> list[InnovidPlacement]:
+        """The placement-level rows only."""
+        return [r for r in self.placements if r.is_placement_level]
+
+    def creative_rows_for(self, placement_id: str) -> list[InnovidPlacement]:
+        """
+        The creative-level rows under one placement.
+
+        The summary comes back as a tree flattened into rows -- a
+        PLACEMENT row followed by its PLACEMENT-CREATIVE rows -- and
+        each level carries its own dates. That's where a creative
+        that starts after its placement becomes visible, without
+        needing to open the decision set at all.
+        """
+        wanted = str(placement_id).strip()
+        return [
+            r for r in self.placements
+            if r.is_creative_level and r.placement_id == wanted
+        ]
+
+    # Deliberately no compare-the-dates helper here.
+    #
+    # The PLACEMENT-CREATIVE rows do carry startDate/endDate, but
+    # those repeat the placement's dates rather than the creative's
+    # own -- the summary grid shows the placement flight on every row
+    # under it. Comparing them would match every time and report "all
+    # creatives flight like their placement", which is a false pass on
+    # exactly the error this is meant to catch. Creative flight dates
+    # only exist inside the decision set, so they have to be read
+    # from there.
 
 
 # ----------------------------------------------------------------
@@ -678,6 +723,8 @@ def fetch_campaign(
                 if page_number == 1:
                     result.returned_fields = summary_field_names(summary)
                 count_filled_fields(summary, result.field_coverage)
+                items = summary.get("items") if isinstance(summary, dict) else None
+                result.rows_seen += len(items) if isinstance(items, list) else 0
 
                 batch = parse_summary_response(summary)
                 result.placements.extend(batch)
