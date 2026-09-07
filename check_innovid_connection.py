@@ -12,6 +12,7 @@ which is the fastest way to see where a login is getting stuck.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -24,8 +25,64 @@ from core.innovid_api import (  # noqa: E402
     establish_session,
     fetch_campaign,
     load_credentials,
+    record_api_calls,
     session_is_saved,
 )
+
+
+def _record_what_innovid_asks_for(campaign_id: str) -> int:
+    """
+    Watches Innovid's own interface to learn an endpoint QA2 can't
+    find on its own.
+    """
+    print("Opening the campaign in a browser window.\n")
+    print("Click around the way you normally would -- in particular,")
+    print("open a decision set so its panel loads. When you're done,")
+    print("just close the window.\n")
+    print("Only the addresses Innovid calls are written down. No")
+    print("headers, no cookies, no request or response contents, so")
+    print("nothing here can carry your session.\n")
+
+    try:
+        calls = record_api_calls(
+            campaign_id=campaign_id, credentials=load_credentials()
+        )
+    except InnovidAuthError as exc:
+        print(f"Didn't work out:\n  {exc}")
+        return 1
+
+    if not calls:
+        print("No API calls were recorded. If the window never")
+        print("loaded the campaign, try --login first.")
+        return 1
+
+    # Group by endpoint shape so fifty calls to one endpoint read as
+    # one line. The numbers in a path are ids, and the shape is what
+    # matters when hunting for an endpoint.
+    shapes: dict[str, list[str]] = {}
+    for url in calls:
+        path = url.split("?", 1)[0]
+        shape = re.sub(r"/\d+", "/{id}", path)
+        shapes.setdefault(shape, []).append(url)
+
+    known = ("/summary", "/dset/")
+    print(f"{len(calls)} call(s) across {len(shapes)} endpoint(s):\n")
+    for shape in sorted(shapes):
+        mark = "     " if any(k in shape for k in known) else "NEW  "
+        print(f"  {mark}{shape}   ({len(shapes[shape])} call(s))")
+
+    print("\nFull addresses of the endpoints QA2 doesn't already use:")
+    for shape in sorted(shapes):
+        if any(k in shape for k in known):
+            continue
+        for url in shapes[shape][:3]:
+            print(f"  {url}")
+
+    print(
+        "\nSend those over. Give them a glance first -- they are "
+        "just paths and ids, but they are yours to check."
+    )
+    return 0
 
 
 def _sign_in_by_hand() -> int:
@@ -63,7 +120,7 @@ def main() -> int:
 
     if not args:
         print("Usage: python check_innovid_connection.py "
-              "<CAMPAIGN_ID> [--show] [--login]")
+              "<CAMPAIGN_ID> [--show] [--login] [--record]")
         print("Example: python check_innovid_connection.py 323492")
         return 2
 
@@ -71,6 +128,9 @@ def main() -> int:
 
     if "--login" in sys.argv:
         return _sign_in_by_hand()
+
+    if "--record" in sys.argv:
+        return _record_what_innovid_asks_for(campaign_id)
 
     credentials = load_credentials()
 

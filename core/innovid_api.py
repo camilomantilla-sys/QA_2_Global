@@ -599,6 +599,85 @@ def session_is_saved(session_path: Path | None = None) -> bool:
     return (session_path or SESSION_PATH).exists()
 
 
+def record_api_calls(
+    campaign_id: str,
+    credentials: InnovidCredentials | None = None,
+    session_path: Path | None = None,
+    timeout_ms: int = 600_000,
+) -> list[str]:
+    """
+    Opens Innovid in a normal window and writes down which API calls
+    its own interface makes while a person clicks around.
+
+    QA2 keeps hitting fields the interface clearly has and the
+    documented-looking endpoints don't return -- decision set 38808 is
+    visible in the UI but absent from every row of the campaign
+    summary. Watching what the app itself asks for answers that in one
+    sitting, and it beats asking somebody to dig through DevTools.
+
+    Records request URLs only. Not headers, not cookies, not request
+    or response bodies -- so the result can be pasted into a chat
+    without carrying the session token, which is as good as a
+    password.
+    """
+    saved_session = session_path or SESSION_PATH
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise InnovidAuthError(
+            "Playwright isn't installed in the Python that's running "
+            f"QA2. Install it there with:  {_venv_python_hint()} -m "
+            "pip install -r requirements.txt"
+        )
+
+    seen: list[str] = []
+
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=False)
+        context = (
+            browser.new_context(storage_state=str(saved_session))
+            if saved_session.exists()
+            else browser.new_context()
+        )
+        page = context.new_page()
+
+        def _note(request):
+            if _API_HOST not in request.url:
+                return
+            url = request.url
+            if url not in seen:
+                seen.append(url)
+
+        page.on("request", _note)
+
+        try:
+            if not saved_session.exists():
+                if credentials is None:
+                    raise InnovidAuthError(
+                        "No saved session and no credentials. Run "
+                        "with --login first."
+                    )
+                _login(page, credentials, 60_000)
+
+            page.goto(
+                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                wait_until="domcontentloaded",
+                timeout=60_000,
+            )
+
+            # The person drives from here.
+            _wait_until_window_closed(page, timeout_ms)
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+            browser.close()
+
+    return seen
+
+
 def establish_session(
     session_path: Path | None = None,
     login_url: str = APP_ORIGIN,
@@ -686,6 +765,27 @@ def _looks_like_sign_in(page) -> bool:
         return _first_visible(page, PASS_SELECTORS) is not None
     except Exception:
         return False
+
+
+def _wait_until_window_closed(page, timeout_ms: int) -> bool:
+    """
+    Blocks until the person closes the browser window, or the time
+    runs out. True if they closed it.
+
+    Closing the window is how someone says "done" without having to
+    go back to a terminal they may not even have in front of them.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        try:
+            if page.is_closed():
+                return True
+            page.wait_for_timeout(500)
+        except Exception:
+            # The page or the whole browser went away mid-wait, which
+            # is the same answer.
+            return True
+    return False
 
 
 def _wait_until_signed_in(page, timeout_ms: int) -> bool:
