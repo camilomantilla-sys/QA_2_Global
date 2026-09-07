@@ -309,6 +309,17 @@ def _dset_url(dtree_id: str) -> str:
     return f"{DT_BASE}/dset/{dtree_id}"
 
 
+def _venv_python_hint() -> str:
+    """
+    The full path of the interpreter running QA2, for pasting into a
+    terminal. Saying plain "python" is what sends people to the system
+    Python, which is never where QA2's packages are installed.
+    """
+    import sys
+
+    return sys.executable or "python"
+
+
 def fetch_campaign(
     campaign_id: str,
     credentials: InnovidCredentials,
@@ -331,8 +342,9 @@ def fetch_campaign(
         from playwright.sync_api import sync_playwright
     except ImportError:
         result.errors.append(
-            "Playwright isn't installed -- run the launcher once to "
-            "install requirements, then try again."
+            "Playwright isn't installed in the Python that's running "
+            f"QA2. Install it there with:  {_venv_python_hint()} -m pip "
+            "install -r requirements.txt"
         )
         return result
 
@@ -344,7 +356,7 @@ def fetch_campaign(
                 result.errors.append(
                     "Playwright is installed but its browser isn't. "
                     "Open a terminal in the QA2 folder and run:  "
-                    "python -m playwright install chromium"
+                    f"{_venv_python_hint()} -m playwright install chromium"
                 )
             else:
                 result.errors.append(f"Could not start the browser: {exc}")
