@@ -68,6 +68,13 @@ SUMMARY_FIELDS = (
 SUMMARY_PAGE_SIZE = 500
 MAX_SUMMARY_PAGES = 40
 
+# A saved sign-in, so QA2 doesn't have to log in again each run.
+# Holds session cookies, which are as good as the password until they
+# expire -- gitignored, same as the credentials.
+SESSION_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "innovid_session.json"
+)
+
 CREDENTIALS_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "innovid_credentials.env"
 )
@@ -360,23 +367,158 @@ def _venv_python_hint() -> str:
     return sys.executable or "python"
 
 
+def _launch_browser(playwright, headless: bool):
+    """
+    Starts Chromium, turning the two failures people actually hit into
+    instructions instead of tracebacks. Raises InnovidAuthError with
+    the message to show.
+    """
+    try:
+        return playwright.chromium.launch(headless=headless)
+    except Exception as exc:
+        if "Executable doesn't exist" in str(exc):
+            raise InnovidAuthError(
+                "Playwright is installed but its browser isn't. "
+                "Open a terminal in the QA2 folder and run:  "
+                f"{_venv_python_hint()} -m playwright install chromium"
+            ) from exc
+        raise InnovidAuthError(f"Could not start the browser: {exc}") from exc
+
+
+def session_is_saved(session_path: Path | None = None) -> bool:
+    return (session_path or SESSION_PATH).exists()
+
+
+def establish_session(
+    session_path: Path | None = None,
+    login_url: str = APP_ORIGIN,
+    timeout_ms: int = 300_000,
+) -> str:
+    """
+    Opens a normal browser window and waits for a human to sign in,
+    then saves the session so later runs don't have to.
+
+    Automating the sign-in itself turned out to be the wrong idea:
+    Innovid authenticates through Mediaocean's Auth0 tenant, which
+    treats repeated scripted logins as suspicious and starts refusing
+    them, and it can ask for a verification code that no script can
+    answer. Signing in by hand once sidesteps both, and is also how
+    the person stays in control of their own credentials -- QA2 never
+    has to see them.
+
+    Returns the path the session was written to. Raises
+    InnovidAuthError if the sign-in never completes.
+    """
+    target = session_path or SESSION_PATH
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise InnovidAuthError(
+            "Playwright isn't installed in the Python that's running "
+            f"QA2. Install it there with:  {_venv_python_hint()} -m "
+            "pip install -r requirements.txt"
+        )
+
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=False)
+        context = browser.new_context()
+        page = context.new_page()
+        try:
+            page.goto(login_url, wait_until="domcontentloaded", timeout=60_000)
+
+            if not _wait_until_signed_in(page, timeout_ms):
+                raise InnovidAuthError(
+                    "Timed out waiting for the sign-in. Nothing was "
+                    "saved -- run it again and complete the sign-in "
+                    "in the window that opens.\n"
+                    f"  Left on: {page.url}"
+                )
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            context.storage_state(path=str(target))
+        finally:
+            context.close()
+            browser.close()
+
+    return str(target)
+
+
+def _looks_like_sign_in(page) -> bool:
+    """
+    True when the browser is showing a sign-in rather than the app --
+    either a password box, or a URL that left the Innovid domain for
+    an identity provider.
+    """
+    try:
+        if not page.url.startswith(APP_ORIGIN):
+            return True
+        return _first_visible(page, PASS_SELECTORS) is not None
+    except Exception:
+        return False
+
+
+def _wait_until_signed_in(page, timeout_ms: int) -> bool:
+    """
+    True once the browser is sitting on Innovid itself with no
+    password box in sight.
+
+    Both halves matter: the sign-in bounces through Auth0 and back, so
+    being on the Innovid domain isn't enough on its own, and an
+    identity provider can show a password box on an Innovid-looking
+    URL mid-flow.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        try:
+            on_app = page.url.startswith(APP_ORIGIN)
+            if on_app and _first_visible(page, PASS_SELECTORS) is None:
+                return True
+        except Exception:
+            # The page is mid-navigation. Look again shortly.
+            pass
+        try:
+            page.wait_for_timeout(1_000)
+        except Exception:
+            # The window was closed. Nothing more to wait for.
+            return False
+    return False
+
+
 def fetch_campaign(
     campaign_id: str,
-    credentials: InnovidCredentials,
+    credentials: InnovidCredentials | None = None,
     placement_ids: set[str] | None = None,
     headless: bool = True,
     timeout_ms: int = 60_000,
+    session_path: Path | None = None,
 ) -> InnovidFetchResult:
     """
-    Logs into Innovid in a real browser, then calls the API with that
-    session. `placement_ids` restricts the decision-set calls to the
-    placements the Traffic Sheet actually worked, so a 200-placement
-    campaign doesn't turn into 200 requests.
+    Reads a campaign from Innovid's API using a browser session.
+
+    Prefers the session saved by `establish_session` -- signing in by
+    hand once and reusing it, which is both more reliable than
+    scripting Auth0 and the only thing that works when the sign-in
+    asks for a verification code. Falls back to filling in the login
+    form with `credentials` when no session has been saved.
+
+    `placement_ids` restricts the decision-set calls to the placements
+    the Traffic Sheet actually worked, so a 200-placement campaign
+    doesn't turn into 200 requests.
 
     Never raises for a partial failure: whatever could be fetched
     comes back, and what couldn't is described in `.errors`.
     """
     result = InnovidFetchResult(campaign_id=str(campaign_id))
+    saved_session = session_path or SESSION_PATH
+
+    if not saved_session.exists() and credentials is None:
+        result.errors.append(
+            "No saved Innovid session and no credentials to sign in "
+            "with. Run the connection check with --login to sign in "
+            "once by hand."
+        )
+        return result
 
     try:
         from playwright.sync_api import sync_playwright
@@ -390,19 +532,17 @@ def fetch_campaign(
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=headless)
-        except Exception as exc:
-            if "Executable doesn't exist" in str(exc):
-                result.errors.append(
-                    "Playwright is installed but its browser isn't. "
-                    "Open a terminal in the QA2 folder and run:  "
-                    f"{_venv_python_hint()} -m playwright install chromium"
-                )
-            else:
-                result.errors.append(f"Could not start the browser: {exc}")
+            browser = _launch_browser(p, headless)
+        except InnovidAuthError as exc:
+            result.errors.append(str(exc))
             return result
 
-        context = browser.new_context()
+        using_saved_session = saved_session.exists()
+        context = (
+            browser.new_context(storage_state=str(saved_session))
+            if using_saved_session
+            else browser.new_context()
+        )
         page = context.new_page()
 
         csrf_token = {"value": ""}
@@ -418,7 +558,8 @@ def fetch_campaign(
         page.on("request", _capture_csrf)
 
         try:
-            _login(page, credentials, timeout_ms)
+            if not using_saved_session:
+                _login(page, credentials, timeout_ms)
 
             # Visiting the campaign makes the app issue its own API
             # calls, which is what surfaces the CSRF token.
@@ -427,6 +568,17 @@ def fetch_campaign(
                 wait_until="networkidle",
                 timeout=timeout_ms,
             )
+
+            # A saved session expires eventually, and when it does the
+            # campaign page quietly becomes a login page. Without this
+            # check the run would report an empty campaign instead of
+            # an expired sign-in.
+            if using_saved_session and _looks_like_sign_in(page):
+                raise InnovidAuthError(
+                    "The saved Innovid session has expired. Run the "
+                    "connection check with --login to sign in again.\n"
+                    f"  Ended up on: {page.url}"
+                )
 
             # One page at a time: a campaign with more placements
             # than fit in a page would otherwise come back silently

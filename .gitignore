@@ -74,3 +74,6 @@ tag_inventory_coverage*.txt
 
 # Innovid credentials -- never leaves the machine running QA2
 config/innovid_credentials.env
+
+# Saved Innovid sign-in -- session cookies, as sensitive as the password
+config/innovid_session.json
