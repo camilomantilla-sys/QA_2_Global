@@ -62,6 +62,12 @@ SUMMARY_FIELDS = (
     "modernDtreeName",
 )
 
+# Innovid caps a page of results; 500 is what its own interface asks
+# for. MAX_SUMMARY_PAGES is a stop so a bad response can't spin
+# forever.
+SUMMARY_PAGE_SIZE = 500
+MAX_SUMMARY_PAGES = 40
+
 CREDENTIALS_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "innovid_credentials.env"
 )
@@ -127,6 +133,11 @@ class InnovidFetchResult:
     placements: list[InnovidPlacement] = field(default_factory=list)
     creative_nodes: list[InnovidCreativeNode] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    # The field names Innovid actually returned. Kept because "the
+    # column came back blank" and "Innovid never sent that column"
+    # look identical once parsed, and they need opposite fixes.
+    returned_fields: list[str] = field(default_factory=list)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
         dtree_ids = {
@@ -206,6 +217,29 @@ def _text(value) -> str:
     return str(value)
 
 
+def summary_field_names(payload: dict) -> list[str]:
+    """
+    The field names present in a /summary response.
+
+    Names only, never values: this is for working out why a column
+    arrived empty, and it gets printed and pasted into chats.
+    """
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return []
+
+    names: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key in item:
+            if key not in names:
+                names.append(key)
+    return sorted(names)
+
+
 def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
     """
     Turns a /summary response into placement rows.
@@ -223,6 +257,11 @@ def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
     rows: list[InnovidPlacement] = []
     for item in items:
         if not isinstance(item, dict):
+            continue
+        # Innovid includes rows with no placement id (totals and
+        # spacers). Counting those as placements would inflate every
+        # figure QA2 reports.
+        if not _text(item.get("placementId")):
             continue
         rows.append(
             InnovidPlacement(
@@ -389,20 +428,42 @@ def fetch_campaign(
                 timeout=timeout_ms,
             )
 
-            summary = _api_get_json(
-                page,
-                _summary_url(campaign_id),
-                csrf_token["value"],
-                method="POST",
-                body={
-                    "rpp": 500,
-                    "page": 1,
-                    "searchTerm": None,
-                    "sortBy": "name",
-                    "sortOrder": "ASC",
-                },
-            )
-            result.placements = parse_summary_response(summary)
+            # One page at a time: a campaign with more placements
+            # than fit in a page would otherwise come back silently
+            # truncated, which is worse than failing outright.
+            page_number = 1
+            while True:
+                summary = _api_get_json(
+                    page,
+                    _summary_url(campaign_id),
+                    csrf_token["value"],
+                    method="POST",
+                    body={
+                        "rpp": SUMMARY_PAGE_SIZE,
+                        "page": page_number,
+                        "searchTerm": None,
+                        "sortBy": "name",
+                        "sortOrder": "ASC",
+                    },
+                )
+                if page_number == 1:
+                    result.returned_fields = summary_field_names(summary)
+
+                batch = parse_summary_response(summary)
+                result.placements.extend(batch)
+
+                total_pages = summary.get("totalPages") if isinstance(summary, dict) else None
+                if not isinstance(total_pages, int) or page_number >= total_pages:
+                    break
+                if page_number >= MAX_SUMMARY_PAGES:
+                    result.errors.append(
+                        f"Stopped after {MAX_SUMMARY_PAGES} pages of "
+                        f"placements ({len(result.placements)} rows). "
+                        "This campaign is larger than expected -- the "
+                        "results below are incomplete."
+                    )
+                    break
+                page_number += 1
 
             wanted = {str(p).strip() for p in (placement_ids or set()) if str(p).strip()}
             dtree_ids = sorted(
