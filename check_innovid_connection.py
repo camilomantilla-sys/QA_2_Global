@@ -75,11 +75,44 @@ def main() -> int:
         )
         return 1
 
-    print(f"{len(result.placements)} placement row(s)")
+    placement_ids = {r.placement_id for r in result.placements}
+    print(f"{len(result.placements)} row(s), "
+          f"{len(placement_ids)} distinct placement(s)")
     print(f"{len(result.creative_nodes)} creative node(s)\n")
 
-    with_partner = [p for p in result.placements if p.verification_partner]
-    print(f"Verification Partner filled in on {len(with_partner)} row(s)")
+    # Coverage across every row, not a sample. A field that is filled
+    # in on the first five rows and empty on the other 404 is exactly
+    # the kind of thing a sample hides.
+    critical = {
+        "Verification Partner": lambda r: r.verification_partner,
+        "Decision set id": lambda r: r.dtree_id,
+        "Start date": lambda r: r.start_date,
+        "End date": lambda r: r.end_date,
+        "Rotation weight": lambda r: r.rotation_weight,
+    }
+    total = len(result.placements)
+    print("How much of each field actually came back:")
+    missing_entirely = []
+    for label, getter in critical.items():
+        filled = sum(1 for r in result.placements if getter(r))
+        flag = "" if filled else "   <-- nothing at all"
+        print(f"  {label:22} {filled:>4} / {total}{flag}")
+        if not filled:
+            missing_entirely.append(label)
+
+    if missing_entirely and result.returned_fields:
+        print(
+            "\nInnovid returned these field names (names only, no "
+            "values):"
+        )
+        for name in result.returned_fields:
+            print(f"  - {name}")
+        print(
+            "\nIf the fields above are missing from that list, "
+            "Innovid didn't send them -- which usually means the "
+            "saved column view is filtering them out, not that they "
+            "are empty in the campaign. Send this list over."
+        )
 
     print("\nFirst few placements:")
     for row in result.placements[:5]:
@@ -102,7 +135,7 @@ def main() -> int:
             )
 
     # The whole point: catching a creative that starts after its
-    # placement does.
+    # placement does. Checked across every row.
     mismatches = []
     for row in result.placements:
         for node in result.nodes_for_placement(row.placement_id):
@@ -112,7 +145,13 @@ def main() -> int:
                 mismatches.append((row, node))
 
     print()
-    if mismatches:
+    if not result.creative_nodes:
+        print(
+            "No creative dates were checked: without a decision set "
+            "id there is nothing to look them up with. That is the "
+            "thing to fix before this is useful."
+        )
+    elif mismatches:
         print(f"{len(mismatches)} creative(s) starting on a different day "
               "than their placement:")
         for row, node in mismatches[:10]:
