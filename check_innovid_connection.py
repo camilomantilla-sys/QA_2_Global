@@ -19,9 +19,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.innovid_api import (  # noqa: E402
     CREDENTIALS_PATH,
+    SESSION_PATH,
+    InnovidAuthError,
+    establish_session,
     fetch_campaign,
     load_credentials,
+    session_is_saved,
 )
+
+
+def _sign_in_by_hand() -> int:
+    """
+    Opens a normal browser window so the sign-in happens the usual
+    way -- SSO, verification code and all -- and keeps the session.
+    """
+    print("Opening a browser window.\n")
+    print("Sign in to Innovid the way you normally would. Once the")
+    print("campaign manager has loaded, this will save the session")
+    print("and close the window by itself. Nothing is typed for you,")
+    print("and your password is never read.\n")
+
+    try:
+        saved_to = establish_session()
+    except InnovidAuthError as exc:
+        print(f"Didn't work out:\n  {exc}")
+        return 1
+
+    print(f"Signed in. Session saved to {saved_to}")
+    print(
+        "\nThat file holds session cookies, which work like your "
+        "password until they expire, so it stays on this machine -- "
+        "it's gitignored and must not be shared or committed. When "
+        "it expires, run --login again."
+    )
+    print("\nNow run the check without --login:")
+    print(f"    {sys.executable} check_innovid_connection.py <CAMPAIGN_ID>")
+    return 0
 
 
 def main() -> int:
@@ -29,25 +62,38 @@ def main() -> int:
     show_browser = "--show" in sys.argv
 
     if not args:
-        print("Usage: python check_innovid_connection.py <CAMPAIGN_ID> [--show]")
+        print("Usage: python check_innovid_connection.py "
+              "<CAMPAIGN_ID> [--show] [--login]")
         print("Example: python check_innovid_connection.py 323492")
         return 2
 
     campaign_id = args[0]
 
+    if "--login" in sys.argv:
+        return _sign_in_by_hand()
+
     credentials = load_credentials()
-    if credentials is None:
-        print("No credentials found.\n")
-        print(f"Expected file: {CREDENTIALS_PATH}")
+
+    if not session_is_saved() and credentials is None:
+        print("Nothing to sign in with.\n")
         print(
-            "Copy config/innovid_credentials.env.example to "
-            "config/innovid_credentials.env and fill in your Innovid "
-            "username and password. That file is gitignored -- it "
-            "never leaves your machine."
+            "Either sign in by hand once (recommended -- it also "
+            "handles verification codes):\n"
+            f"    {sys.executable} check_innovid_connection.py "
+            f"{campaign_id} --login\n"
+        )
+        print(
+            "or copy config/innovid_credentials.env.example to "
+            f"{CREDENTIALS_PATH.name} in the same folder and fill it "
+            "in. Both files are gitignored -- they never leave your "
+            "machine."
         )
         return 1
 
-    print(f"Signing in as {credentials.username}")
+    if session_is_saved():
+        print(f"Using the saved sign-in ({SESSION_PATH.name})")
+    else:
+        print(f"Signing in as {credentials.username}")
     print(f"Campaign {campaign_id}")
     print(f"Browser: {'visible' if show_browser else 'hidden'}\n")
 
