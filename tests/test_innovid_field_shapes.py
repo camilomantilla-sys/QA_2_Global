@@ -9,6 +9,7 @@ Run with pytest, or directly:  python tests/test_innovid_field_shapes.py
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.innovid_api import (  # noqa: E402
     InnovidFetchResult,
     _dset_mismatch,
+    redact_body,
     redact_url,
     count_filled_fields,
     count_levels,
@@ -449,6 +451,62 @@ def test_long_id_lists_are_still_truncated():
         f"https://api.flashtalking.net/twr/v1/x?placementIds={ids}"
     )
     assert "truncated" in kept
+
+# ---------------------------------------------------------------
+# Request bodies. The summary endpoint is called four times with an
+# identical URL; whatever makes Innovid return decision set 38808 is
+# in the body, so the body has to be readable -- without carrying
+# anything typed into a search box.
+# ---------------------------------------------------------------
+
+SUMMARY_URL = (
+    "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+)
+
+
+def test_the_shape_of_a_summary_body_is_readable():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "page": 1, "rpp": 500, "sortBy": "name", "sortOrder": "ASC",
+        "parentId": 10988717, "level": "PLACEMENT",
+    }))
+
+    assert "parentId=10988717" in body
+    assert "level=PLACEMENT" in body
+    assert "rpp=500" in body
+
+
+def test_a_typed_search_term_never_comes_out():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "page": 1, "searchTerm": "something personal someone typed",
+    }))
+
+    assert "searchTerm=<hidden>" in body
+    assert "personal" not in body
+
+
+def test_bodies_are_only_read_for_the_endpoints_being_investigated():
+    other = "https://api.flashtalking.net/crm/v1/user"
+    assert redact_body(other, json.dumps({"anything": "at all"})) == ""
+
+
+def test_a_body_that_is_not_json_is_reported_not_dumped():
+    out = redact_body(SUMMARY_URL, "user=camilo&password=hunter2")
+
+    assert "not JSON" in out
+    assert "hunter2" not in out
+
+
+def test_no_body_is_not_an_error():
+    assert redact_body(SUMMARY_URL, None) == ""
+    assert redact_body(SUMMARY_URL, "") == ""
+
+
+def test_nested_structure_is_shown_but_bounded():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "fields": ["a"] * 200,
+    }))
+    assert "truncated" in body
+    assert len(body) < 300
 
 
 if __name__ == "__main__":

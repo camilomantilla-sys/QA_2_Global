@@ -671,6 +671,63 @@ def redact_url(url: str) -> str:
     return f"{base}?{'&'.join(kept)}"
 
 
+# Body keys whose values describe what is being asked for. Anything
+# else is reduced to its name, same rule as the query string.
+SAFE_BODY_KEYS = frozenset({
+    "page", "rpp", "sortBy", "sortOrder", "level", "levels", "parentId",
+    "parentLevel", "placementId", "placementIds", "siteId", "expand",
+    "expandAll", "groupBy", "type", "id", "ids", "campaignId",
+    "decisionSetId", "dtreeId", "includeChildren", "fields",
+})
+
+# Only these endpoints have bodies worth reading. Keeping the list
+# short matters: a body is the most likely place for something
+# personal to turn up, and none of the others are being investigated.
+BODY_ENDPOINTS = ("/summary", "/dset/")
+
+
+def redact_body(url: str, body: str | None) -> str:
+    """
+    Summarises a request body as keys, with values shown only for the
+    keys that describe the request.
+
+    The summary endpoint is called several times with the same URL and
+    different bodies -- expanding a placement in the grid is a body
+    change, not a URL change -- so the URL alone can't explain how
+    Innovid asks for a decision set. Reading the body is the only way
+    to see that, and reading it this way keeps anything typed into a
+    search box out of the output.
+    """
+    if not body or not url:
+        return ""
+    if not any(marker in url for marker in BODY_ENDPOINTS):
+        return ""
+
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return "(body is not JSON)"
+
+    if not isinstance(parsed, dict):
+        return f"(body is a {type(parsed).__name__})"
+
+    parts = []
+    for key in sorted(parsed):
+        value = parsed[key]
+        if key not in SAFE_BODY_KEYS:
+            parts.append(f"{key}=<hidden>")
+        elif isinstance(value, (dict, list)):
+            # Structure is informative; contents may not be safe.
+            shown = json.dumps(value)
+            if len(shown) > 120:
+                shown = shown[:120] + "...(truncated)"
+            parts.append(f"{key}={shown}")
+        else:
+            parts.append(f"{key}={value}")
+
+    return "{" + ", ".join(parts) + "}"
+
+
 def record_api_calls(
     campaign_id: str,
     credentials: InnovidCredentials | None = None,
@@ -716,8 +773,15 @@ def record_api_calls(
 
         def _note(request):
             url = redact_url(request.url)
-            if url and url not in seen:
-                seen.append(url)
+            if not url:
+                return
+            try:
+                body = redact_body(url, request.post_data)
+            except Exception:
+                body = ""
+            line = f"{url}\n      body: {body}" if body else url
+            if line not in seen:
+                seen.append(line)
 
         page.on("request", _note)
 

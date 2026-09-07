@@ -62,10 +62,10 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
     # one line. The numbers in a path are ids, and the shape is what
     # matters when hunting for an endpoint.
     shapes: dict[str, list[str]] = {}
-    for url in calls:
-        path = url.split("?", 1)[0]
+    for entry in calls:
+        path = entry.split("\n", 1)[0].split("?", 1)[0]
         shape = re.sub(r"/\d+", "/{id}", path)
-        shapes.setdefault(shape, []).append(url)
+        shapes.setdefault(shape, []).append(entry)
 
     # Decision sets are the reason this exists, and the summary's
     # field list is how Innovid says which columns it wants.
@@ -82,8 +82,8 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
     if highlights:
         print("THE PART THAT MATTERS -- send these lines:\n")
         for shape in highlights:
-            for url in shapes[shape]:
-                print(f"  {url}")
+            for entry in shapes[shape]:
+                print(f"  {entry}")
         print()
 
     print(f"Everything else Innovid called "
@@ -91,8 +91,8 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
     for shape in sorted(shapes):
         if _is_interesting(shape):
             continue
-        for url in shapes[shape][:2]:
-            print(f"  {url}")
+        for entry in shapes[shape][:2]:
+            print(f"  {entry}")
         if len(shapes[shape]) > 2:
             print(f"  ... and {len(shapes[shape]) - 2} more like it")
 
