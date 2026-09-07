@@ -35,31 +35,47 @@ CM_BASE = "https://api.flashtalking.net/cm/v1/ui"
 DT_BASE = "https://api.flashtalking.net/dt/v1/ui"
 APP_ORIGIN = "https://campaign-manager.flashtalking.net"
 
-# Everything QA2 can use today, plus the two IDs that stitch the
-# placement level to the creative level. Asked for explicitly so the
-# result never depends on which column view the user has configured
-# in Innovid.
+# What Innovid's own summary grid asks for, taken from the request
+# its interface makes, plus the fields QA2 needs that its default
+# view doesn't request. Asking for a field Innovid doesn't recognise
+# is harmless -- it comes back absent rather than as an error -- and
+# the response carries about 130 fields regardless of this list, so
+# it is a floor rather than a filter.
 SUMMARY_FIELDS = (
+    # Innovid's own list, in its order.
+    "status",
+    "siteName",
     "placementId",
     "placementName",
-    "siteName",
+    "placementType",
     "dimensions",
-    "status",
+    "clickTag1",
     "startDate",
     "endDate",
+    "creativeDescription",
     "creativeId",
     "fileName",
-    "creativeDescription",
-    "clickTag1",
     "thirdPartySurvey1",
     "thirdPartyImpression1",
     "thirdPartyImpression2",
     "verificationPartner",
     "verificationStatus",
-    "rotationWeight",
     "bookedUnits",
+    "prismaPlacementId",
+
+    # QA2's additions. The decision set ids are what link a placement
+    # to its creatives' real flight dates; Innovid's grid gets them
+    # from the decision set's own row instead of asking for them.
+    "id",
+    "name",
+    "level",
+    "rotationWeight",
     "placementModernDtreeId",
+    "modernDtreeId",
     "modernDtreeName",
+    "placementDecisionSetId",
+    "decisionSetId",
+    "decisionSetName",
 )
 
 # Innovid caps a page of results; 500 is what its own interface asks
@@ -67,6 +83,11 @@ SUMMARY_FIELDS = (
 # forever.
 SUMMARY_PAGE_SIZE = 500
 MAX_SUMMARY_PAGES = 40
+
+# When decision set lookups keep failing the same way, the next one
+# will too. Stopping keeps QA2 from firing dozens of doomed requests
+# at an internal API that rate limits.
+GIVE_UP_AFTER_FAILED_LOOKUPS = 3
 
 # A saved sign-in, so QA2 doesn't have to log in again each run.
 # Holds session cookies, which are as good as the password until they
@@ -176,6 +197,13 @@ class InnovidFetchResult:
     # against the parsed placements -- otherwise a field present on
     # every row reads as "409 / 385", which looks like a bug.
     rows_seen: int = 0
+
+    # What each level of the flattened tree actually contains: how
+    # many rows, and which fields are filled in on at least one of
+    # them. The rows QA2 discards for having no placement id are in
+    # here too, which is the point -- a decision set arrives as its
+    # own row, and discarding it silently is how its id went missing.
+    levels: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
         dtree_ids = {
@@ -307,6 +335,33 @@ def summary_field_names(payload: dict) -> list[str]:
             if key not in names:
                 names.append(key)
     return sorted(names)
+
+
+def count_levels(payload: dict, into: dict[str, dict[str, int]]) -> dict:
+    """
+    Groups the response's rows by `level`, counting how many rows each
+    level has and which fields carry a value on them.
+
+    Names and counts only, never values.
+    """
+    if not isinstance(payload, dict):
+        return into
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return into
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        level = _text(item.get("level")) or "(no level)"
+        bucket = into.setdefault(level, {"_rows": 0})
+        bucket["_rows"] += 1
+        for key, value in item.items():
+            if key == "level":
+                continue
+            if _text(value):
+                bucket[key] = bucket.get(key, 0) + 1
+    return into
 
 
 def count_filled_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
@@ -442,6 +497,37 @@ def _summary_url(campaign_id: str) -> str:
         f"{CM_BASE}/campaigns/{campaign_id}/summary"
         f"?fields={','.join(SUMMARY_FIELDS)}"
     )
+
+
+def _summarise_dset_failures(
+    failures: list[tuple[str, str]], attempted: int
+) -> list[str]:
+    """
+    Collapses per-decision-set failures into one line per kind of
+    failure, with a few example ids.
+
+    Fifty lines saying the same thing hide the one line that differs,
+    and the ids matter far less than the reason.
+    """
+    if not failures:
+        return []
+
+    by_reason: dict[str, list[str]] = {}
+    for dset_id, reason in failures:
+        # The id appears inside the message; strip it so the same
+        # failure on different ids groups together.
+        shape = reason.replace(str(dset_id), "{id}")
+        by_reason.setdefault(shape, []).append(dset_id)
+
+    messages = []
+    for shape, ids in sorted(by_reason.items(), key=lambda kv: -len(kv[1])):
+        examples = ", ".join(ids[:3])
+        more = f" (and {len(ids) - 3} more)" if len(ids) > 3 else ""
+        messages.append(
+            f"{len(ids)} of {attempted} decision set(s) could not be "
+            f"read. Ids: {examples}{more}. Reason: {shape}"
+        )
+    return messages
 
 
 def _dset_mismatch(dset: dict, asked_for: str, expected_name: str) -> str:
@@ -755,6 +841,7 @@ def fetch_campaign(
                 if page_number == 1:
                     result.returned_fields = summary_field_names(summary)
                 count_filled_fields(summary, result.field_coverage)
+                count_levels(summary, result.levels)
                 items = summary.get("items") if isinstance(summary, dict) else None
                 result.rows_seen += len(items) if isinstance(items, list) else 0
 
@@ -783,35 +870,80 @@ def fetch_campaign(
             # than trusted -- reading the wrong decision set would
             # hand QA2 another creative's flight dates, which is worse
             # than reading none.
-            wanted_dsets: dict[str, str] = {}
+            # Modern ids first: those are what this endpoint is for.
+            # Legacy ids are tried afterwards and give up early,
+            # because if the endpoint rejects the first few it will
+            # reject all of them, and firing fifty more doomed
+            # requests at a rate-limited internal API is rude and
+            # slow for no information.
+            modern: dict[str, str] = {}
+            legacy: dict[str, str] = {}
             for row in result.placements:
                 if wanted and row.placement_id not in wanted:
                     continue
-                for dset_id, dset_name in (
-                    (row.dtree_id, row.dtree_name),
-                    (row.legacy_dset_id, row.legacy_dset_name),
-                ):
-                    if dset_id:
-                        wanted_dsets.setdefault(dset_id, dset_name)
+                if row.dtree_id:
+                    modern.setdefault(row.dtree_id, row.dtree_name)
+                if row.legacy_dset_id:
+                    legacy.setdefault(row.legacy_dset_id, row.legacy_dset_name)
 
-            for dset_id in sorted(wanted_dsets):
+            # An id that exists in both places only needs asking once.
+            for dset_id in modern:
+                legacy.pop(dset_id, None)
+
+            wanted_dsets = dict(modern)
+            wanted_dsets.update(legacy)
+
+            # Failures are collected rather than appended one by one:
+            # a campaign whose decision sets all fail the same way
+            # produced fifty identical lines, which buries every other
+            # problem in the run.
+            failures: list[tuple[str, str]] = []
+            skipped_legacy = 0
+            legacy_shapes: set[str] = set()
+
+            order = sorted(modern) + sorted(legacy)
+            for index, dset_id in enumerate(order):
+                is_legacy = dset_id in legacy
+
+                if is_legacy and len(legacy_shapes) == 1 and len(failures) >= (
+                    GIVE_UP_AFTER_FAILED_LOOKUPS
+                ):
+                    skipped_legacy += 1
+                    continue
+
                 expected_name = wanted_dsets[dset_id]
                 try:
                     dset = _api_get_json(
                         page, _dset_url(dset_id), csrf_token["value"]
                     )
                 except Exception as exc:
-                    result.errors.append(
-                        f"Decision set {dset_id} could not be read: {exc}"
-                    )
+                    failures.append((dset_id, str(exc)))
+                    if is_legacy:
+                        legacy_shapes.add(str(exc).replace(dset_id, "{id}"))
                     continue
 
                 problem = _dset_mismatch(dset, dset_id, expected_name)
                 if problem:
-                    result.errors.append(problem)
+                    failures.append((dset_id, problem))
+                    if is_legacy:
+                        legacy_shapes.add(problem.replace(dset_id, "{id}"))
                     continue
 
                 result.creative_nodes.extend(parse_dset_response(dset))
+
+            for message in _summarise_dset_failures(failures, len(wanted_dsets)):
+                result.errors.append(message)
+
+            if skipped_legacy:
+                result.errors.append(
+                    f"Stopped after {GIVE_UP_AFTER_FAILED_LOOKUPS} "
+                    f"identical failures and skipped {skipped_legacy} "
+                    "more decision set(s). These ids come from "
+                    "decisionSetId, which this endpoint does not "
+                    "accept -- it reads the modern id "
+                    "(placementModernDtreeId), which this campaign's "
+                    "summary did not return."
+                )
 
         except InnovidAuthError as exc:
             result.errors.append(str(exc))

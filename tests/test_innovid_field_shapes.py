@@ -18,6 +18,7 @@ from core.innovid_api import (  # noqa: E402
     InnovidFetchResult,
     _dset_mismatch,
     count_filled_fields,
+    count_levels,
     parse_dset_response,
     parse_summary_response,
     summary_field_names,
@@ -232,6 +233,71 @@ def test_the_verified_decision_set_carries_the_real_creative_date():
     nodes = parse_dset_response(DSET_38808)
     assert nodes[0].start_timestamp == "2026-07-24 00:00:00"
     assert nodes[0].weight == "1"
+
+# ---------------------------------------------------------------
+# Innovid's own summary request asks for no decision-set field at
+# all, yet its grid shows decision set 38808. The grid gets it from
+# the decision set's own row -- and rows carrying no placementId are
+# exactly the ones QA2 discards, which is how that id went missing.
+# ---------------------------------------------------------------
+
+FLATTENED_TREE = {"items": [
+    {"id": 323492, "level": "CAMPAIGN", "name": "WEN_FRO_003_FROSTY"},
+    {"id": 6221, "level": "SITE", "name": "GumGum", "siteId": 6221},
+    {"id": 10988717, "level": "PLACEMENT", "placementId": 10988717,
+     "name": "P3JF5Y2|WEN|FRO|001|GUMGUM|320 x 50",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    # The decision set: its own row, its own id, no placementId.
+    {"id": 38808, "level": "PLACEMENT-DTREE",
+     "name": "Frosty GM Display 320x50",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"id": 6312751, "level": "PLACEMENT-CREATIVE", "placementId": 10988717,
+     "name": "320x50.jpg", "creativeId": 6312751,
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+]}
+
+
+def test_the_decision_set_row_is_currently_discarded():
+    """
+    Documents the gap rather than papering over it.
+
+    parse_summary_response keeps only rows with a placementId, which
+    is right for counting placements and wrong for finding decision
+    sets. The id is in the response the whole time.
+    """
+    rows = parse_summary_response(FLATTENED_TREE)
+
+    assert len(rows) == 2
+    assert all(r.level != "PLACEMENT-DTREE" for r in rows)
+    assert all(not r.dtree_id for r in rows), "38808 never reaches a row"
+
+
+def test_level_counts_surface_the_discarded_rows():
+    # This is what makes the missing decision set visible in a run
+    # instead of having to guess at it.
+    levels = count_levels(FLATTENED_TREE, {})
+
+    assert set(levels) == {
+        "CAMPAIGN", "SITE", "PLACEMENT", "PLACEMENT-DTREE",
+        "PLACEMENT-CREATIVE",
+    }
+    assert levels["PLACEMENT-DTREE"]["_rows"] == 1
+    assert levels["PLACEMENT-DTREE"]["id"] == 1
+    assert levels["PLACEMENT-DTREE"]["name"] == 1
+    assert "placementId" not in levels["PLACEMENT-DTREE"]
+
+
+def test_level_counts_never_carry_values():
+    levels = count_levels(FLATTENED_TREE, {})
+    for fields in levels.values():
+        for count in fields.values():
+            assert isinstance(count, int)
+
+
+def test_level_counts_accumulate_across_pages():
+    levels = count_levels(FLATTENED_TREE, {})
+    count_levels(FLATTENED_TREE, levels)
+    assert levels["PLACEMENT"]["_rows"] == 2
 
 
 if __name__ == "__main__":

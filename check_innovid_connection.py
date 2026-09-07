@@ -107,9 +107,13 @@ def main() -> int:
         print("Problems:")
         for error in result.errors:
             print(f"  - {error}")
-        # Anything below would be guesswork: the run already knows why
-        # it stopped, and adding "maybe the campaign ID is wrong" here
-        # only sends people looking in the wrong place.
+        print()
+
+    # Only stop here when nothing came back. A partial failure --
+    # placements read, some decision sets refused -- still has a
+    # report worth seeing, and hiding it behind the errors throws away
+    # the part that worked.
+    if result.errors and not result.placements:
         return 1
 
     if not result.placements:
@@ -150,15 +154,18 @@ def main() -> int:
         if not filled:
             missing_entirely.append(label)
 
-    # Rows arrive at more than one level, and a field that only
-    # exists on one of them looks "half empty" until they're split.
-    levels: dict[str, int] = {}
-    for row in result.placements:
-        levels[row.level or "(none)"] = levels.get(row.level or "(none)", 0) + 1
-    if len(levels) > 1 or "(none)" not in levels:
-        print("\nRow levels:")
-        for level, count in sorted(levels.items()):
-            print(f"  level {level:10} {count:>4} row(s)")
+    # Every level Innovid returned, including the rows QA2 discards
+    # for having no placement id. A decision set arrives as its own
+    # row, so those discarded rows are where its id lives.
+    if result.levels:
+        print("\nWhat each level of the response contains:")
+        for level, fields in sorted(
+            result.levels.items(), key=lambda kv: -kv[1].get("_rows", 0)
+        ):
+            rows = fields.get("_rows", 0)
+            filled = sorted(k for k in fields if k != "_rows")
+            print(f"\n  {level}  --  {rows} row(s)")
+            print("    fields with data: " + (", ".join(filled) or "(none)"))
 
     if missing_entirely and result.field_coverage:
         filled = {k: v for k, v in result.field_coverage.items() if v}
