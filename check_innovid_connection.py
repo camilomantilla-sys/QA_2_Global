@@ -422,6 +422,19 @@ def main() -> int:
         print(f"\n{orphans} creative node(s) came from decision sets "
               "that no placement row claims.")
 
+    if result.node_fields:
+        print("\nWhat a decision-set node carries (names and counts, "
+              "no values):")
+        for name, count in sorted(
+            result.node_fields.items(), key=lambda kv: (-kv[1], kv[0])
+        ):
+            print(f"  {count:>4}  {name}")
+        print(
+            "  -- looking for whichever of these names the creative "
+            "the node serves, so findings can say the filename "
+            "instead of \"node 2\"."
+        )
+
     print("\nConnection works.")
     return 0
 

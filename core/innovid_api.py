@@ -207,6 +207,12 @@ class InnovidFetchResult:
     # every row reads as "409 / 385", which looks like a bug.
     rows_seen: int = 0
 
+    # The field names a decision-set node carries. Rotation nodes come
+    # back identified only as "node 1", "node 2" -- the creative they
+    # serve is in some field not being read, since Innovid's own panel
+    # shows a filename and id per row. Names only, no values.
+    node_fields: dict[str, int] = field(default_factory=dict)
+
     # What each level of the flattened tree actually contains: how
     # many rows, and which fields are filled in on at least one of
     # them. The rows QA2 discards for having no placement id are in
@@ -587,6 +593,30 @@ def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
             )
         )
     return rows
+
+
+def count_node_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
+    """
+    Counts how many decision-set nodes carry a value for each field.
+
+    Exists to find where a node names the creative it serves, so a
+    finding can say "creative V2_300x600.jpg starts 27 Sep" rather
+    than "node 2".
+    """
+    if not isinstance(payload, dict):
+        return into
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list):
+        return into
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        for key, value in node.items():
+            into.setdefault(key, 0)
+            if _text(value):
+                into[key] += 1
+    return into
 
 
 def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
@@ -1332,6 +1362,7 @@ def fetch_campaign(
                         group_failures += 1
                         continue
 
+                    count_node_fields(dset, result.node_fields)
                     result.creative_nodes.extend(parse_dset_response(dset))
 
             for message in _summarise_dset_failures(failures, len(wanted_dsets)):
