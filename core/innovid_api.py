@@ -517,13 +517,20 @@ PASS_SELECTORS = (
 
 # "Next" on a two-step sign-in, where the password only appears after
 # the address is submitted.
+# Matched in order, and deliberately narrow: a login screen also
+# carries "Cancel" and "Forgot password", and clicking one of those
+# instead would look like a failed sign-in.
 NEXT_SELECTORS = (
     "input[type='submit']",
     "button[type='submit']",
     "#idSIButton9",             # Microsoft's Next/Sign in button
+    "button:has-text('Sign in')",
+    "button:has-text('Log in')",
+    "button:has-text('Login')",
     "button:has-text('Next')",
     "button:has-text('Continue')",
-    "button:has-text('Sign in')",
+    "button:has-text('Iniciar')",
+    "button:has-text('Continuar')",
 )
 
 
@@ -611,20 +618,36 @@ def _login(page, credentials: InnovidCredentials, timeout_ms: int) -> None:
             )
 
 
-def _submit_step(page, box) -> None:
+def _submit_step(page, box, timeout_ms: int = 20_000) -> None:
     """
     Moves one step forward in the sign-in.
 
-    Enter submits most forms, but not all, so a button is the fallback
-    -- and the order matters. Clicking unconditionally after Enter
-    lands the click on the *next* screen's button, which on a two-step
-    sign-in submits the password screen before the password is typed.
-    So the button is only used once Enter has visibly done nothing.
+    Enter submits most forms, but not all, so a button is the
+    fallback. Both the order and the patience matter here:
+
+    - Clicking unconditionally after Enter lands the click on the
+      *next* screen's button, which on a two-step sign-in submits the
+      password screen before the password is typed.
+    - Giving up on Enter too early is just as bad. Corporate SSO takes
+      seconds to answer, so a short wait concludes Enter did nothing
+      and clicks the button -- a second submit, which the identity
+      provider rejects and bounces back to the login page. That looks
+      exactly like a wrong password.
+
+    So: wait for the navigation Enter starts, generously, and only
+    reach for the button once nothing has happened at all.
     """
     before_url = page.url
+
     try:
-        box.press("Enter")
+        with page.expect_navigation(
+            timeout=timeout_ms, wait_until="domcontentloaded"
+        ):
+            box.press("Enter")
+        return
     except Exception:
+        # Either Enter did nothing, or the form advances without a
+        # navigation (a single-page sign-in swapping the screen).
         pass
 
     if _moved_on(page, box, before_url):
@@ -633,7 +656,7 @@ def _submit_step(page, box) -> None:
     button = _first_visible(page, NEXT_SELECTORS)
     if button is not None:
         try:
-            button.click(timeout=3_000)
+            button.click(timeout=5_000)
         except Exception:
             # The page moved between the check and the click. Not a
             # problem -- that was the goal.
@@ -642,9 +665,9 @@ def _submit_step(page, box) -> None:
 
 def _moved_on(page, box, before_url: str, timeout_ms: int = 4_000) -> bool:
     """
-    True once the sign-in has advanced: either the browser navigated,
-    or the box that was just filled left the page (single-page forms
-    swap the screen without changing the URL).
+    True once the sign-in has advanced without a navigation: the box
+    that was just filled left the page, as happens on single-page
+    forms that swap the screen in place.
     """
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
