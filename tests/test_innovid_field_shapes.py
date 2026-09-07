@@ -48,9 +48,9 @@ def test_legacy_decision_set_is_read_when_the_modern_one_is_null():
 
     assert len(rows) == 2
     assert rows[0].dtree_id == ""
-    assert rows[0].legacy_dset_id == "44120"
-    assert rows[0].legacy_dset_name == "Frosty GM 320x50"
-    assert rows[1].legacy_dset_id == "44120"
+    assert rows[0].dset_link_id == "44120"
+    assert rows[0].dset_name == "Frosty GM 320x50"
+    assert rows[1].dset_id == "44120"
 
 
 def test_the_two_generations_are_never_conflated():
@@ -507,6 +507,52 @@ def test_nested_structure_is_shown_but_bounded():
     }))
     assert "truncated" in body
     assert len(body) < 300
+
+# ---------------------------------------------------------------
+# The two decision-set numbers.
+#
+# Campaign 323492's creative rows carry decisionSetId AND
+# placementDecisionSetId on the same 64 rows. Treating them as the
+# same field meant every lookup used placementDecisionSetId -- ids
+# 73087..73109, consecutive, the shape of a join table -- and all of
+# them were rejected with HTTP 400. Innovid's own UI opens
+# /dt/v1/ui/dset/38808 for that campaign.
+# ---------------------------------------------------------------
+
+TWO_IDS = {"items": [
+    {"placementId": 10988717, "level": "PLACEMENT",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
+     "creativeId": 6312751,
+     "decisionSetId": 38808,
+     "decisionSetName": "Frosty GM Display 320x50",
+     "placementDecisionSetId": 73087},
+]}
+
+
+def test_the_decision_set_and_its_link_are_kept_apart():
+    row = parse_summary_response(TWO_IDS)[1]
+
+    assert row.dset_id == "38808", "the decision set itself"
+    assert row.dset_link_id == "73087", "the placement-to-set link"
+    assert row.dset_name == "Frosty GM Display 320x50"
+
+
+def test_the_link_id_never_stands_in_for_the_decision_set():
+    # The whole failure: one is not a fallback for the other.
+    row = parse_summary_response(TWO_IDS)[1]
+    assert row.dset_id != row.dset_link_id
+
+
+def test_a_row_with_only_a_link_id_yields_no_decision_set():
+    only_link = {"items": [
+        {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+         "placementDecisionSetId": 73088},
+    ]}
+    row = parse_summary_response(only_link)[0]
+
+    assert row.dset_id == ""
+    assert row.dset_link_id == "73088"
 
 
 if __name__ == "__main__":

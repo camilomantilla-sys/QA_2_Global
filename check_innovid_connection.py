@@ -218,7 +218,8 @@ def main() -> int:
     critical = {
         "Verification Partner": lambda r: r.verification_partner,
         "Decision set id (modern)": lambda r: r.dtree_id,
-        "Decision set id (legacy)": lambda r: r.legacy_dset_id,
+        "decisionSetId": lambda r: r.dset_id,
+        "placementDecisionSetId": lambda r: r.dset_link_id,
         "Start date": lambda r: r.start_date,
         "End date": lambda r: r.end_date,
         "Rotation weight": lambda r: r.rotation_weight,
@@ -274,8 +275,7 @@ def main() -> int:
             f"  {row.placement_id}  {row.start_date} -> {row.end_date or '(ongoing)'}"
             f"  | {row.verification_partner or '-'}"
             f" {row.verification_status or ''}"
-            f"  | dset {row.dtree_id or row.legacy_dset_id or '-'}"
-            f"{' (legacy)' if not row.dtree_id and row.legacy_dset_id else ''}"
+            f"  | dset {row.dtree_id or row.dset_id or '-'}"
         )
 
     if creative_level:
@@ -325,7 +325,7 @@ def main() -> int:
                   "same day as its placement.")
     else:
         modern = sum(1 for r in result.placements if r.dtree_id)
-        legacy = sum(1 for r in result.placements if r.legacy_dset_id)
+        legacy = sum(1 for r in result.placements if r.dset_id)
         print("Creative flight dates were NOT checked.")
         print(
             "  They live inside the decision set, not in the summary "

@@ -142,8 +142,16 @@ class InnovidPlacement:
     # creative rather than nothing.
     dtree_id: str = ""
     dtree_name: str = ""
-    legacy_dset_id: str = ""
-    legacy_dset_name: str = ""
+
+    # Two different numbers, which an earlier version collapsed into
+    # one and got wrong. `decisionSetId` identifies the decision set.
+    # `placementDecisionSetId` identifies the link between a placement
+    # and that decision set -- consecutive ids in a narrow range, the
+    # shape of a join table -- and asking /dset for one of those is
+    # what produced HTTP 400 on every single lookup.
+    dset_id: str = ""
+    dset_name: str = ""
+    dset_link_id: str = ""
 
     # Rows come at more than one level (placement, creative). Kept so
     # the two can be told apart instead of being counted together.
@@ -436,11 +444,9 @@ def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
                     or item.get("modernDtreeId")
                 ),
                 dtree_name=_text(item.get("modernDtreeName")),
-                legacy_dset_id=_text(
-                    item.get("placementDecisionSetId")
-                    or item.get("decisionSetId")
-                ),
-                legacy_dset_name=_text(item.get("decisionSetName")),
+                dset_id=_text(item.get("decisionSetId")),
+                dset_name=_text(item.get("decisionSetName")),
+                dset_link_id=_text(item.get("placementDecisionSetId")),
                 level=_text(item.get("level")),
             )
         )
@@ -1104,79 +1110,88 @@ def fetch_campaign(
             # than trusted -- reading the wrong decision set would
             # hand QA2 another creative's flight dates, which is worse
             # than reading none.
-            # Modern ids first: those are what this endpoint is for.
-            # Legacy ids are tried afterwards and give up early,
-            # because if the endpoint rejects the first few it will
-            # reject all of them, and firing fifty more doomed
-            # requests at a rate-limited internal API is rude and
-            # slow for no information.
-            modern: dict[str, str] = {}
-            legacy: dict[str, str] = {}
+            # Three places an id can come from, tried in the order
+            # they are likely to actually be the decision set. Each is
+            # its own group so that giving up on one doesn't skip the
+            # next: collapsing them is what previously meant every
+            # lookup used the link id and none used the real id.
+            groups: list[tuple[str, dict[str, str]]] = [
+                ("modern dtree id", {}),
+                ("decisionSetId", {}),
+                ("placementDecisionSetId", {}),
+            ]
             for row in result.placements:
                 if wanted and row.placement_id not in wanted:
                     continue
                 if row.dtree_id:
-                    modern.setdefault(row.dtree_id, row.dtree_name)
-                if row.legacy_dset_id:
-                    legacy.setdefault(row.legacy_dset_id, row.legacy_dset_name)
+                    groups[0][1].setdefault(row.dtree_id, row.dtree_name)
+                if row.dset_id:
+                    groups[1][1].setdefault(row.dset_id, row.dset_name)
+                if row.dset_link_id:
+                    groups[2][1].setdefault(row.dset_link_id, row.dset_name)
 
-            # An id that exists in both places only needs asking once.
-            for dset_id in modern:
-                legacy.pop(dset_id, None)
+            # Never ask twice for the same number.
+            already: set[str] = set()
+            for _, ids in groups:
+                for candidate in list(ids):
+                    if candidate in already:
+                        ids.pop(candidate)
+                    else:
+                        already.add(candidate)
 
-            wanted_dsets = dict(modern)
-            wanted_dsets.update(legacy)
+            wanted_dsets = {k: v for _, ids in groups for k, v in ids.items()}
 
             # Failures are collected rather than appended one by one:
             # a campaign whose decision sets all fail the same way
             # produced fifty identical lines, which buries every other
             # problem in the run.
             failures: list[tuple[str, str]] = []
-            skipped_legacy = 0
-            legacy_shapes: set[str] = set()
+            skipped: list[str] = []
 
-            order = sorted(modern) + sorted(legacy)
-            for index, dset_id in enumerate(order):
-                is_legacy = dset_id in legacy
+            for source, ids in groups:
+                shapes_seen: set[str] = set()
+                group_failures = 0
 
-                if is_legacy and len(legacy_shapes) == 1 and len(failures) >= (
-                    GIVE_UP_AFTER_FAILED_LOOKUPS
-                ):
-                    skipped_legacy += 1
-                    continue
+                for dset_id in sorted(ids):
+                    # Give up on this source once it keeps failing the
+                    # same way -- but only on this source. The next is
+                    # a different number and deserves its own chance.
+                    if (
+                        group_failures >= GIVE_UP_AFTER_FAILED_LOOKUPS
+                        and len(shapes_seen) == 1
+                    ):
+                        remaining = len(ids) - group_failures
+                        if remaining > 0:
+                            skipped.append(f"{remaining} more from {source}")
+                        break
 
-                expected_name = wanted_dsets[dset_id]
-                try:
-                    dset = _api_get_json(
-                        page, _dset_url(dset_id), csrf_token["value"]
-                    )
-                except Exception as exc:
-                    failures.append((dset_id, str(exc)))
-                    if is_legacy:
-                        legacy_shapes.add(str(exc).replace(dset_id, "{id}"))
-                    continue
+                    expected_name = ids[dset_id]
+                    try:
+                        dset = _api_get_json(
+                            page, _dset_url(dset_id), csrf_token["value"]
+                        )
+                    except Exception as exc:
+                        failures.append((dset_id, f"{source}: {exc}"))
+                        shapes_seen.add(str(exc).replace(dset_id, "{id}"))
+                        group_failures += 1
+                        continue
 
-                problem = _dset_mismatch(dset, dset_id, expected_name)
-                if problem:
-                    failures.append((dset_id, problem))
-                    if is_legacy:
-                        legacy_shapes.add(problem.replace(dset_id, "{id}"))
-                    continue
+                    problem = _dset_mismatch(dset, dset_id, expected_name)
+                    if problem:
+                        failures.append((dset_id, f"{source}: {problem}"))
+                        shapes_seen.add(problem.replace(dset_id, "{id}"))
+                        group_failures += 1
+                        continue
 
-                result.creative_nodes.extend(parse_dset_response(dset))
+                    result.creative_nodes.extend(parse_dset_response(dset))
 
             for message in _summarise_dset_failures(failures, len(wanted_dsets)):
                 result.errors.append(message)
 
-            if skipped_legacy:
+            if skipped:
                 result.errors.append(
-                    f"Stopped after {GIVE_UP_AFTER_FAILED_LOOKUPS} "
-                    f"identical failures and skipped {skipped_legacy} "
-                    "more decision set(s). These ids come from "
-                    "decisionSetId, which this endpoint does not "
-                    "accept -- it reads the modern id "
-                    "(placementModernDtreeId), which this campaign's "
-                    "summary did not return."
+                    "Stopped early on sources that kept failing "
+                    f"identically: {', '.join(skipped)}."
                 )
 
         except InnovidAuthError as exc:
