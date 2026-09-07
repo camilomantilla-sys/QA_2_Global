@@ -131,7 +131,8 @@ def main() -> int:
     # the kind of thing a sample hides.
     critical = {
         "Verification Partner": lambda r: r.verification_partner,
-        "Decision set id": lambda r: r.dtree_id,
+        "Decision set id (modern)": lambda r: r.dtree_id,
+        "Decision set id (legacy)": lambda r: r.legacy_dset_id,
         "Start date": lambda r: r.start_date,
         "End date": lambda r: r.end_date,
         "Rotation weight": lambda r: r.rotation_weight,
@@ -146,18 +147,34 @@ def main() -> int:
         if not filled:
             missing_entirely.append(label)
 
-    if missing_entirely and result.returned_fields:
+    # Rows arrive at more than one level, and a field that only
+    # exists on one of them looks "half empty" until they're split.
+    levels: dict[str, int] = {}
+    for row in result.placements:
+        levels[row.level or "(none)"] = levels.get(row.level or "(none)", 0) + 1
+    if len(levels) > 1 or "(none)" not in levels:
+        print("\nRow levels:")
+        for level, count in sorted(levels.items()):
+            print(f"  level {level:10} {count:>4} row(s)")
+
+    if missing_entirely and result.field_coverage:
+        filled = {k: v for k, v in result.field_coverage.items() if v}
+        empty = sorted(k for k, v in result.field_coverage.items() if not v)
+
         print(
-            "\nInnovid returned these field names (names only, no "
-            "values):"
+            f"\nOf the {len(result.field_coverage)} fields Innovid "
+            f"sent, {len(filled)} carry data. Counts only, no values:"
         )
-        for name in result.returned_fields:
-            print(f"  - {name}")
+        for name, count in sorted(filled.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"  {count:>4} / {total}  {name}")
+
+        print(f"\nThe other {len(empty)} came back empty on every row:")
+        print("  " + ", ".join(empty))
         print(
-            "\nIf the fields above are missing from that list, "
-            "Innovid didn't send them -- which usually means the "
-            "saved column view is filtering them out, not that they "
-            "are empty in the campaign. Send this list over."
+            "\nSend both lists over. A field that is empty on every "
+            "single row is Innovid not filling it in for this "
+            "campaign, which is a different problem from QA2 reading "
+            "the wrong field name -- and they need opposite fixes."
         )
 
     print("\nFirst few placements:")
@@ -166,7 +183,8 @@ def main() -> int:
             f"  {row.placement_id}  {row.start_date} -> {row.end_date or '(ongoing)'}"
             f"  | {row.verification_partner or '-'}"
             f" {row.verification_status or ''}"
-            f"  | dset {row.dtree_id or '-'}"
+            f"  | dset {row.dtree_id or row.legacy_dset_id or '-'}"
+            f"{' (legacy)' if not row.dtree_id and row.legacy_dset_id else ''}"
         )
 
     if result.creative_nodes:

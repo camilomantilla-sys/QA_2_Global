@@ -113,8 +113,20 @@ class InnovidPlacement:
     verification_status: str = ""
     rotation_weight: str = ""
     booked_units: str = ""
+
+    # Innovid carries two generations of decision set. The modern one
+    # is what /dt/v1/ui/dset reads; the legacy id is a different
+    # system and is kept separate rather than folded in, because
+    # looking one up as if it were the other returns the wrong
+    # creative rather than nothing.
     dtree_id: str = ""
     dtree_name: str = ""
+    legacy_dset_id: str = ""
+    legacy_dset_name: str = ""
+
+    # Rows come at more than one level (placement, creative). Kept so
+    # the two can be told apart instead of being counted together.
+    level: str = ""
 
 
 @dataclass
@@ -145,6 +157,11 @@ class InnovidFetchResult:
     # column came back blank" and "Innovid never sent that column"
     # look identical once parsed, and they need opposite fixes.
     returned_fields: list[str] = field(default_factory=list)
+
+    # For each of those, how many rows actually carry a value. Counts
+    # only -- never the values -- so this can be read out loud when
+    # working out why a column is empty.
+    field_coverage: dict[str, int] = field(default_factory=dict)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
         dtree_ids = {
@@ -247,6 +264,30 @@ def summary_field_names(payload: dict) -> list[str]:
     return sorted(names)
 
 
+def count_filled_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
+    """
+    Adds to `into` the number of rows carrying a value for each field.
+
+    Counts, not values: this is for answering "is this column empty
+    for everyone, or only for these rows", which is the question that
+    decides where to look next.
+    """
+    if not isinstance(payload, dict):
+        return into
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return into
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key, value in item.items():
+            into.setdefault(key, 0)
+            if _text(value):
+                into[key] += 1
+    return into
+
+
 def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
     """
     Turns a /summary response into placement rows.
@@ -295,6 +336,12 @@ def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
                     or item.get("modernDtreeId")
                 ),
                 dtree_name=_text(item.get("modernDtreeName")),
+                legacy_dset_id=_text(
+                    item.get("placementDecisionSetId")
+                    or item.get("decisionSetId")
+                ),
+                legacy_dset_name=_text(item.get("decisionSetName")),
+                level=_text(item.get("level")),
             )
         )
     return rows
@@ -630,6 +677,7 @@ def fetch_campaign(
                 )
                 if page_number == 1:
                     result.returned_fields = summary_field_names(summary)
+                count_filled_fields(summary, result.field_coverage)
 
                 batch = parse_summary_response(summary)
                 result.placements.extend(batch)
