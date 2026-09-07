@@ -121,10 +121,13 @@ def main() -> int:
         )
         return 1
 
-    placement_ids = {r.placement_id for r in result.placements}
-    print(f"{len(result.placements)} row(s), "
-          f"{len(placement_ids)} distinct placement(s)")
-    print(f"{len(result.creative_nodes)} creative node(s)\n")
+    placement_level = result.placement_rows()
+    creative_level = [r for r in result.placements if r.is_creative_level]
+    print(f"{len(placement_level)} placement(s), "
+          f"{len(creative_level)} creative row(s)")
+    if result.creative_nodes:
+        print(f"{len(result.creative_nodes)} decision-set node(s)")
+    print()
 
     # Coverage across every row, not a sample. A field that is filled
     # in on the first five rows and empty on the other 404 is exactly
@@ -161,12 +164,14 @@ def main() -> int:
         filled = {k: v for k, v in result.field_coverage.items() if v}
         empty = sorted(k for k, v in result.field_coverage.items() if not v)
 
+        seen = result.rows_seen or total
         print(
             f"\nOf the {len(result.field_coverage)} fields Innovid "
-            f"sent, {len(filled)} carry data. Counts only, no values:"
+            f"sent, {len(filled)} carry data, counted over all {seen} "
+            "rows it returned. Counts only, no values:"
         )
         for name, count in sorted(filled.items(), key=lambda kv: (-kv[1], kv[0])):
-            print(f"  {count:>4} / {total}  {name}")
+            print(f"  {count:>4} / {seen}  {name}")
 
         print(f"\nThe other {len(empty)} came back empty on every row:")
         print("  " + ", ".join(empty))
@@ -187,8 +192,18 @@ def main() -> int:
             f"{' (legacy)' if not row.dtree_id and row.legacy_dset_id else ''}"
         )
 
+    if creative_level:
+        print("\nFirst few creative rows (the part no export gives us):")
+        for row in creative_level[:5]:
+            print(
+                f"  under placement {row.placement_id}"
+                f"  {row.start_date} -> {row.end_date or '(ongoing)'}"
+                f"  | weight {row.rotation_weight or '-'}"
+                f"  | {row.file_name or row.creative_description or ''}"
+            )
+
     if result.creative_nodes:
-        print("\nFirst few creatives (the part no export gives us):")
+        print("\nFirst few decision-set nodes:")
         for node in result.creative_nodes[:5]:
             print(
                 f"  creative {node.creative_id}"
@@ -198,35 +213,46 @@ def main() -> int:
                 f"{'  | DEFAULT' if node.is_default else ''}"
             )
 
-    # The whole point: catching a creative that starts after its
-    # placement does. Checked across every row.
-    mismatches = []
-    for row in result.placements:
-        for node in result.nodes_for_placement(row.placement_id):
-            if node.is_default or not node.start_timestamp or not row.start_date:
-                continue
-            if node.start_timestamp[:10] != row.start_date[:10]:
-                mismatches.append((row, node))
-
+    # Creative flight dates are NOT in the summary. The creative rows
+    # repeat their placement's dates, so comparing them here would
+    # pass every time -- including on the very case this is for.
     print()
-    if not result.creative_nodes:
-        print(
-            "No creative dates were checked: without a decision set "
-            "id there is nothing to look them up with. That is the "
-            "thing to fix before this is useful."
-        )
-    elif mismatches:
-        print(f"{len(mismatches)} creative(s) starting on a different day "
-              "than their placement:")
-        for row, node in mismatches[:10]:
-            print(
-                f"  placement {row.placement_id} starts {row.start_date}"
-                f"  ->  creative {node.creative_id} starts "
-                f"{node.start_timestamp[:10]}"
-            )
+    if result.creative_nodes:
+        mismatches = []
+        for row in placement_level:
+            for node in result.nodes_for_placement(row.placement_id):
+                if node.is_default or not node.start_timestamp or not row.start_date:
+                    continue
+                if node.start_timestamp[:10] != row.start_date[:10]:
+                    mismatches.append((row, node))
+        if mismatches:
+            print(f"{len(mismatches)} creative(s) starting on a different "
+                  "day than their placement:")
+            for row, node in mismatches[:15]:
+                print(
+                    f"  placement {row.placement_id} starts {row.start_date}"
+                    f"  ->  creative {node.creative_id} starts "
+                    f"{node.start_timestamp[:10]}"
+                )
+        else:
+            print("Every creative in the decision sets read starts the "
+                  "same day as its placement.")
     else:
-        print("Every creative starts the same day as its placement "
-              "in this campaign.")
+        modern = sum(1 for r in result.placements if r.dtree_id)
+        legacy = sum(1 for r in result.placements if r.legacy_dset_id)
+        print("Creative flight dates were NOT checked.")
+        print(
+            "  They live inside the decision set, not in the summary "
+            "-- the dates on the creative rows above are the "
+            "placement's, repeated."
+        )
+        print(f"  Modern decision sets in this campaign: {modern} row(s)")
+        print(f"  Legacy decision sets in this campaign: {legacy} row(s)")
+        if legacy and not modern:
+            print(
+                "  Only legacy decision sets here, and QA2 does not "
+                "know that endpoint yet, so nothing could be opened."
+            )
 
     print("\nConnection works.")
     return 0
