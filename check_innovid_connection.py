@@ -326,29 +326,50 @@ def main() -> int:
             "other with the same id."
         )
     else:
-        mismatches = []
-        for row in placement_level:
-            for node in result.nodes_for_placement(row.placement_id):
-                if node.is_default or not node.start_timestamp:
-                    continue
-                if not row.start_date:
-                    continue
-                if node.start_timestamp[:10] != row.start_date[:10]:
-                    mismatches.append((row, node))
+        found = result.creative_flight_gaps()
+        gaps, harmless = found["gaps"], found["harmless"]
 
-        print(f"{linked} creative(s) compared against their placement.")
-        if mismatches:
-            print(f"\n{len(mismatches)} start on a different day:")
-            for row, node in mismatches[:15]:
+        print(f"{linked} creative(s) compared against their placement.\n")
+
+        if gaps:
+            print(f"{len(gaps)} GAP(S) -- the placement is live with "
+                  "nothing to serve:")
+            for row, node, days in gaps[:15]:
+                who = node.creative_id or f"node {node.node_id}"
+                late = f"{abs(days)} day(s)"
+                if days > 0:
+                    print(
+                        f"  placement {row.placement_id} starts "
+                        f"{row.start_date}, creative {who} only starts "
+                        f"{node.start_timestamp[:10]} -- {late} late"
+                    )
+                else:
+                    print(
+                        f"  placement {row.placement_id} runs to "
+                        f"{row.end_date}, creative {who} stops "
+                        f"{node.end_timestamp[:10]} -- {late} short"
+                    )
+            if len(gaps) > 15:
+                print(f"  ... and {len(gaps) - 15} more")
+        else:
+            print("No gaps: every creative covers its placement's "
+                  "whole flight.")
+
+        if harmless:
+            print(f"\n{len(harmless)} creative(s) differ from their "
+                  "placement without costing delivery -- ready early "
+                  "or left running late, and the placement gates "
+                  "both:")
+            for row, node, days in harmless[:5]:
                 who = node.creative_id or f"node {node.node_id}"
                 print(
-                    f"  placement {row.placement_id} starts "
-                    f"{row.start_date}  ->  creative {who} starts "
-                    f"{node.start_timestamp[:10]}"
+                    f"  placement {row.placement_id} {row.start_date} "
+                    f"-> {row.end_date or '(ongoing)'}, creative {who} "
+                    f"{node.start_timestamp[:10]} -> "
+                    f"{node.end_timestamp[:10] or '(ongoing)'}"
                 )
-        else:
-            print("None of them starts on a different day than its "
-                  "placement.")
+            if len(harmless) > 5:
+                print(f"  ... and {len(harmless) - 5} more")
 
     # Decision sets that were read but belong to no placement QA2
     # knows about are worth naming: they are the gap, not a success.

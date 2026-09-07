@@ -636,6 +636,116 @@ def test_a_node_id_is_not_mistaken_for_a_creative_id():
     assert nodes[0].creative_id == "", "no creative named on that node"
     assert nodes[1].creative_id == "6312751", "the default one names it"
 
+# ---------------------------------------------------------------
+# Which date differences actually cost delivery.
+#
+# The first working run found eight differences in campaign 323492,
+# in both directions: two creatives starting four days after their
+# placement (nothing serves for four days) and six ready a week
+# early (harmless -- the placement gates delivery). Reporting those
+# together would bury two real findings under six non-events.
+# ---------------------------------------------------------------
+
+REAL_CASES = {"items": [
+    # 10988717/8: placement 20 Jul, creative 24 Jul. A real gap.
+    {"placementId": 10988717, "level": "PLACEMENT",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
+     "decisionSetId": 38808, "decisionSetName": "Frosty GM Display 320x50"},
+
+    # 10964170: placement 27 Jul, creative 20 Jul. Harmless.
+    {"placementId": 10964170, "level": "PLACEMENT",
+     "startDate": "2026-07-27", "endDate": "2026-08-23"},
+    {"placementId": 10964170, "level": "PLACEMENT-CREATIVE",
+     "decisionSetId": 44120, "decisionSetName": "Early Set"},
+]}
+
+LATE_DSET = {
+    "id": 38808, "name": "Frosty GM Display 320x50",
+    "servingMethod": "Rotation",
+    "nodes": [{"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+               "endTimestamp": "2026-08-23 23:59:00", "weight": 1}],
+}
+EARLY_DSET = {
+    "id": 44120, "name": "Early Set", "servingMethod": "Rotation",
+    "nodes": [{"id": 1, "startTimestamp": "2026-07-20 00:00:00",
+               "endTimestamp": "2026-08-23 23:59:00", "weight": 1}],
+}
+
+
+def _real_result():
+    return InnovidFetchResult(
+        campaign_id="323492",
+        placements=parse_summary_response(REAL_CASES),
+        creative_nodes=(parse_dset_response(LATE_DSET)
+                        + parse_dset_response(EARLY_DSET)),
+    )
+
+
+def test_a_creative_starting_late_is_a_gap():
+    found = _real_result().creative_flight_gaps()
+
+    gaps = [(p.placement_id, days) for p, _, days in found["gaps"]]
+    assert ("10988717", 4) in gaps, "four days with nothing serving"
+
+
+def test_a_creative_ready_early_is_not_a_gap():
+    found = _real_result().creative_flight_gaps()
+
+    assert all(p.placement_id != "10964170" for p, _, _ in found["gaps"])
+    assert any(p.placement_id == "10964170" for p, _, _ in found["harmless"])
+
+
+def test_a_creative_ending_early_is_a_gap():
+    short = {
+        "id": 44121, "name": "Short Set", "servingMethod": "Rotation",
+        "nodes": [{"id": 1, "startTimestamp": "2026-07-20 00:00:00",
+                   "endTimestamp": "2026-08-01 23:59:00", "weight": 1}],
+    }
+    result = InnovidFetchResult(
+        campaign_id="x",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "2026-07-20", "endDate": "2026-08-23"},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 44121},
+        ]}),
+        creative_nodes=parse_dset_response(short),
+    )
+
+    found = result.creative_flight_gaps()
+    assert found["gaps"], "the placement outlives its creative"
+    assert found["gaps"][0][2] < 0, "negative days = ends short"
+
+
+def test_the_default_node_is_not_a_flight_date():
+    # A default creative's timestamp is when it was attached.
+    with_default = dict(LATE_DSET, nodes=[
+        {"id": 6312751, "startTimestamp": "2026-07-21 10:02:11",
+         "endTimestamp": None, "isDefault": True},
+    ])
+    result = InnovidFetchResult(
+        campaign_id="x",
+        placements=parse_summary_response(REAL_CASES),
+        creative_nodes=parse_dset_response(with_default),
+    )
+    found = result.creative_flight_gaps()
+    assert not found["gaps"] and not found["harmless"]
+
+
+def test_unparseable_dates_are_skipped_not_guessed():
+    broken = dict(LATE_DSET, nodes=[
+        {"id": 1, "startTimestamp": "Ongoing", "endTimestamp": "",
+         "weight": 1},
+    ])
+    result = InnovidFetchResult(
+        campaign_id="x",
+        placements=parse_summary_response(REAL_CASES),
+        creative_nodes=parse_dset_response(broken),
+    )
+    found = result.creative_flight_gaps()
+    assert not found["gaps"]
+
 
 if __name__ == "__main__":
     passed = failed = 0

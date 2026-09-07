@@ -234,6 +234,59 @@ class InnovidFetchResult:
                     dset_ids.add(candidate)
         return [n for n in self.creative_nodes if n.dtree_id in dset_ids]
 
+    def creative_flight_gaps(self) -> dict[str, list[tuple]]:
+        """
+        Compares each creative's flight against its placement's, and
+        sorts the differences by whether they actually cost delivery.
+
+        The direction matters and lumping them together would bury the
+        real ones:
+
+        `gaps` -- the creative starts after the placement does, or
+        ends before it does. The placement is live with nothing to
+        serve in that window. This is the finding QA2 exists for.
+
+        `harmless` -- the creative is ready before the placement
+        starts, or runs past its end. The placement gates delivery, so
+        nothing is lost. Worth listing, never worth alarming about.
+
+        Returns (placement, node, days) tuples. Default nodes are
+        skipped: a default creative's timestamp is when it was
+        attached, not a flight date.
+        """
+        from datetime import date
+
+        def _as_date(value: str):
+            try:
+                return date.fromisoformat(str(value)[:10])
+            except (ValueError, TypeError):
+                return None
+
+        gaps: list[tuple] = []
+        harmless: list[tuple] = []
+
+        for placement in self.placement_rows():
+            starts = _as_date(placement.start_date)
+            ends = _as_date(placement.end_date)
+
+            for node in self.nodes_for_placement(placement.placement_id):
+                if node.is_default:
+                    continue
+
+                node_starts = _as_date(node.start_timestamp)
+                if starts and node_starts and node_starts != starts:
+                    days = (node_starts - starts).days
+                    bucket = gaps if days > 0 else harmless
+                    bucket.append((placement, node, days))
+
+                node_ends = _as_date(node.end_timestamp)
+                if ends and node_ends and node_ends != ends:
+                    days = (node_ends - ends).days
+                    bucket = gaps if days < 0 else harmless
+                    bucket.append((placement, node, days))
+
+        return {"gaps": gaps, "harmless": harmless}
+
     def linked_node_count(self) -> int:
         """
         How many creative nodes could actually be tied to a placement.
