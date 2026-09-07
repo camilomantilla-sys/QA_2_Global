@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.innovid_api import (  # noqa: E402
     InnovidFetchResult,
     _dset_mismatch,
+    redact_url,
     count_filled_fields,
     count_levels,
     parse_dset_response,
@@ -298,6 +299,83 @@ def test_level_counts_accumulate_across_pages():
     levels = count_levels(FLATTENED_TREE, {})
     count_levels(FLATTENED_TREE, levels)
     assert levels["PLACEMENT"]["_rows"] == 2
+
+# ---------------------------------------------------------------
+# Redacting recorded URLs.
+#
+# The first --record run printed an OAuth redirect complete with its
+# `code` -- a credential -- because only headers and bodies were being
+# filtered and query strings were not. These are the actual URLs from
+# that run.
+# ---------------------------------------------------------------
+
+OAUTH_REDIRECT = (
+    "https://api.flashtalking.net/login/oauth2/code/auth0"
+    "?code=7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D"
+)
+MEDIAOCEAN_LOGIN = (
+    "https://uam-login.mediaocean.com/login?state=hKFo2SA5TjY3UzNM"
+    "&client=YzenbLU4y1EIvP1dXdXLKMf2OlZqThxh&nonce=1P6sVS2fxHN5AngI"
+)
+SUMMARY = (
+    "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+    "?getFilterValues=true&fields=status,siteName,placementId"
+)
+JWT_WIDGET = "https://api.flashtalking.net/zen/v1/ui/generate-web-widget-jwt"
+
+
+def test_an_oauth_code_is_never_recorded():
+    """The leak this guards against."""
+    assert redact_url(OAUTH_REDIRECT) == ""
+
+
+def test_the_identity_provider_is_dropped_wholesale():
+    # Its URLs are state, nonce and client id -- all credential-shaped
+    # and none of it useful for reading campaigns.
+    assert redact_url(MEDIAOCEAN_LOGIN) == ""
+
+
+def test_the_useful_part_of_a_real_call_survives():
+    kept = redact_url(SUMMARY)
+
+    assert "campaigns/323492/summary" in kept
+    assert "fields=status,siteName,placementId" in kept
+    assert "getFilterValues=true" in kept
+
+
+def test_unknown_parameters_keep_their_name_but_lose_their_value():
+    kept = redact_url(
+        "https://api.flashtalking.net/x?sessionToken=abc123&page=2"
+    )
+
+    assert "sessionToken=<hidden>" in kept
+    assert "abc123" not in kept
+    assert "page=2" in kept, "safe parameters still say what they are"
+
+
+def test_a_long_id_list_is_truncated_not_dropped():
+    ids = ",".join(str(10964000 + n) for n in range(200))
+    kept = redact_url(
+        f"https://api.flashtalking.net/twr/v1/x?rpp=212&placementIds={ids}"
+    )
+
+    assert "placementIds=10964000" in kept
+    assert "truncated" in kept
+    assert len(kept) < 400
+
+
+def test_paths_are_kept_whole():
+    # The path is the entire point of recording.
+    assert redact_url(JWT_WIDGET) == JWT_WIDGET
+    assert redact_url(
+        "https://api.flashtalking.net/dt/v1/ui/dset/38808"
+    ) == "https://api.flashtalking.net/dt/v1/ui/dset/38808"
+
+
+def test_anything_off_innovid_is_ignored():
+    assert redact_url("https://example.com/whatever?a=b") == ""
+    assert redact_url("") == ""
 
 
 if __name__ == "__main__":

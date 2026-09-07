@@ -599,6 +599,67 @@ def session_is_saved(session_path: Path | None = None) -> bool:
     return (session_path or SESSION_PATH).exists()
 
 
+# Query parameters whose values are safe to show: they describe what
+# was asked for, not who is asking. Everything else is reduced to its
+# name, because a sign-in redirect carries an authorization code in
+# the query string and no denylist of scary-looking names would have
+# caught it reliably.
+SAFE_QUERY_PARAMS = frozenset({
+    "fields", "rpp", "page", "sortBy", "sortOrder", "includeClosed",
+    "quickFilter", "filterType", "level", "campaignId", "placementIds",
+    "getFilterValues",
+})
+
+# Hosts that only ever handle signing in. Nothing there tells QA2
+# anything about campaigns, and everything there is credential-shaped.
+AUTH_HOSTS = ("uam-login.mediaocean.com", "auth0.com")
+
+AUTH_PATHS = ("/oauth2/", "/login/oauth", "/authorize", "/uilogin")
+
+
+def redact_url(url: str) -> str:
+    """
+    Prepares a recorded URL for someone to paste somewhere.
+
+    Keeps the path -- which is the whole point -- and the handful of
+    query parameters that describe the request. Every other value is
+    replaced by its name.
+
+    Sign-in URLs are dropped entirely rather than redacted: an OAuth
+    redirect's `code` is a credential, and there is no version of that
+    URL worth showing.
+
+    Returns "" for anything that should not be recorded at all.
+    """
+    if not url or _API_HOST not in url:
+        if any(host in url for host in AUTH_HOSTS):
+            return ""
+        if _API_HOST not in url:
+            return ""
+
+    if any(marker in url for marker in AUTH_PATHS):
+        return ""
+
+    base, _, query = url.partition("?")
+    if not query:
+        return base
+
+    kept = []
+    for pair in query.split("&"):
+        name, sep, value = pair.partition("=")
+        if not sep:
+            kept.append(name)
+        elif name in SAFE_QUERY_PARAMS:
+            # Long id lists say nothing extra after the first few.
+            if len(value) > 80:
+                value = value[:80] + "...(truncated)"
+            kept.append(f"{name}={value}")
+        else:
+            kept.append(f"{name}=<hidden>")
+
+    return f"{base}?{'&'.join(kept)}"
+
+
 def record_api_calls(
     campaign_id: str,
     credentials: InnovidCredentials | None = None,
@@ -643,10 +704,8 @@ def record_api_calls(
         page = context.new_page()
 
         def _note(request):
-            if _API_HOST not in request.url:
-                return
-            url = request.url
-            if url not in seen:
+            url = redact_url(request.url)
+            if url and url not in seen:
                 seen.append(url)
 
         page.on("request", _note)

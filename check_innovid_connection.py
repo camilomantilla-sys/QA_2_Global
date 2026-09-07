@@ -39,9 +39,11 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
     print("Click around the way you normally would -- in particular,")
     print("open a decision set so its panel loads. When you're done,")
     print("just close the window.\n")
-    print("Only the addresses Innovid calls are written down. No")
-    print("headers, no cookies, no request or response contents, so")
-    print("nothing here can carry your session.\n")
+    print("Only the addresses Innovid calls are written down --")
+    print("no headers, no cookies, no request or response contents.")
+    print("Sign-in addresses are dropped entirely, and query values")
+    print("are hidden unless they describe the request, because a")
+    print("sign-in redirect carries a credential in its address.\n")
 
     try:
         calls = record_api_calls(
@@ -66,21 +68,35 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
         shapes.setdefault(shape, []).append(url)
 
     known = ("/summary", "/dset/")
+    # Anything to do with decision sets is the reason this exists.
+    interesting = ("dset", "dtree", "decision", "creative", "column")
+
     print(f"{len(calls)} call(s) across {len(shapes)} endpoint(s):\n")
     for shape in sorted(shapes):
-        mark = "     " if any(k in shape for k in known) else "NEW  "
+        if any(k in shape.lower() for k in interesting):
+            mark = "*    "
+        elif any(k in shape for k in known):
+            mark = "     "
+        else:
+            mark = "NEW  "
         print(f"  {mark}{shape}   ({len(shapes[shape])} call(s))")
 
-    print("\nFull addresses of the endpoints QA2 doesn't already use:")
+    # Every address, including the endpoints QA2 already uses. The
+    # decision-set call is one of those, and its id is the thing most
+    # worth seeing -- suppressing it as "already known" hid exactly
+    # what this was run to find.
+    print("\nFull addresses:")
     for shape in sorted(shapes):
-        if any(k in shape for k in known):
-            continue
         for url in shapes[shape][:3]:
             print(f"  {url}")
+        if len(shapes[shape]) > 3:
+            print(f"  ... and {len(shapes[shape]) - 3} more like it")
 
     print(
-        "\nSend those over. Give them a glance first -- they are "
-        "just paths and ids, but they are yours to check."
+        "\nThe lines marked * are the ones to send first. Sign-in "
+        "addresses are left out entirely, and query values are "
+        "hidden unless they describe the request -- but give it a "
+        "glance anyway before pasting it anywhere."
     )
     return 0
 
