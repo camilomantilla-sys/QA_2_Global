@@ -430,9 +430,9 @@ def main() -> int:
         ):
             print(f"  {count:>4}  {name}")
         print(
-            "  -- looking for whichever of these names the creative "
-            "the node serves, so findings can say the filename "
-            "instead of \"node 2\"."
+            "  -- `serving` is the one that names the creative. Kept "
+            "on show so a campaign whose nodes come back shaped "
+            "differently is visible rather than silently unnamed."
         )
 
     print("\nConnection works.")
