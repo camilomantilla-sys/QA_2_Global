@@ -240,26 +240,48 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
         return detected_profile, detection_evidence, ts_result
 
 
-@st.cache_data(show_spinner=False, ttl=900)
+INNOVID_CACHE_SECONDS = 900
+
+
 def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
     """
-    Reads the campaign from Innovid, once per set of placements.
+    Reads the campaign from Innovid, reusing a good answer.
 
     Cached because every widget interaction reruns the whole script,
-    and without this a checkbox tick would launch a browser and hit
-    Innovid again. The placement ids are part of the key so changing
-    the Traffic Sheet re-fetches; the 15-minute expiry keeps a stale
-    answer from outliving a correction made in Innovid.
+    and without it a checkbox tick would launch a browser and hit
+    Innovid again.
 
-    Never raises: Innovid has bad days, and the rest of the QA has to
+    Only successes are kept. A cached failure is worse than no cache:
+    it repeats an error the code may already have fixed, and the
+    person on the other side is told the same wrong thing for fifteen
+    minutes while wondering why the fix did nothing. A failed attempt
+    is simply retried.
+
+    Never raises: Innovid has bad days and the rest of the QA has to
     run anyway. A failure comes back inside `.errors`.
     """
-    return fetch_campaign(
+    import time as _time
+
+    key = (str(campaign_id), tuple(placement_ids))
+    store = st.session_state.setdefault("qa2_innovid_cache", {})
+
+    hit = store.get(key)
+    if hit and (_time.monotonic() - hit[0]) < INNOVID_CACHE_SECONDS:
+        return hit[1]
+
+    result = fetch_campaign(
         campaign_id=campaign_id,
         credentials=load_credentials(),
         placement_ids=set(placement_ids) or None,
         headless=True,
     )
+
+    if not result.errors:
+        store[key] = (_time.monotonic(), result)
+    else:
+        store.pop(key, None)
+
+    return result
 
 
 @st.cache_data(show_spinner=False)
