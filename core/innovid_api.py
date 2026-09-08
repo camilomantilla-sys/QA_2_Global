@@ -1516,8 +1516,12 @@ def fetch_campaign(
             # trouble it retries in a loop that never goes quiet at
             # all. That turned a bad day at Innovid into a 60-second
             # timeout with nothing useful said about it.
+            # La direccion que abre la propia interfaz. `/campaign/{id}`
+            # cargaba algo, pero no es la vista de la campana, y el
+            # token que deja en sessionStorage no sirve para pedir su
+            # resumen.
             page.goto(
-                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                f"{APP_ORIGIN}/{campaign_id}/summary/",
                 wait_until="domcontentloaded",
                 timeout=timeout_ms,
             )
@@ -1950,11 +1954,22 @@ def _first_visible(page, selectors):
     return None
 
 
-def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=None):
+def _api_get_json(page, url: str, csrf_token: str, method: str = "GET",
+                  body=None, _retried: bool = False):
     """
     Runs the API call inside the logged-in page, so the session cookie
     rides along automatically and we only have to add the CSRF header.
+
+    The token is re-read from the page immediately before each call.
+    Innovid hands out a new one as it goes, so a token captured once
+    at the start is stale by the second request -- and a stale token
+    is refused exactly like a wrong one, which is indistinguishable
+    from the outside.
     """
+    fresh = _csrf_from_page(page)
+    if fresh:
+        csrf_token = fresh
+
     script = """
         async ([url, method, body, csrf]) => {
             const headers = {
@@ -1997,6 +2012,21 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
             "appears, then close it:\n"
             f"    {_venv_python_hint()} check_innovid_connection.py "
             "--login"
+        )
+
+    if status == 403 and not _retried:
+        # Un reintento, y solo uno. Si el token roto, recargar la
+        # pagina hace que Innovid entregue uno nuevo; si el problema
+        # es de permisos, el segundo intento falla igual y el mensaje
+        # de abajo dice lo que corresponde.
+        try:
+            page.reload(wait_until="domcontentloaded", timeout=30_000)
+            page.wait_for_timeout(2_000)
+        except Exception:
+            pass
+        return _api_get_json(
+            page, url, _csrf_from_page(page) or csrf_token,
+            method=method, body=body, _retried=True,
         )
 
     if status == 403:
