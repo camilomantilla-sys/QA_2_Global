@@ -1056,6 +1056,24 @@ def establish_session(
         browser = _launch_browser(p, headless=False)
         context = browser.new_context()
         page = context.new_page()
+
+        # Marca la primera respuesta buena del host de la API.
+        api_ok = {"seen": False}
+
+        def _note_api(response):
+            # Una llamada de API de verdad, no cualquier cosa servida
+            # por ese host: los endpoints de Innovid viven bajo /v1/,
+            # y es su respuesta la que deja las cookies que la sesion
+            # guardada necesita.
+            if (
+                _API_HOST in response.url
+                and "/v1/" in response.url
+                and response.status < 400
+            ):
+                api_ok["seen"] = True
+
+        page.on("response", _note_api)
+
         try:
             page.goto(login_url, wait_until="domcontentloaded", timeout=60_000)
 
@@ -1065,6 +1083,22 @@ def establish_session(
                     "saved -- run it again and complete the sign-in "
                     "in the window that opens.\n"
                     f"  Left on: {page.url}"
+                )
+
+            # Reaching the campaign manager is not the same as being
+            # able to call its API: the two live on different hosts,
+            # and api.flashtalking.net sets its own cookies only once
+            # the app calls it. Saving the moment the page appears
+            # captured a session that then got HTTP 401 on every
+            # request. So wait for the app to make a call that
+            # actually succeeds, and save after that.
+            if not _wait_for_api_cookies(api_ok, 45_000, page):
+                raise InnovidAuthError(
+                    "Signed in, but Innovid's API never answered "
+                    "while the window was open, so the session would "
+                    "not have worked.\n"
+                    "  Open a campaign in that window before closing "
+                    "it, and try again."
                 )
 
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1129,6 +1163,26 @@ def _wait_until_window_closed(page, timeout_ms: int) -> bool:
             # is the same answer.
             return True
     return False
+
+
+def _wait_for_api_cookies(api_ok: dict, timeout_ms: int, page) -> bool:
+    """
+    Waits until Innovid's API has answered the app at least once.
+
+    That call is what puts the API host's cookies in the browser, and
+    those are what the saved session needs. Without it the session
+    looks fine -- the campaign manager loads -- and every API request
+    comes back 401.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if api_ok.get("seen"):
+            return True
+        try:
+            page.wait_for_timeout(500)
+        except Exception:
+            return api_ok.get("seen", False)
+    return api_ok.get("seen", False)
 
 
 def _wait_until_signed_in(page, timeout_ms: int) -> bool:
@@ -1686,6 +1740,19 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
             "a problem on their side, not with the sign-in or with "
             "QA2 -- if their own campaign manager is also showing "
             "errors, the thing to do is wait and try later."
+        )
+
+    if status in (401, 403):
+        # La causa casi siempre es la sesion, no la peticion. Volcar
+        # la URL completa con sus 30 campos no dice nada util y tapa
+        # lo unico que hay que hacer.
+        raise InnovidAuthError(
+            f"Innovid rejected the request (HTTP {status}). The saved "
+            "sign-in is no longer valid.\n"
+            "  Run this once, open a campaign in the window that "
+            "appears, then close it:\n"
+            f"    {_venv_python_hint()} check_innovid_connection.py "
+            "--login"
         )
 
     if status != 200:
