@@ -199,6 +199,28 @@ class _RestoredUpload:
         return self._data
 
 
+def _workbook_path(directory: str, file_name: str, file_bytes: bytes) -> Path:
+    """
+    Writes the upload to disk under a name that matches what it
+    actually is.
+
+    Innovid exports its placement views named .XLS while the file is
+    really a modern .xlsx -- it starts with "PK", a zip. openpyxl
+    refuses those on the extension alone, so QA2 rejected a file it
+    could read perfectly, and the only way through was renaming every
+    export by hand. The content decides the extension here; the
+    original name is kept otherwise, since parsers use it for context.
+    """
+    stem = Path(file_name).stem
+    suffix = Path(file_name).suffix.lower()
+
+    # PK\x03\x04 is the zip header every xlsx/xlsm starts with.
+    if file_bytes[:2] == b"PK" and suffix not in (".xlsx", ".xlsm", ".zip"):
+        suffix = ".xlsx"
+
+    return Path(directory) / f"{stem}{suffix}"
+
+
 @st.cache_data(show_spinner=False)
 def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None):
     """
@@ -211,7 +233,7 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
     profile choice changed.
     """
     with tempfile.TemporaryDirectory(prefix="qa2_cache_ts_") as directory:
-        path = Path(directory) / Path(file_name).name
+        path = _workbook_path(directory, file_name, file_bytes)
         path.write_bytes(file_bytes)
         detected_profile, detection_evidence = detect_profile(path)
         ts_result = parse_ts(path, profile_name=profile_name)
@@ -243,7 +265,7 @@ def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
 @st.cache_data(show_spinner=False)
 def cached_parse_innovid_export(file_bytes: bytes, file_name: str):
     with tempfile.TemporaryDirectory(prefix="qa2_cache_exp_") as directory:
-        path = Path(directory) / Path(file_name).name
+        path = _workbook_path(directory, file_name, file_bytes)
         path.write_bytes(file_bytes)
         return parse_innovid_export(path)
 
@@ -251,7 +273,7 @@ def cached_parse_innovid_export(file_bytes: bytes, file_name: str):
 @st.cache_data(show_spinner=False)
 def cached_parse_innovid_tags(file_bytes: bytes, file_name: str):
     with tempfile.TemporaryDirectory(prefix="qa2_cache_tags_") as directory:
-        path = Path(directory) / Path(file_name).name
+        path = _workbook_path(directory, file_name, file_bytes)
         path.write_bytes(file_bytes)
         return parse_innovid_tags(path)
 
@@ -259,7 +281,7 @@ def cached_parse_innovid_tags(file_bytes: bytes, file_name: str):
 @st.cache_data(show_spinner=False)
 def cached_parse_dv_tags(file_bytes: bytes, file_name: str):
     with tempfile.TemporaryDirectory(prefix="qa2_cache_dv_") as directory:
-        path = Path(directory) / Path(file_name).name
+        path = _workbook_path(directory, file_name, file_bytes)
         path.write_bytes(file_bytes)
         return parse_dv_tags(path)
 
@@ -1319,7 +1341,7 @@ with st.sidebar:
 
     uploaded_ts = st.file_uploader(
         "1. Upload Traffic Sheet",
-        type=["xlsx", "xlsm"],
+        type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
         key="qa2_ts",
     ) or _restored.get("ts")
@@ -1348,7 +1370,7 @@ with st.sidebar:
 
     uploaded_pc = st.file_uploader(
         "2. Upload Innovid Placement-Creative View",
-        type=["xlsx", "xlsm"],
+        type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
         key="qa2_pc",
     ) or _restored.get("pc")
@@ -1365,7 +1387,7 @@ with st.sidebar:
 
     uploaded_pl = st.file_uploader(
         "3. Upload Innovid Placement View",
-        type=["xlsx", "xlsm"],
+        type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
         key="qa2_pl",
     ) or _restored.get("pl")
@@ -1382,7 +1404,7 @@ with st.sidebar:
 
     uploaded_tags = st.file_uploader(
         "4. Upload Tag files",
-        type=["xlsx", "xlsm"],
+        type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=True,
         key="qa2_tags",
     )
@@ -1418,7 +1440,7 @@ with st.sidebar:
 
     uploaded_dv = st.file_uploader(
         "6. Upload DV Pinnacle Tags",
-        type=["xlsx", "xlsm"],
+        type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
         key="qa2_dv",
     ) or _restored.get("dv")

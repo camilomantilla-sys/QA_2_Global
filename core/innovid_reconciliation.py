@@ -141,6 +141,19 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             continue
 
         expected = _expected_creatives(pm)
+        if not expected:
+            # La TS no declara creativos para este placement -- una
+            # solicitud de default web ads o de 1x1 de tracking es
+            # asi. Sin nada esperado no hay comparacion posible, y
+            # marcar como "extra" todo lo que Innovid tenga llenaria
+            # el reporte de ruido sobre creativos que nadie pidio
+            # revisar.
+            out.unchecked.append(
+                (pid, "the Traffic Sheet declares no creatives for this "
+                      "placement, so there is nothing to compare")
+            )
+            continue
+
         _compare_creatives(pid, expected, nodes, out)
 
     return out

@@ -311,6 +311,49 @@ def test_no_innovid_result_means_no_findings_at_all():
     assert rec.flights == [] and rec.partners == []
     assert _findings(rec).findings == []
 
+def test_a_request_with_no_creatives_makes_no_extra_noise():
+    """
+    Caso real: TS_3360_UNIC_US_MDS declara 15 placements de default
+    web ads y ningun creativo en Creative Rotations.
+
+    Sin esto, cada creativo que Innovid tenga se reportaba como
+    "extra", llenando el reporte de hallazgos sobre creativos que
+    nadie pidio revisar.
+    """
+    ts = _ts("11087616", [])
+    got = _innovid("11087616", 40316, [
+        _node(V1, "2026-09-14", "2026-10-31", node_id=1),
+        _node(V2, "2026-09-27", "2026-10-31", node_id=2),
+    ])
+
+    rec = reconcile(ts, got)
+
+    assert rec.flights == [], "nada que comparar es nada que reportar"
+    assert len(rec.unchecked) == 1
+    assert "declares no creatives" in rec.unchecked[0][1]
+
+    # Pero el Verification Partner si se revisa: no depende de que la
+    # TS declare creativos.
+    assert len(rec.partners) == 1
+    findings = _by_rule(_findings(rec), "INV-003")
+    assert findings and findings[0].status.name == "PASS"
+
+
+def test_extra_creatives_are_still_reported_when_the_ts_declares_some():
+    # La regla anterior no debe silenciar el caso legitimo.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V1, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V1, "2026-09-14", "2026-10-31", node_id=1),
+        _node(V2, "2026-09-27", "2026-10-31", node_id=2),
+    ])
+
+    rec = reconcile(ts, got)
+    extras = [c for c in rec.flights if c.status == EXTRA_IN_INNOVID]
+    assert len(extras) == 1 and extras[0].creative_name == V2
+
 
 if __name__ == "__main__":
     passed = failed = 0
