@@ -240,6 +240,36 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
         return detected_profile, detection_evidence, ts_result
 
 
+@st.cache_data(show_spinner=False)
+def running_version() -> str:
+    """
+    Which commit the running app is actually on.
+
+    A restarted app and a stale one look identical from the outside,
+    and an error message from three commits ago was read as the fix
+    not working. Shown so that question can be answered by looking
+    instead of by trusting.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    try:
+        sha = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        return "unknown"
+
+    if not sha:
+        return "unknown"
+    return f"{sha}{' + local edits' if dirty else ''}"
+
+
 INNOVID_CACHE_SECONDS = 900
 
 
@@ -1487,6 +1517,8 @@ with st.sidebar:
             "The campaign is taken from the Traffic Sheet, so there is "
             "nothing to type."
         )
+
+        st.caption(f"QA2 build: `{running_version()}`")
 
         _has_session = session_is_saved()
         if _has_session:
