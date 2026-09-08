@@ -1070,8 +1070,11 @@ def diagnose_session(
         page.on("request", _watch)
 
         try:
+            # La misma direccion que usa la corrida real. Mirar una
+            # pagina distinta de la que falla es diagnosticar otra
+            # cosa.
             page.goto(
-                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                f"{APP_ORIGIN}/{campaign_id}/summary/",
                 wait_until="domcontentloaded", timeout=60_000,
             )
             page.wait_for_timeout(12_000)

@@ -2385,6 +2385,18 @@ if True:
                             )
                         )
 
+                        # Solo cuando el fallo es de sesion o de
+                        # token. Los 400 de placementDecisionSetId
+                        # salen en cada corrida y son conocidos:
+                        # diagnosticar por ellos abriria un navegador
+                        # de mas cada vez, para no decir nada nuevo.
+                        _auth_trouble = any(
+                            word in " ".join(innovid_result.errors).lower()
+                            for word in ("session", "token", "sign-in",
+                                         "401", "403")
+                        )
+
+                    if innovid_result.errors and _auth_trouble:
                         # El diagnostico aqui mismo, no en la terminal.
                         # Pedir que se corra un comando aparte y se
                         # pegue la salida convertia cada fallo en una
