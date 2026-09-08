@@ -31,6 +31,13 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Cuando se cargo este modulo. Streamlit recarga ui/app_v2.py al
+# cambiar, pero Python conserva los modulos ya importados: la app
+# puede estar mostrando codigo nuevo y ejecutando este viejo. Con esta
+# marca, la app puede compararlo contra la fecha del archivo y decirlo
+# en vez de dejar que se note por un mensaje de error que ya no existe.
+MODULE_LOADED_AT = time.time()
+
 CM_BASE = "https://api.flashtalking.net/cm/v1/ui"
 DT_BASE = "https://api.flashtalking.net/dt/v1/ui"
 APP_ORIGIN = "https://campaign-manager.flashtalking.net"

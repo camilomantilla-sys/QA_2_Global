@@ -240,15 +240,45 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
         return detected_profile, detection_evidence, ts_result
 
 
+def stale_modules() -> list[str]:
+    """
+    Files that changed on disk after the code from them was loaded.
+
+    Streamlit reloads ui/app_v2.py when it changes, but Python keeps
+    modules it has already imported. So the app can show a brand new
+    commit marker while still running last week's core -- which is
+    exactly how an error message that no longer exists in the source
+    kept appearing, and how a git sha shown in the sidebar gave false
+    assurance that the fix had arrived.
+    """
+    import importlib
+    import os
+
+    stale: list[str] = []
+    for name in ("core.innovid_api", "core.innovid_reconciliation",
+                 "rules.innovid"):
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        loaded_at = getattr(module, "MODULE_LOADED_AT", None)
+        path = getattr(module, "__file__", None)
+        if loaded_at is None or not path:
+            continue
+        try:
+            if os.path.getmtime(path) > loaded_at + 1:
+                stale.append(name)
+        except OSError:
+            continue
+    return stale
+
+
 @st.cache_data(show_spinner=False)
 def running_version() -> str:
     """
-    Which commit the running app is actually on.
+    Which commit the repository is on.
 
-    A restarted app and a stale one look identical from the outside,
-    and an error message from three commits ago was read as the fix
-    not working. Shown so that question can be answered by looking
-    instead of by trusting.
+    Says nothing about what is loaded in memory -- see
+    stale_modules() for that.
     """
     import subprocess
 
@@ -1519,6 +1549,21 @@ with st.sidebar:
         )
 
         st.caption(f"QA2 build: `{running_version()}`")
+
+        _stale = stale_modules()
+        if _stale:
+            # Lo mas importante de esta seccion: un arreglo puede
+            # estar en disco y no estar corriendo, y desde afuera se
+            # ve igual que un arreglo que no funciono.
+            st.error(
+                "**Restart QA2.** The code changed on disk after the "
+                "app started, so it is still running the old version "
+                "of: "
+                + ", ".join(m.split(".")[-1] for m in _stale)
+                + ".\n\nStop it in the terminal (Ctrl+C) and launch "
+                "it again -- reloading this page is not enough, "
+                "because Python keeps modules it has already loaded."
+            )
 
         _has_session = session_is_saved()
         if _has_session:
