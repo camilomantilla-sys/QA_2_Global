@@ -1,7 +1,7 @@
 """
 El 403 que le salio a Camilo: sesion valida, token ausente.
 """
-import json, sys, threading
+import json, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 sys.path.insert(0, "/home/user/QA_2_Global")
@@ -49,7 +49,9 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 api.APP_ORIGIN = base; api.CM_BASE = f"{base}/cm/v1/ui"
 api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
 
-sess = Path("csrf.json"); sess.write_text(json.dumps({"cookies": [], "origins": []}))
+# Un temporal, no la raiz del repo: un test no debe dejar
+# basura en el arbol de trabajo.
+sess = Path(tempfile.mkdtemp()) / "csrf.json"; sess.write_text(json.dumps({"cookies": [], "origins": []}))
 fails = []
 def check(label, got, want):
     if got != want: fails.append(label); print(f"  FAIL {label}: {got!r} != {want!r}")
