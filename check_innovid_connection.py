@@ -22,6 +22,7 @@ from core.innovid_api import (  # noqa: E402
     CREDENTIALS_PATH,
     SESSION_PATH,
     InnovidAuthError,
+    diagnose_session,
     establish_session,
     fetch_campaign,
     load_credentials,
@@ -146,7 +147,7 @@ def main() -> int:
 
     if not args:
         print("Usage: python check_innovid_connection.py "
-              "<CAMPAIGN_ID> [--show] [--record]")
+              "<CAMPAIGN_ID> [--show] [--record] [--diagnose]")
         print("       python check_innovid_connection.py --login")
         print("Example: python check_innovid_connection.py 323492")
         return 2
@@ -155,6 +156,15 @@ def main() -> int:
 
     if "--record" in sys.argv:
         return _record_what_innovid_asks_for(campaign_id)
+
+    if "--diagnose" in sys.argv:
+        print("Looking at what the saved session actually carries.\n")
+        print("Names and shapes only -- no cookie values, no tokens.\n")
+        for line in diagnose_session(campaign_id,
+                                     headless="--show" not in sys.argv):
+            print(line)
+        print("\nSend this over.")
+        return 0
 
     credentials = load_credentials()
 

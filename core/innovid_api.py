@@ -1021,6 +1021,121 @@ def record_api_calls(
     return seen
 
 
+def diagnose_session(
+    campaign_id: str,
+    session_path: Path | None = None,
+    headless: bool = True,
+) -> list[str]:
+    """
+    Reports why a saved session can't call Innovid's API.
+
+    Written because guessing was not converging: a session that signs
+    in cleanly still gets HTTP 403, and the difference between a fresh
+    login and a restored one is exactly the sort of thing that has to
+    be looked at rather than reasoned about.
+
+    Reports names and shapes only -- cookie names, storage keys,
+    whether a token was found and from where, and what Innovid's own
+    error says. No cookie values, no token values.
+    """
+    saved = session_path or SESSION_PATH
+    lines: list[str] = []
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return ["Playwright isn't installed in this Python."]
+
+    if not saved.exists():
+        return [f"No saved session at {saved}. Run --login first."]
+
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=headless)
+        context = browser.new_context(storage_state=str(saved))
+        page = context.new_page()
+
+        headers_seen: dict[str, bool] = {"csrf": False}
+
+        def _watch(request):
+            if _API_HOST in request.url and request.headers.get("x-csrf-token"):
+                headers_seen["csrf"] = True
+
+        page.on("request", _watch)
+
+        try:
+            page.goto(
+                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                wait_until="domcontentloaded", timeout=60_000,
+            )
+            page.wait_for_timeout(12_000)
+
+            lines.append(f"Landed on: {page.url}")
+            lines.append(
+                "Looks like a sign-in page: "
+                f"{_looks_like_sign_in(page)}"
+            )
+
+            cookies = context.cookies()
+            by_domain: dict[str, list[str]] = {}
+            for cookie in cookies:
+                by_domain.setdefault(
+                    cookie.get("domain", "?"), []
+                ).append(cookie.get("name", "?"))
+            lines.append(f"\nCookies in the saved session ({len(cookies)}):")
+            for domain, names in sorted(by_domain.items()):
+                lines.append(f"  {domain}: {', '.join(sorted(names))}")
+
+            storage = page.evaluate("""() => ({
+                local: Object.keys(localStorage || {}),
+                session: Object.keys(sessionStorage || {}),
+            })""")
+            lines.append(
+                f"\nlocalStorage keys: {', '.join(storage['local']) or '(none)'}"
+            )
+            lines.append(
+                f"sessionStorage keys: "
+                f"{', '.join(storage['session']) or '(none)'}"
+            )
+
+            lines.append(
+                f"\nThe app sent an X-Csrf-Token itself: "
+                f"{headers_seen['csrf']}"
+            )
+            from_cookie = _csrf_from_cookies(context)
+            lines.append(
+                f"A token was found in the cookies: {bool(from_cookie)}"
+            )
+
+            # Y lo que de verdad falta: que dice Innovid al rechazar.
+            outcome = page.evaluate(
+                """async (url) => {
+                    const r = await fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json',
+                                  'X-Requested-With': 'XMLHttpRequest'},
+                        body: JSON.stringify({rpp: 1, page: 1}),
+                        credentials: 'include',
+                    });
+                    const t = await r.text();
+                    return {status: r.status, text: t.slice(0, 300)};
+                }""",
+                _summary_url(campaign_id),
+            )
+            lines.append(
+                f"\nA request with no token returns HTTP "
+                f"{outcome.get('status')}"
+            )
+            lines.append(f"  Innovid says: {outcome.get('text')}")
+
+        except Exception as exc:
+            lines.append(f"\nThe check itself failed: {exc}")
+        finally:
+            context.close()
+            browser.close()
+
+    return lines
+
+
 def establish_session(
     session_path: Path | None = None,
     login_url: str = APP_ORIGIN,
