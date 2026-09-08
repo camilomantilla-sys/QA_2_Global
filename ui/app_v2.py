@@ -40,6 +40,14 @@ from core.adobe_pixel_reconciliation import (
     save_adobe_vendor_rows,
 )
 from core.dv_reconciliation import reconcile_dv_tags
+from core.innovid_api import (
+    SESSION_PATH,
+    fetch_campaign,
+    load_credentials,
+    session_is_saved,
+)
+from core.innovid_reconciliation import reconcile as reconcile_innovid
+from rules import innovid as innovid_rules
 from core.dv_omni_reconciliation import reconcile_dv_omni
 from core.team_roster import (
     ACCOUNTS as TEAM_ACCOUNTS,
@@ -208,6 +216,28 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
         detected_profile, detection_evidence = detect_profile(path)
         ts_result = parse_ts(path, profile_name=profile_name)
         return detected_profile, detection_evidence, ts_result
+
+
+@st.cache_data(show_spinner=False, ttl=900)
+def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
+    """
+    Reads the campaign from Innovid, once per set of placements.
+
+    Cached because every widget interaction reruns the whole script,
+    and without this a checkbox tick would launch a browser and hit
+    Innovid again. The placement ids are part of the key so changing
+    the Traffic Sheet re-fetches; the 15-minute expiry keeps a stale
+    answer from outliving a correction made in Innovid.
+
+    Never raises: Innovid has bad days, and the rest of the QA has to
+    run anyway. A failure comes back inside `.errors`.
+    """
+    return fetch_campaign(
+        campaign_id=campaign_id,
+        credentials=load_credentials(),
+        placement_ids=set(placement_ids) or None,
+        headless=True,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -1405,6 +1435,48 @@ with st.sidebar:
 
     st.divider()
 
+    with st.expander("🔗 Check against Innovid (optional)"):
+        st.caption(
+            "Reads three things straight from Innovid that no export "
+            "carries: each creative's flight dates inside the decision "
+            "set, its rotation weight, and the Verification Partner. "
+            "The campaign is taken from the Traffic Sheet, so there is "
+            "nothing to type."
+        )
+
+        _has_session = session_is_saved()
+        if _has_session:
+            st.success(f"Signed in — using {SESSION_PATH.name}")
+        else:
+            # The full interpreter path, not "python": on Windows a
+            # bare "python" resolves to the system install, which has
+            # none of QA2's packages -- the exact wall this hit the
+            # first time it was set up.
+            st.info(
+                "Not signed in yet. Open a terminal in the QA2 folder "
+                "and run this once:\n\n"
+                f"`{sys.executable} check_innovid_connection.py "
+                "--login`\n\n"
+                "A browser opens, you sign in as usual, and the "
+                "session is saved. Your password is never read."
+            )
+
+        check_innovid = st.checkbox(
+            "Check this request against Innovid",
+            value=False,
+            key="qa2_check_innovid",
+            disabled=not _has_session,
+            help=(
+                "Opens Innovid in the background and reads the "
+                "campaign. Takes a few seconds the first time; the "
+                "answer is reused for 15 minutes. If Innovid doesn't "
+                "respond, the rest of the QA still runs and these "
+                "checks are reported as not verified."
+            ),
+        )
+
+    st.divider()
+
     _account_options = ["All / unknown"] + sorted(
         {
             row.get("account", "").strip()
@@ -2145,6 +2217,67 @@ if True:
                 default_ad_reconciliation,
                 findings_buffer,
             )
+
+            # Innovid holds three things no export carries: each
+            # creative's flight dates inside the decision set, its
+            # rotation weight, and the Verification Partner. Only
+            # asked for when the QA ticks the box, and only for the
+            # placements this request worked.
+            innovid_reconciliation = None
+            innovid_result = None
+
+            if st.session_state.get("qa2_check_innovid"):
+                campaign_id = str(
+                    getattr(match_result, "ts_campaign_id", "") or ""
+                ).strip()
+
+                if not campaign_id:
+                    st.warning(
+                        "The Traffic Sheet doesn't declare a Campaign "
+                        "ID in Campaign Information, so there is "
+                        "nothing to look up in Innovid. The rest of "
+                        "the QA ran normally."
+                    )
+                else:
+                    worked_ids = tuple(sorted(
+                        str(pm.placement_id) for pm in match_result.matched
+                    ))
+                    with st.spinner(
+                        f"Reading campaign {campaign_id} from Innovid…"
+                    ):
+                        innovid_result = cached_fetch_innovid(
+                            campaign_id, worked_ids
+                        )
+
+                    # Said out loud, not just folded into the
+                    # findings: an expired session or a bad day at
+                    # Innovid is something to act on, and it looks
+                    # nothing like a placement that happens to be
+                    # fine.
+                    if innovid_result.errors:
+                        st.warning(
+                            "Innovid didn't answer everything. These "
+                            "checks are reported as not verified:\n\n"
+                            + "\n\n".join(
+                                f"- {error}"
+                                for error in innovid_result.errors
+                            )
+                        )
+                    elif not innovid_result.placements:
+                        st.warning(
+                            f"Innovid returned no placements for "
+                            f"campaign {campaign_id}. Check that the "
+                            "Campaign ID in the Traffic Sheet is the "
+                            "one Innovid uses."
+                        )
+
+                    innovid_reconciliation = reconcile_innovid(
+                        match_result, innovid_result
+                    )
+                    innovid_rules.evaluate(
+                        innovid_reconciliation,
+                        findings_buffer,
+                    )
 
         # ----------------------------------------------------
         # Review approval: REVIEW -> PASS

@@ -128,7 +128,8 @@ def _sign_in_by_hand() -> int:
         "it's gitignored and must not be shared or committed. When "
         "it expires, run --login again."
     )
-    print("\nNow run the check without --login:")
+    print("\nQA2 will use it by itself now. To check a campaign from "
+          "a terminal:")
     print(f"    {sys.executable} check_innovid_connection.py <CAMPAIGN_ID>")
     return 0
 
@@ -137,16 +138,20 @@ def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     show_browser = "--show" in sys.argv
 
+    # Signing in has nothing to do with a campaign, so it doesn't ask
+    # for one. Requiring an id here meant the instructions had to
+    # carry a number that was then ignored.
+    if "--login" in sys.argv:
+        return _sign_in_by_hand()
+
     if not args:
         print("Usage: python check_innovid_connection.py "
-              "<CAMPAIGN_ID> [--show] [--login] [--record]")
+              "<CAMPAIGN_ID> [--show] [--record]")
+        print("       python check_innovid_connection.py --login")
         print("Example: python check_innovid_connection.py 323492")
         return 2
 
     campaign_id = args[0]
-
-    if "--login" in sys.argv:
-        return _sign_in_by_hand()
 
     if "--record" in sys.argv:
         return _record_what_innovid_asks_for(campaign_id)
