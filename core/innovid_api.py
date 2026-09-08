@@ -1021,6 +1021,140 @@ def record_api_calls(
     return seen
 
 
+def diagnose_session(
+    campaign_id: str,
+    session_path: Path | None = None,
+    headless: bool = True,
+) -> list[str]:
+    """
+    Reports why a saved session can't call Innovid's API.
+
+    Written because guessing was not converging: a session that signs
+    in cleanly still gets HTTP 403, and the difference between a fresh
+    login and a restored one is exactly the sort of thing that has to
+    be looked at rather than reasoned about.
+
+    Reports names and shapes only -- cookie names, storage keys,
+    whether a token was found and from where, and what Innovid's own
+    error says. No cookie values, no token values.
+    """
+    saved = session_path or SESSION_PATH
+    lines: list[str] = []
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return ["Playwright isn't installed in this Python."]
+
+    if not saved.exists():
+        return [f"No saved session at {saved}. Run --login first."]
+
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=headless)
+        context = browser.new_context(storage_state=str(saved))
+        page = context.new_page()
+
+        headers_seen: dict[str, bool] = {"csrf": False}
+
+        def _watch(request):
+            if _API_HOST in request.url and request.headers.get("x-csrf-token"):
+                headers_seen["csrf"] = True
+
+        page.on("request", _watch)
+
+        try:
+            page.goto(
+                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                wait_until="domcontentloaded", timeout=60_000,
+            )
+            page.wait_for_timeout(12_000)
+
+            lines.append(f"Landed on: {page.url}")
+            lines.append(
+                "Looks like a sign-in page: "
+                f"{_looks_like_sign_in(page)}"
+            )
+
+            cookies = context.cookies()
+            by_domain: dict[str, list[str]] = {}
+            for cookie in cookies:
+                by_domain.setdefault(
+                    cookie.get("domain", "?"), []
+                ).append(cookie.get("name", "?"))
+            lines.append(f"\nCookies in the saved session ({len(cookies)}):")
+            for domain, names in sorted(by_domain.items()):
+                lines.append(f"  {domain}: {', '.join(sorted(names))}")
+
+            storage = page.evaluate("""() => ({
+                local: Object.keys(localStorage || {}),
+                session: Object.keys(sessionStorage || {}),
+            })""")
+            lines.append(
+                f"\nlocalStorage keys: {', '.join(storage['local']) or '(none)'}"
+            )
+            lines.append(
+                f"sessionStorage keys: "
+                f"{', '.join(storage['session']) or '(none)'}"
+            )
+
+            lines.append(
+                f"\nThe app sent an X-Csrf-Token itself: "
+                f"{headers_seen['csrf']}"
+            )
+            # Separado por origen a proposito: decir solo "se
+            # encontro un token" fue lo que dio confianza en el token
+            # de Auth0, que es valido pero para otra puerta.
+            lines.append(
+                f"A token is in sessionStorage: "
+                f"{bool(_csrf_from_page(page))}"
+            )
+            lines.append(
+                f"A token is in an Innovid cookie: "
+                f"{bool(_csrf_from_cookies(context))}"
+            )
+            other = [
+                c.get("name", "")
+                for c in context.cookies()
+                if "csrf" in str(c.get("name", "")).casefold()
+                and not str(c.get("domain", "")).lstrip(".")
+                .casefold().endswith("flashtalking.net")
+            ]
+            if other:
+                lines.append(
+                    "  (ignored, they belong to the sign-in provider: "
+                    f"{', '.join(other)})"
+                )
+
+            # Y lo que de verdad falta: que dice Innovid al rechazar.
+            outcome = page.evaluate(
+                """async (url) => {
+                    const r = await fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json',
+                                  'X-Requested-With': 'XMLHttpRequest'},
+                        body: JSON.stringify({rpp: 1, page: 1}),
+                        credentials: 'include',
+                    });
+                    const t = await r.text();
+                    return {status: r.status, text: t.slice(0, 300)};
+                }""",
+                _summary_url(campaign_id),
+            )
+            lines.append(
+                f"\nA request with no token returns HTTP "
+                f"{outcome.get('status')}"
+            )
+            lines.append(f"  Innovid says: {outcome.get('text')}")
+
+        except Exception as exc:
+            lines.append(f"\nThe check itself failed: {exc}")
+        finally:
+            context.close()
+            browser.close()
+
+    return lines
+
+
 def establish_session(
     session_path: Path | None = None,
     login_url: str = APP_ORIGIN,
@@ -1117,13 +1251,42 @@ CSRF_COOKIE_NAMES = (
 )
 
 
+def _csrf_from_page(page) -> str:
+    """
+    Lee el token CSRF de donde Innovid lo guarda: sessionStorage.
+
+    Confirmado en una sesion real -- las claves de sessionStorage del
+    campaign manager son pendo_tabId, csrf y previous_page_loads. Lo
+    escribe la propia pagina al cargar, asi que existe aunque la
+    sesion venga restaurada de un archivo (sessionStorage no se guarda
+    con la sesion, pero la pagina lo repone).
+    """
+    script = """
+        () => {
+            for (const key of ['csrf', 'csrfToken', 'XSRF-TOKEN',
+                               'X-Csrf-Token']) {
+                const v = sessionStorage.getItem(key);
+                if (v) return v;
+            }
+            return '';
+        }
+    """
+    try:
+        return str(page.evaluate(script) or "").strip()
+    except Exception:
+        return ""
+
+
 def _csrf_from_cookies(context) -> str:
     """
-    Busca el token CSRF entre las cookies de la sesion.
+    Ultimo recurso: una cookie CSRF, pero solo de Innovid.
 
-    La cabecera de una peticion de la app es la fuente preferida, pero
-    solo existe si la app llamo a su API mientras mirabamos. La cookie
-    esta desde que se inicia sesion.
+    Nunca del proveedor de identidad. Una sesion real trae `_csrf` en
+    uam-login.mediaocean.com -- el token de Auth0 -- y mandarselo a
+    api.flashtalking.net es lo que producia "Invalid CSRF Token": un
+    token valido, para otra puerta. Aceptar cualquier cookie que se
+    llamara csrf no era una red de seguridad, era una forma de
+    equivocarse con confianza.
     """
     from urllib.parse import unquote
 
@@ -1132,13 +1295,34 @@ def _csrf_from_cookies(context) -> str:
     except Exception:
         return ""
 
-    by_name = {c.get("name", ""): c.get("value", "") for c in cookies}
+    # Los dominios propios se derivan de la configuracion, no van
+    # escritos a mano: asi el filtro sigue al host que este en uso.
+    from urllib.parse import urlparse
+
+    ours = {
+        _API_HOST.casefold(),
+        (urlparse(APP_ORIGIN).hostname or "").casefold(),
+    }
+    ours.discard("")
+    # Y su dominio padre, para las cookies puestas en el nivel de arriba.
+    for host in list(ours):
+        parts = host.split(".")
+        if len(parts) > 2:
+            ours.add(".".join(parts[-2:]))
+
+    def _is_innovid(cookie) -> bool:
+        domain = str(cookie.get("domain", "")).lstrip(".").casefold()
+        return any(
+            domain == own or domain.endswith("." + own) for own in ours
+        )
+
+    mine = [c for c in cookies if _is_innovid(c)]
+    by_name = {c.get("name", ""): c.get("value", "") for c in mine}
+
     for name in CSRF_COOKIE_NAMES:
         if by_name.get(name):
             return unquote(by_name[name])
 
-    # Alguna instalacion puede nombrarla distinto; se acepta cualquiera
-    # que se llame como un token csrf.
     for name, value in by_name.items():
         if "csrf" in name.casefold() and value:
             return unquote(value)
@@ -1332,8 +1516,12 @@ def fetch_campaign(
             # trouble it retries in a loop that never goes quiet at
             # all. That turned a bad day at Innovid into a 60-second
             # timeout with nothing useful said about it.
+            # La direccion que abre la propia interfaz. `/campaign/{id}`
+            # cargaba algo, pero no es la vista de la campana, y el
+            # token que deja en sessionStorage no sirve para pedir su
+            # resumen.
             page.goto(
-                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                f"{APP_ORIGIN}/{campaign_id}/summary/",
                 wait_until="domcontentloaded",
                 timeout=timeout_ms,
             )
@@ -1359,7 +1547,11 @@ def fetch_campaign(
                 # cookie y solo lo copian a la cabecera al llamar. Sin
                 # esto, la corrida seguia sin token hasta chocar con un
                 # 403 que no decia nada de la causa.
-                csrf_token["value"] = _csrf_from_cookies(context)
+                # sessionStorage primero: ahi es donde Innovid lo
+                # guarda de verdad.
+                csrf_token["value"] = (
+                    _csrf_from_page(page) or _csrf_from_cookies(context)
+                )
 
                 if not csrf_token["value"]:
                     # Dicho antes de intentar, no despues de fallar:
@@ -1762,11 +1954,22 @@ def _first_visible(page, selectors):
     return None
 
 
-def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=None):
+def _api_get_json(page, url: str, csrf_token: str, method: str = "GET",
+                  body=None, _retried: bool = False):
     """
     Runs the API call inside the logged-in page, so the session cookie
     rides along automatically and we only have to add the CSRF header.
+
+    The token is re-read from the page immediately before each call.
+    Innovid hands out a new one as it goes, so a token captured once
+    at the start is stale by the second request -- and a stale token
+    is refused exactly like a wrong one, which is indistinguishable
+    from the outside.
     """
+    fresh = _csrf_from_page(page)
+    if fresh:
+        csrf_token = fresh
+
     script = """
         async ([url, method, body, csrf]) => {
             const headers = {
@@ -1809,6 +2012,21 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
             "appears, then close it:\n"
             f"    {_venv_python_hint()} check_innovid_connection.py "
             "--login"
+        )
+
+    if status == 403 and not _retried:
+        # Un reintento, y solo uno. Si el token roto, recargar la
+        # pagina hace que Innovid entregue uno nuevo; si el problema
+        # es de permisos, el segundo intento falla igual y el mensaje
+        # de abajo dice lo que corresponde.
+        try:
+            page.reload(wait_until="domcontentloaded", timeout=30_000)
+            page.wait_for_timeout(2_000)
+        except Exception:
+            pass
+        return _api_get_json(
+            page, url, _csrf_from_page(page) or csrf_token,
+            method=method, body=body, _retried=True,
         )
 
     if status == 403:
