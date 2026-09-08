@@ -4,7 +4,7 @@ El 401 que le salio a Camilo con una sesion guardada.
 Dos cosas: que el mensaje diga que hacer, y que --login no guarde una
 sesion que no sirve.
 """
-import json, sys, threading
+import json, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -42,7 +42,9 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 api.APP_ORIGIN = base; api.CM_BASE = f"{base}/cm/v1/ui"
 api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
 
-sess = Path("s401.json"); sess.write_text(json.dumps({"cookies": [], "origins": []}))
+# Un temporal, no la raiz del repo: un test no debe dejar
+# basura en el arbol de trabajo.
+sess = Path(tempfile.mkdtemp()) / "s401.json"; sess.write_text(json.dumps({"cookies": [], "origins": []}))
 
 fails = []
 def check(label, got, want):

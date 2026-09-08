@@ -1110,6 +1110,42 @@ def establish_session(
     return str(target)
 
 
+# Nombres con los que las apps suelen guardar el token en cookie.
+CSRF_COOKIE_NAMES = (
+    "XSRF-TOKEN", "CSRF-TOKEN", "X-CSRF-TOKEN", "csrfToken",
+    "csrf_token", "_csrf",
+)
+
+
+def _csrf_from_cookies(context) -> str:
+    """
+    Busca el token CSRF entre las cookies de la sesion.
+
+    La cabecera de una peticion de la app es la fuente preferida, pero
+    solo existe si la app llamo a su API mientras mirabamos. La cookie
+    esta desde que se inicia sesion.
+    """
+    from urllib.parse import unquote
+
+    try:
+        cookies = context.cookies()
+    except Exception:
+        return ""
+
+    by_name = {c.get("name", ""): c.get("value", "") for c in cookies}
+    for name in CSRF_COOKIE_NAMES:
+        if by_name.get(name):
+            return unquote(by_name[name])
+
+    # Alguna instalacion puede nombrarla distinto; se acepta cualquiera
+    # que se llame como un token csrf.
+    for name, value in by_name.items():
+        if "csrf" in name.casefold() and value:
+            return unquote(value)
+
+    return ""
+
+
 def _wait_for_csrf(page, captured: dict, timeout_ms: int) -> bool:
     """
     Waits for the app to make an API call of its own, which is where
@@ -1302,20 +1338,41 @@ def fetch_campaign(
                 timeout=timeout_ms,
             )
 
-            # A saved session expires eventually, and when it does the
-            # campaign page quietly becomes a login page. Without this
-            # check the run would report an empty campaign instead of
-            # an expired sign-in.
-            # The token rides on the app's own API calls, so it only
-            # exists once the page has made one.
-            _wait_for_csrf(page, csrf_token, timeout_ms=min(timeout_ms, 30_000))
-
+            # Comprobado ANTES de esperar el token: una sesion
+            # expirada convierte la pagina de campana en una de login,
+            # y ahi no va a aparecer ningun token. Esperarlo treinta
+            # segundos y avisar de su ausencia solo tapaba la causa
+            # real con un sintoma.
             if using_saved_session and _looks_like_sign_in(page):
                 raise InnovidAuthError(
                     "The saved Innovid session has expired. Run the "
                     "connection check with --login to sign in again.\n"
                     f"  Ended up on: {page.url}"
                 )
+
+            # The token rides on the app's own API calls, so it only
+            # exists once the page has made one.
+            if not _wait_for_csrf(
+                page, csrf_token, timeout_ms=min(timeout_ms, 30_000)
+            ):
+                # Segundo intento: muchas apps guardan el token en una
+                # cookie y solo lo copian a la cabecera al llamar. Sin
+                # esto, la corrida seguia sin token hasta chocar con un
+                # 403 que no decia nada de la causa.
+                csrf_token["value"] = _csrf_from_cookies(context)
+
+                if not csrf_token["value"]:
+                    # Dicho antes de intentar, no despues de fallar:
+                    # sin token la peticion va a ser rechazada, y el
+                    # motivo real se pierde detras del codigo HTTP.
+                    result.errors.append(
+                        "Innovid never handed over its security "
+                        "token, so the requests below were sent "
+                        "without one and will probably be refused. "
+                        "This usually means the saved sign-in was "
+                        "captured before the campaign manager "
+                        "finished loading."
+                    )
 
             # One page at a time: a campaign with more placements
             # than fit in a page would otherwise come back silently
@@ -1742,17 +1799,35 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
             "errors, the thing to do is wait and try later."
         )
 
-    if status in (401, 403):
-        # La causa casi siempre es la sesion, no la peticion. Volcar
-        # la URL completa con sus 30 campos no dice nada util y tapa
-        # lo unico que hay que hacer.
+    if status == 401:
+        # Volcar la URL con sus 30 campos no dice nada util y tapa lo
+        # unico que hay que hacer.
         raise InnovidAuthError(
-            f"Innovid rejected the request (HTTP {status}). The saved "
-            "sign-in is no longer valid.\n"
+            "Innovid didn't recognise the session (HTTP 401). The "
+            "saved sign-in is no longer valid.\n"
             "  Run this once, open a campaign in the window that "
             "appears, then close it:\n"
             f"    {_venv_python_hint()} check_innovid_connection.py "
             "--login"
+        )
+
+    if status == 403:
+        # 403 con sesion valida es casi siempre el token de seguridad,
+        # no la sesion. Mandar a iniciar sesion otra vez aqui hace
+        # perder el tiempo en lo que no es.
+        raise InnovidAuthError(
+            "Innovid accepted the session but refused the request "
+            "(HTTP 403)"
+            + (
+                ", and no security token could be read from it. The "
+                "sign-in may have been saved before Innovid finished "
+                "loading.\n"
+                "  Run --login again and, in the window that opens, "
+                "let a campaign load fully before closing it."
+                if not csrf_token
+                else ". The account may not have access to this "
+                     "campaign."
+            )
         )
 
     if status != 200:
