@@ -212,10 +212,11 @@ class InnovidFetchResult:
     # every row reads as "409 / 385", which looks like a bug.
     rows_seen: int = 0
 
-    # The field names a decision-set node carries. Rotation nodes come
-    # back identified only as "node 1", "node 2" -- the creative they
-    # serve is in some field not being read, since Innovid's own panel
-    # shows a filename and id per row. Names only, no values.
+    # The field names a decision-set node carries. `serving` is the
+    # one naming the creative, found by counting these on a real
+    # campaign. Kept on show because a campaign whose nodes arrive
+    # shaped differently would otherwise just produce creatives with
+    # no name. Names only, no values.
     node_fields: dict[str, int] = field(default_factory=dict)
 
     # What each level of the flattened tree actually contains: how
@@ -628,9 +629,10 @@ def _serving_id(serving) -> str:
     """
     The creative id out of a node's `serving`.
 
-    Shape unconfirmed -- the field is present on every node, and
-    `defaultServing` next to it is {id, name, adType}, so `serving` is
-    read the same way while tolerating a bare id.
+    Confirmed against campaign 327957: `serving` is an object holding
+    the creative's id and filename, matching what Innovid's Edit
+    Decision Set panel shows for the same nodes. A bare id is still
+    tolerated in case another campaign returns it that way.
     """
     if isinstance(serving, dict):
         return _text(serving.get("id"))
