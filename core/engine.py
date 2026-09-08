@@ -23,6 +23,7 @@ from rules import adobe_tag_policy  # idem: recibe `reconciliation`
 from rules import pixels  # idem: recibe `reconciliation`
 from rules import dv_omni  # idem: recibe `reconciliation`
 from rules import defaults  # idem: recibe `reconciliation`
+from rules import innovid  # idem: recibe `reconciliation`
 
 
 def run_rules(
@@ -33,6 +34,7 @@ def run_rules(
     pixel_reconciliation=None,
     dv_omni_reconciliation=None,
     default_ad_reconciliation=None,
+    innovid_reconciliation=None,
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
 
@@ -58,6 +60,13 @@ def run_rules(
 
     if default_ad_reconciliation is not None:
         defaults.evaluate(default_ad_reconciliation, buffer)
+
+    # Opcional a proposito: Innovid es un servicio externo que tiene
+    # dias malos, y un QA que se cae entero porque una API no respondio
+    # no sirve. Sin reconciliacion, el resto del QA corre igual y estos
+    # chequeos simplemente no se hacen.
+    if innovid_reconciliation is not None:
+        innovid.evaluate(innovid_reconciliation, buffer)
 
     if tags_result is not None:
         tag_match_result = match_tags(match_result, tags_result)
