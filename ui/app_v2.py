@@ -42,6 +42,7 @@ from core.adobe_pixel_reconciliation import (
 from core.dv_reconciliation import reconcile_dv_tags
 from core.innovid_api import (
     SESSION_PATH,
+    diagnose_session,
     fetch_campaign,
     load_credentials,
     session_is_saved,
@@ -1539,6 +1540,19 @@ with st.sidebar:
 
     st.divider()
 
+    # Fuera de cualquier desplegable: este aviso invalida todo lo
+    # que la app diga despues, y dentro de un expander cerrado no lo
+    # ve nadie -- que es exactamente lo que paso.
+    _stale = stale_modules()
+    if _stale:
+        st.error(
+            "**Restart QA2.** The code changed after the app started, "
+            "so it is still running the old "
+            + ", ".join(m.split(".")[-1] for m in _stale)
+            + ". Stop it in the terminal (Ctrl+C) and launch it again "
+            "-- reloading this page is not enough."
+        )
+
     with st.expander("🔗 Check against Innovid (optional)"):
         st.caption(
             "Reads three things straight from Innovid that no export "
@@ -1550,20 +1564,6 @@ with st.sidebar:
 
         st.caption(f"QA2 build: `{running_version()}`")
 
-        _stale = stale_modules()
-        if _stale:
-            # Lo mas importante de esta seccion: un arreglo puede
-            # estar en disco y no estar corriendo, y desde afuera se
-            # ve igual que un arreglo que no funciono.
-            st.error(
-                "**Restart QA2.** The code changed on disk after the "
-                "app started, so it is still running the old version "
-                "of: "
-                + ", ".join(m.split(".")[-1] for m in _stale)
-                + ".\n\nStop it in the terminal (Ctrl+C) and launch "
-                "it again -- reloading this page is not enough, "
-                "because Python keeps modules it has already loaded."
-            )
 
         _has_session = session_is_saved()
         if _has_session:
@@ -2384,6 +2384,27 @@ if True:
                                 for error in innovid_result.errors
                             )
                         )
+
+                        # El diagnostico aqui mismo, no en la terminal.
+                        # Pedir que se corra un comando aparte y se
+                        # pegue la salida convertia cada fallo en una
+                        # ida y vuelta; esto lo responde de una.
+                        with st.expander(
+                            "What Innovid actually returned "
+                            "(names and shapes only, no values)"
+                        ):
+                            with st.spinner("Looking…"):
+                                try:
+                                    report = diagnose_session(campaign_id)
+                                except Exception as exc:  # noqa: BLE001
+                                    report = [f"The check failed: {exc}"]
+                            st.code("\n".join(report), language="text")
+                            st.caption(
+                                "Safe to share: cookie and storage "
+                                "names, whether a token was found and "
+                                "where, and Innovid's own error text. "
+                                "No cookie values, no tokens."
+                            )
                     elif not innovid_result.placements:
                         st.warning(
                             f"Innovid returned no placements for "
