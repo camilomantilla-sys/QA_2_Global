@@ -30,6 +30,18 @@ CONF_NONE = "NONE"
 _EXT = re.compile(r"\.(jpg|jpeg|png|gif|mp4|mov|webm|html|htm|zip|svg)$", re.I)
 _IS_DEFAULT = re.compile(r"\bdefault\b", re.I)
 
+def _as_date(value: object) -> date | None:
+    """
+    Deja pasar solo fechas reales.
+
+    La capa de extraccion ya convierte las columnas kind="date", pero
+    una celda con texto libre ("TBD", "ver correo") llega tal cual. Si
+    eso se colara como fecha, la comparacion con Innovid reventaria o,
+    peor, compararia contra basura.
+    """
+    return value if isinstance(value, date) else None
+
+
 def norm_creative(value: object) -> str:
     """
     Forma canonica para comparar nombres de creativo y filenames.
@@ -56,6 +68,15 @@ class ExpectedCreative:
     ts_sheet: str = ""
     url: str = ""             # URL completa declarada en la TS
     cgen: str = ""            # CGENS declarado en la TS
+
+    # Vuelo declarado para ESTE creativo en Creative Rotations, que
+    # puede diferir del vuelo del placement: una rotacion secuencial
+    # declara un creativo del 14 al 26 y otro del 27 en adelante.
+    # Ningun export los trae -- solo el decision set de Innovid.
+    start: date | None = None
+    end: date | None = None
+    rotation_weight: str = ""
+    sequence: str = ""
     dims: str = ""            # <-- NUEVA
 
     @property
@@ -334,6 +355,10 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 ),
                 cgen=str(row.values.get("cgen") or ""),
                 dims=norm_dims(row.values.get("dims_or_duration")),
+                start=_as_date(row.values.get("start_date")),
+                end=_as_date(row.values.get("end_date")),
+                rotation_weight=str(row.values.get("rotation_weight") or ""),
+                sequence=str(row.values.get("sequence") or ""),
             ))
 
     # --- placements trabajados

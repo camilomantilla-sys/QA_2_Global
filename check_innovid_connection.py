@@ -12,6 +12,7 @@ which is the fastest way to see where a login is getting stuck.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -24,8 +25,83 @@ from core.innovid_api import (  # noqa: E402
     establish_session,
     fetch_campaign,
     load_credentials,
+    record_api_calls,
     session_is_saved,
 )
+
+
+def _record_what_innovid_asks_for(campaign_id: str) -> int:
+    """
+    Watches Innovid's own interface to learn an endpoint QA2 can't
+    find on its own.
+    """
+    print("Opening the campaign in a browser window.\n")
+    print("Click around the way you normally would -- in particular,")
+    print("open a decision set so its panel loads. When you're done,")
+    print("just close the window.\n")
+    print("Only the addresses Innovid calls are written down --")
+    print("no headers, no cookies, no request or response contents.")
+    print("Sign-in addresses are dropped entirely, and query values")
+    print("are hidden unless they describe the request, because a")
+    print("sign-in redirect carries a credential in its address.\n")
+
+    try:
+        calls = record_api_calls(
+            campaign_id=campaign_id, credentials=load_credentials()
+        )
+    except InnovidAuthError as exc:
+        print(f"Didn't work out:\n  {exc}")
+        return 1
+
+    if not calls:
+        print("No API calls were recorded. If the window never")
+        print("loaded the campaign, try --login first.")
+        return 1
+
+    # Group by endpoint shape so fifty calls to one endpoint read as
+    # one line. The numbers in a path are ids, and the shape is what
+    # matters when hunting for an endpoint.
+    shapes: dict[str, list[str]] = {}
+    for entry in calls:
+        path = entry.split("\n", 1)[0].split("?", 1)[0]
+        shape = re.sub(r"/\d+", "/{id}", path)
+        shapes.setdefault(shape, []).append(entry)
+
+    # Decision sets are the reason this exists, and the summary's
+    # field list is how Innovid says which columns it wants.
+    interesting = ("dset", "dtree", "decision", "column", "summary")
+
+    def _is_interesting(shape: str) -> bool:
+        return any(k in shape.lower() for k in interesting)
+
+    # The interesting ones print their full addresses right here.
+    # Listing shapes and putting the addresses in a separate section
+    # meant the ids -- the entire point -- were a scroll away, and the
+    # first person to read this report sent back the shapes alone.
+    highlights = sorted(s for s in shapes if _is_interesting(s))
+    if highlights:
+        print("THE PART THAT MATTERS -- send these lines:\n")
+        for shape in highlights:
+            for entry in shapes[shape]:
+                print(f"  {entry}")
+        print()
+
+    print(f"Everything else Innovid called "
+          f"({len(calls)} call(s), {len(shapes)} endpoint(s)):\n")
+    for shape in sorted(shapes):
+        if _is_interesting(shape):
+            continue
+        for entry in shapes[shape][:2]:
+            print(f"  {entry}")
+        if len(shapes[shape]) > 2:
+            print(f"  ... and {len(shapes[shape]) - 2} more like it")
+
+    print(
+        "\nSign-in addresses are left out entirely, and query values "
+        "are hidden unless they describe the request -- but give it a "
+        "glance anyway before pasting it anywhere."
+    )
+    return 0
 
 
 def _sign_in_by_hand() -> int:
@@ -52,7 +128,8 @@ def _sign_in_by_hand() -> int:
         "it's gitignored and must not be shared or committed. When "
         "it expires, run --login again."
     )
-    print("\nNow run the check without --login:")
+    print("\nQA2 will use it by itself now. To check a campaign from "
+          "a terminal:")
     print(f"    {sys.executable} check_innovid_connection.py <CAMPAIGN_ID>")
     return 0
 
@@ -61,16 +138,23 @@ def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     show_browser = "--show" in sys.argv
 
+    # Signing in has nothing to do with a campaign, so it doesn't ask
+    # for one. Requiring an id here meant the instructions had to
+    # carry a number that was then ignored.
+    if "--login" in sys.argv:
+        return _sign_in_by_hand()
+
     if not args:
         print("Usage: python check_innovid_connection.py "
-              "<CAMPAIGN_ID> [--show] [--login]")
+              "<CAMPAIGN_ID> [--show] [--record]")
+        print("       python check_innovid_connection.py --login")
         print("Example: python check_innovid_connection.py 323492")
         return 2
 
     campaign_id = args[0]
 
-    if "--login" in sys.argv:
-        return _sign_in_by_hand()
+    if "--record" in sys.argv:
+        return _record_what_innovid_asks_for(campaign_id)
 
     credentials = load_credentials()
 
@@ -136,21 +220,39 @@ def main() -> int:
     # Coverage across every row, not a sample. A field that is filled
     # in on the first five rows and empty on the other 404 is exactly
     # the kind of thing a sample hides.
+    # Each field belongs to a level, and dividing by every row makes
+    # a complete field look half missing: verificationPartner sits on
+    # all 54 placements, and reporting it as "54 / 207" is what made
+    # a correct result look broken.
+    PLACEMENT, CREATIVE = "placement", "creative"
     critical = {
-        "Verification Partner": lambda r: r.verification_partner,
-        "Decision set id (modern)": lambda r: r.dtree_id,
-        "Decision set id (legacy)": lambda r: r.legacy_dset_id,
-        "Start date": lambda r: r.start_date,
-        "End date": lambda r: r.end_date,
-        "Rotation weight": lambda r: r.rotation_weight,
+        "Verification Partner": (PLACEMENT, lambda r: r.verification_partner),
+        "Decision set id (modern)": (CREATIVE, lambda r: r.dtree_id),
+        "decisionSetId": (CREATIVE, lambda r: r.dset_id),
+        "placementDecisionSetId": (CREATIVE, lambda r: r.dset_link_id),
+        "Start date": (PLACEMENT, lambda r: r.start_date),
+        "End date": (PLACEMENT, lambda r: r.end_date),
+        "Rotation weight": (CREATIVE, lambda r: r.rotation_weight),
     }
-    total = len(result.placements)
-    print("How much of each field actually came back:")
+    rows_at = {
+        PLACEMENT: placement_level,
+        CREATIVE: creative_level,
+    }
+
+    print("How much of each field came back, counted against the rows "
+          "of its own level:")
     missing_entirely = []
-    for label, getter in critical.items():
-        filled = sum(1 for r in result.placements if getter(r))
-        flag = "" if filled else "   <-- nothing at all"
-        print(f"  {label:22} {filled:>4} / {total}{flag}")
+    for label, (level, getter) in critical.items():
+        rows = rows_at[level]
+        filled = sum(1 for r in rows if getter(r))
+        of = len(rows)
+        if not filled:
+            flag = "   <-- nothing at all"
+        elif filled == of:
+            flag = "   (all of them)"
+        else:
+            flag = ""
+        print(f"  {label:26} {filled:>4} / {of} {level} row(s){flag}")
         if not filled:
             missing_entirely.append(label)
 
@@ -195,8 +297,7 @@ def main() -> int:
             f"  {row.placement_id}  {row.start_date} -> {row.end_date or '(ongoing)'}"
             f"  | {row.verification_partner or '-'}"
             f" {row.verification_status or ''}"
-            f"  | dset {row.dtree_id or row.legacy_dset_id or '-'}"
-            f"{' (legacy)' if not row.dtree_id and row.legacy_dset_id else ''}"
+            f"  | dset {row.dtree_id or row.dset_id or '-'}"
         )
 
     if creative_level:
@@ -213,53 +314,131 @@ def main() -> int:
         print("\nFirst few decision-set nodes:")
         for node in result.creative_nodes[:5]:
             print(
-                f"  creative {node.creative_id}"
+                f"  {node.creative_name or node.creative_id or 'node ' + node.node_id}"
                 f"  {node.start_timestamp or '-'} -> "
                 f"{node.end_timestamp or '(ongoing)'}"
                 f"  | weight {node.weight or '-'}"
                 f"{'  | DEFAULT' if node.is_default else ''}"
             )
 
-    # Creative flight dates are NOT in the summary. The creative rows
-    # repeat their placement's dates, so comparing them here would
-    # pass every time -- including on the very case this is for.
+    # Creative flight dates are NOT in the summary -- the creative
+    # rows repeat their placement's dates. They only exist inside the
+    # decision set, so this section reports on what was read there.
     print()
-    if result.creative_nodes:
-        mismatches = []
-        for row in placement_level:
-            for node in result.nodes_for_placement(row.placement_id):
-                if node.is_default or not node.start_timestamp or not row.start_date:
-                    continue
-                if node.start_timestamp[:10] != row.start_date[:10]:
-                    mismatches.append((row, node))
-        if mismatches:
-            print(f"{len(mismatches)} creative(s) starting on a different "
-                  "day than their placement:")
-            for row, node in mismatches[:15]:
-                print(
-                    f"  placement {row.placement_id} starts {row.start_date}"
-                    f"  ->  creative {node.creative_id} starts "
-                    f"{node.start_timestamp[:10]}"
-                )
-        else:
-            print("Every creative in the decision sets read starts the "
-                  "same day as its placement.")
-    else:
+    linked = result.linked_node_count()
+
+    if not result.creative_nodes:
         modern = sum(1 for r in result.placements if r.dtree_id)
-        legacy = sum(1 for r in result.placements if r.legacy_dset_id)
-        print("Creative flight dates were NOT checked.")
+        by_id = sum(1 for r in result.placements if r.dset_id)
+        print("Creative flight dates were NOT checked -- no decision "
+              "set could be opened.")
+        print(f"  Rows naming a modern dtree id: {modern}")
+        print(f"  Rows naming a decisionSetId:   {by_id}")
+    elif not linked:
+        # The dangerous case. Saying "no differences found" here would
+        # be a pass over a comparison that never happened.
         print(
-            "  They live inside the decision set, not in the summary "
-            "-- the dates on the creative rows above are the "
-            "placement's, repeated."
+            f"{len(result.creative_nodes)} creative node(s) were read, "
+            "but NONE could be tied back to a placement, so NO dates "
+            "were compared."
         )
-        print(f"  Modern decision sets in this campaign: {modern} row(s)")
-        print(f"  Legacy decision sets in this campaign: {legacy} row(s)")
-        if legacy and not modern:
-            print(
-                "  Only legacy decision sets here, and QA2 does not "
-                "know that endpoint yet, so nothing could be opened."
-            )
+        print(
+            "  This is not a clean result -- treat it as unchecked. "
+            "The decision sets and the placements are not naming each "
+            "other with the same id."
+        )
+    else:
+        found = result.creative_flight_gaps()
+        gaps = found["gaps"]
+
+        checked = found["checked"]
+        unchecked = found["unchecked"]
+        all_placements = len(result.placement_rows())
+
+        print(f"{len(checked)} of {all_placements} placement(s) were "
+              "checked, comparing each decision set's creatives as a "
+              "whole rather than one at a time.")
+
+        if unchecked:
+            # Said before the verdict, so a clean result can never be
+            # read as covering placements that were never examined.
+            print(f"\n{len(unchecked)} placement(s) could NOT be "
+                  "checked -- treat these as unverified:")
+            reasons: dict[str, int] = {}
+            for row, why in unchecked:
+                reasons[why] = reasons.get(why, 0) + 1
+            for why, count in sorted(reasons.items(), key=lambda kv: -kv[1]):
+                print(f"  {count} -- {why}")
+            for row, why in unchecked[:5]:
+                print(f"    {row.placement_id}  {row.start_date} -> "
+                      f"{row.end_date or '(ongoing)'}")
+        print()
+
+        if gaps:
+            print(f"{len(gaps)} GAP(S) -- days the placement is live "
+                  "with no creative scheduled:")
+            for gap in gaps[:15]:
+                row = gap["placement"]
+                cover = (
+                    "the default creative fills it"
+                    if gap["covered_by_default"]
+                    else "nothing at all serves"
+                )
+                print(
+                    f"  placement {row.placement_id}: "
+                    f"{gap['start']} to {gap['end']} "
+                    f"({gap['days']} day(s)) -- {cover}"
+                )
+            if len(gaps) > 15:
+                print(f"  ... and {len(gaps) - 15} more")
+        elif checked:
+            print(f"No gaps in those {len(checked)}: some creative is "
+                  "scheduled for every day of the flight.")
+        else:
+            print("Nothing was checked, so nothing can be said about "
+                  "gaps.")
+
+        if found["default_only"]:
+            print(f"\n{len(found['default_only'])} placement(s) have "
+                  "only a default creative and nothing scheduled:")
+            for row in found["default_only"][:10]:
+                print(f"  {row.placement_id}  {row.start_date} -> "
+                      f"{row.end_date}")
+
+        if found["overflow"]:
+            print(f"\n{len(found['overflow'])} creative(s) are "
+                  "scheduled outside their placement's flight. The "
+                  "placement gates delivery, so this costs nothing:")
+            for item in found["overflow"][:5]:
+                row, node = item["placement"], item["node"]
+                who = node.creative_id or f"node {node.node_id}"
+                print(
+                    f"  placement {row.placement_id} "
+                    f"{row.start_date} -> {row.end_date}, "
+                    f"creative {who} {item['start']} -> {item['end']}"
+                )
+            if len(found["overflow"]) > 5:
+                print(f"  ... and {len(found['overflow']) - 5} more")
+
+    # Decision sets that were read but belong to no placement QA2
+    # knows about are worth naming: they are the gap, not a success.
+    orphans = len(result.creative_nodes) - linked
+    if result.creative_nodes and orphans > 0:
+        print(f"\n{orphans} creative node(s) came from decision sets "
+              "that no placement row claims.")
+
+    if result.node_fields:
+        print("\nWhat a decision-set node carries (names and counts, "
+              "no values):")
+        for name, count in sorted(
+            result.node_fields.items(), key=lambda kv: (-kv[1], kv[0])
+        ):
+            print(f"  {count:>4}  {name}")
+        print(
+            "  -- `serving` is the one that names the creative. Kept "
+            "on show so a campaign whose nodes come back shaped "
+            "differently is visible rather than silently unnamed."
+        )
 
     print("\nConnection works.")
     return 0

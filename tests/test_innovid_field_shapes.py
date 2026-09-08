@@ -9,6 +9,7 @@ Run with pytest, or directly:  python tests/test_innovid_field_shapes.py
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -17,8 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.innovid_api import (  # noqa: E402
     InnovidFetchResult,
     _dset_mismatch,
+    redact_body,
+    redact_url,
     count_filled_fields,
     count_levels,
+    InnovidCreativeNode,
     parse_dset_response,
     parse_summary_response,
     summary_field_names,
@@ -45,9 +49,9 @@ def test_legacy_decision_set_is_read_when_the_modern_one_is_null():
 
     assert len(rows) == 2
     assert rows[0].dtree_id == ""
-    assert rows[0].legacy_dset_id == "44120"
-    assert rows[0].legacy_dset_name == "Frosty GM 320x50"
-    assert rows[1].legacy_dset_id == "44120"
+    assert rows[0].dset_link_id == "44120"
+    assert rows[0].dset_name == "Frosty GM 320x50"
+    assert rows[1].dset_id == "44120"
 
 
 def test_the_two_generations_are_never_conflated():
@@ -298,6 +302,626 @@ def test_level_counts_accumulate_across_pages():
     levels = count_levels(FLATTENED_TREE, {})
     count_levels(FLATTENED_TREE, levels)
     assert levels["PLACEMENT"]["_rows"] == 2
+
+# ---------------------------------------------------------------
+# Redacting recorded URLs.
+#
+# The first --record run printed an OAuth redirect complete with its
+# `code` -- a credential -- because only headers and bodies were being
+# filtered and query strings were not. These are the actual URLs from
+# that run.
+# ---------------------------------------------------------------
+
+OAUTH_REDIRECT = (
+    "https://api.flashtalking.net/login/oauth2/code/auth0"
+    "?code=7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D"
+)
+MEDIAOCEAN_LOGIN = (
+    "https://uam-login.mediaocean.com/login?state=hKFo2SA5TjY3UzNM"
+    "&client=YzenbLU4y1EIvP1dXdXLKMf2OlZqThxh&nonce=1P6sVS2fxHN5AngI"
+)
+SUMMARY = (
+    "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+    "?getFilterValues=true&fields=status,siteName,placementId"
+)
+JWT_WIDGET = "https://api.flashtalking.net/zen/v1/ui/generate-web-widget-jwt"
+
+
+def test_an_oauth_code_is_never_recorded():
+    """The leak this guards against."""
+    assert redact_url(OAUTH_REDIRECT) == ""
+
+
+def test_the_identity_provider_is_dropped_wholesale():
+    # Its URLs are state, nonce and client id -- all credential-shaped
+    # and none of it useful for reading campaigns.
+    assert redact_url(MEDIAOCEAN_LOGIN) == ""
+
+
+def test_the_useful_part_of_a_real_call_survives():
+    kept = redact_url(SUMMARY)
+
+    assert "campaigns/323492/summary" in kept
+    assert "fields=status,siteName,placementId" in kept
+    assert "getFilterValues=true" in kept
+
+
+def test_unknown_parameters_keep_their_name_but_lose_their_value():
+    kept = redact_url(
+        "https://api.flashtalking.net/x?sessionToken=abc123&page=2"
+    )
+
+    assert "sessionToken=<hidden>" in kept
+    assert "abc123" not in kept
+    assert "page=2" in kept, "safe parameters still say what they are"
+
+
+def test_a_long_id_list_is_truncated_not_dropped():
+    ids = ",".join(str(10964000 + n) for n in range(200))
+    kept = redact_url(
+        f"https://api.flashtalking.net/twr/v1/x?rpp=212&placementIds={ids}"
+    )
+
+    assert "placementIds=10964000" in kept
+    assert "truncated" in kept
+    assert len(kept) < 400
+
+
+def test_paths_are_kept_whole():
+    # The path is the entire point of recording.
+    assert redact_url(JWT_WIDGET) == JWT_WIDGET
+    assert redact_url(
+        "https://api.flashtalking.net/dt/v1/ui/dset/38808"
+    ) == "https://api.flashtalking.net/dt/v1/ui/dset/38808"
+
+
+def test_anything_off_innovid_is_ignored():
+    assert redact_url("https://example.com/whatever?a=b") == ""
+    assert redact_url("") == ""
+
+# Every sign-in address seen across two real --record runs, verbatim.
+# The mediaocean one survived a run it should not have, so it is here
+# in full rather than shortened.
+REAL_SIGN_IN_URLS = (
+    "https://uam-login.mediaocean.com/login?state=hKFo2SA5TjY3UzNMR3Rh"
+    "M2I3Q2pOWnZMcWNyQUR0dnFkeWJ2SaFupWxvZ2luo3RpZNkgMnVROWhpYXJwT2R0"
+    "dnptWXItNU5yTG5zeXRaUDlmczSjY2lk2SBZemVuYkxVNHkxRUl2UDFkWGRYTEtN"
+    "ZjJPbFpxVGh4aA&client=YzenbLU4y1EIvP1dXdXLKMf2OlZqThxh"
+    "&protocol=oauth2&audience=https%3A%2F%2Fapi.4cinsights.io%2F"
+    "&response_type=code&scope=openid%20profile%20email%20offline_access"
+    "&redirect_uri=https%3A%2F%2Fapi.flashtalking.net%2Flogin%2Foauth2"
+    "%2Fcode%2Fauth0&nonce=1P6sVS2fxHN5AngI206M0QNvQ2qSvDXBPdVrDyHTg9M",
+
+    "https://uam-login.mediaocean.com/authorize/?audience=https://api."
+    "4cinsights.io/&response_type=code&client_id=YzenbLU4y1EIvP1dXdXL"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D",
+
+    "https://api.flashtalking.net/login/oauth2/code/auth0"
+    "?code=7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI"
+    "&state=AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc%3D",
+
+    "https://api.flashtalking.net/oauth2/authorization/auth0",
+    "https://api.flashtalking.net/uilogin"
+    "?uri=https://campaign-manager.flashtalking.net",
+)
+
+
+def test_no_sign_in_address_from_a_real_run_survives():
+    for url in REAL_SIGN_IN_URLS:
+        assert redact_url(url) == "", url
+
+
+def test_no_credential_value_appears_in_any_redacted_output():
+    # Belt and braces: whatever the filter decides, these strings must
+    # not come out the other side.
+    secrets = (
+        "7vAZ0_gPNfWqS8T5ruxUz4cnvOdzjPzg7QLL6HwXYLQLI",
+        "AyGzp-mdqpvUbTsr4AOyVlYuifzwAkYzIm6O3WCI2Vc",
+        "1P6sVS2fxHN5AngI206M0QNvQ2qSvDXBPdVrDyHTg9M",
+        "hKFo2SA5TjY3UzNMR3RhM2I3Q2pOWnZMcWNyQUR0dnFkeWJ2Sa",
+    )
+    for url in REAL_SIGN_IN_URLS:
+        out = redact_url(url)
+        for secret in secrets:
+            assert secret not in out
+
+
+def test_the_fields_list_is_never_truncated():
+    """
+    Which columns Innovid asks for is the answer being hunted, and
+    truncating it at 80 characters hid it on the run that found it.
+    """
+    fields = (
+        "dimensions,placementName,clickTag1,bookedUnits,startDate,"
+        "endDate,prismaPlacementId,verificationPartner,verificationStatus,"
+        "placementModernDtreeId,modernDtreeName,decisionSetId"
+    )
+    kept = redact_url(
+        "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+        f"?fields={fields}"
+    )
+
+    assert fields in kept
+    assert "truncated" not in kept
+
+
+def test_long_id_lists_are_still_truncated():
+    ids = ",".join(str(10964000 + n) for n in range(200))
+    kept = redact_url(
+        f"https://api.flashtalking.net/twr/v1/x?placementIds={ids}"
+    )
+    assert "truncated" in kept
+
+# ---------------------------------------------------------------
+# Request bodies. The summary endpoint is called four times with an
+# identical URL; whatever makes Innovid return decision set 38808 is
+# in the body, so the body has to be readable -- without carrying
+# anything typed into a search box.
+# ---------------------------------------------------------------
+
+SUMMARY_URL = (
+    "https://api.flashtalking.net/cm/v1/ui/campaigns/323492/summary"
+)
+
+
+def test_the_shape_of_a_summary_body_is_readable():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "page": 1, "rpp": 500, "sortBy": "name", "sortOrder": "ASC",
+        "parentId": 10988717, "level": "PLACEMENT",
+    }))
+
+    assert "parentId=10988717" in body
+    assert "level=PLACEMENT" in body
+    assert "rpp=500" in body
+
+
+def test_a_typed_search_term_never_comes_out():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "page": 1, "searchTerm": "something personal someone typed",
+    }))
+
+    assert "searchTerm=<hidden>" in body
+    assert "personal" not in body
+
+
+def test_bodies_are_only_read_for_the_endpoints_being_investigated():
+    other = "https://api.flashtalking.net/crm/v1/user"
+    assert redact_body(other, json.dumps({"anything": "at all"})) == ""
+
+
+def test_a_body_that_is_not_json_is_reported_not_dumped():
+    out = redact_body(SUMMARY_URL, "user=camilo&password=hunter2")
+
+    assert "not JSON" in out
+    assert "hunter2" not in out
+
+
+def test_no_body_is_not_an_error():
+    assert redact_body(SUMMARY_URL, None) == ""
+    assert redact_body(SUMMARY_URL, "") == ""
+
+
+def test_nested_structure_is_shown_but_bounded():
+    body = redact_body(SUMMARY_URL, json.dumps({
+        "fields": ["a"] * 200,
+    }))
+    assert "truncated" in body
+    assert len(body) < 300
+
+# ---------------------------------------------------------------
+# The two decision-set numbers.
+#
+# Campaign 323492's creative rows carry decisionSetId AND
+# placementDecisionSetId on the same 64 rows. Treating them as the
+# same field meant every lookup used placementDecisionSetId -- ids
+# 73087..73109, consecutive, the shape of a join table -- and all of
+# them were rejected with HTTP 400. Innovid's own UI opens
+# /dt/v1/ui/dset/38808 for that campaign.
+# ---------------------------------------------------------------
+
+TWO_IDS = {"items": [
+    {"placementId": 10988717, "level": "PLACEMENT",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
+     "creativeId": 6312751,
+     "decisionSetId": 38808,
+     "decisionSetName": "Frosty GM Display 320x50",
+     "placementDecisionSetId": 73087},
+]}
+
+
+def test_the_decision_set_and_its_link_are_kept_apart():
+    row = parse_summary_response(TWO_IDS)[1]
+
+    assert row.dset_id == "38808", "the decision set itself"
+    assert row.dset_link_id == "73087", "the placement-to-set link"
+    assert row.dset_name == "Frosty GM Display 320x50"
+
+
+def test_the_link_id_never_stands_in_for_the_decision_set():
+    # The whole failure: one is not a fallback for the other.
+    row = parse_summary_response(TWO_IDS)[1]
+    assert row.dset_id != row.dset_link_id
+
+
+def test_a_row_with_only_a_link_id_yields_no_decision_set():
+    only_link = {"items": [
+        {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+         "placementDecisionSetId": 73088},
+    ]}
+    row = parse_summary_response(only_link)[0]
+
+    assert row.dset_id == ""
+    assert row.dset_link_id == "73088"
+
+# ---------------------------------------------------------------
+# Linking decision sets back to placements.
+#
+# The run that first read decision sets reported "every creative
+# starts the same day as its placement" while linking nothing at all:
+# nodes were matched on the modern dtree id, which that campaign does
+# not have. An empty comparison read as a clean pass.
+# ---------------------------------------------------------------
+
+LINK_ROWS = {"items": [
+    {"placementId": 10988717, "level": "PLACEMENT",
+     "startDate": "2026-07-20", "endDate": "2026-08-23"},
+    {"placementId": 10988717, "level": "PLACEMENT-CREATIVE",
+     "decisionSetId": 38808, "decisionSetName": "Frosty GM Display 320x50",
+     "placementDecisionSetId": 73087},
+]}
+
+DSET_WITH_LATE_CREATIVE = {
+    "id": 38808,
+    "name": "Frosty GM Display 320x50",
+    "servingMethod": "Rotation",
+    "defaultServing": {"id": 6312751, "name": "320x50.jpg"},
+    "nodes": [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": None, "weight": 1},
+        {"id": 6312751, "startTimestamp": "2026-07-21 10:02:11",
+         "endTimestamp": None, "isDefault": True},
+    ],
+}
+
+
+def _linked_result():
+    return InnovidFetchResult(
+        campaign_id="323492",
+        placements=parse_summary_response(LINK_ROWS),
+        creative_nodes=parse_dset_response(DSET_WITH_LATE_CREATIVE),
+    )
+
+
+def test_nodes_link_by_decision_set_id_not_only_the_modern_id():
+    result = _linked_result()
+
+    nodes = result.nodes_for_placement("10988717")
+    assert len(nodes) == 2, "the campaign has no modern dtree id at all"
+
+
+def test_the_late_creative_is_found_once_linking_works():
+    result = _linked_result()
+
+    late = [
+        n for n in result.nodes_for_placement("10988717")
+        if not n.is_default and n.start_timestamp.startswith("2026-07-24")
+    ]
+    assert late, "20 July placement, 24 July creative"
+
+
+def test_linked_count_distinguishes_no_differences_from_no_comparison():
+    result = _linked_result()
+    assert result.linked_node_count() == 2
+
+    # Same nodes, but nothing claims them.
+    orphaned = InnovidFetchResult(
+        campaign_id="323492",
+        placements=parse_summary_response({"items": [
+            {"placementId": 999, "level": "PLACEMENT",
+             "startDate": "2026-07-20"},
+        ]}),
+        creative_nodes=parse_dset_response(DSET_WITH_LATE_CREATIVE),
+    )
+    assert orphaned.creative_nodes, "nodes were read"
+    assert orphaned.linked_node_count() == 0, "but none belong to a placement"
+
+
+def test_a_node_id_is_not_mistaken_for_a_creative_id():
+    # Node 1 with weight 1 is a rotation slot; 6312751 is the file.
+    nodes = parse_dset_response(DSET_WITH_LATE_CREATIVE)
+
+    assert nodes[0].node_id == "1"
+    assert nodes[0].creative_id == "", "no creative named on that node"
+    assert nodes[1].creative_id == "6312751", "the default one names it"
+
+# ---------------------------------------------------------------
+# Coverage, not per-creative comparison.
+#
+# Campaign 327957's decision sets rotate sequentially: one creative
+# runs 14-26 Sep, the next 27 Sep-31 Oct, together covering the
+# placement's whole flight. Comparing each creative against the
+# placement on its own reported the second as thirteen days late and
+# produced 45 findings where there were none.
+# ---------------------------------------------------------------
+
+def _result_for(placement_dates, nodes, dset_id=40316):
+    p_start, p_end = placement_dates
+    rows = parse_summary_response({"items": [
+        {"placementId": 11087616, "level": "PLACEMENT",
+         "startDate": p_start, "endDate": p_end},
+        {"placementId": 11087616, "level": "PLACEMENT-CREATIVE",
+         "decisionSetId": dset_id, "decisionSetName": "Display 300x600"},
+    ]})
+    dset = {"id": dset_id, "name": "Display 300x600",
+            "servingMethod": "Weighted Rotation", "nodes": nodes}
+    result = InnovidFetchResult(
+        campaign_id="327957", placements=rows,
+        creative_nodes=parse_dset_response(dset),
+    )
+    return result.creative_flight_gaps()
+
+
+SEQUENTIAL = [
+    {"id": 3, "startTimestamp": "2026-09-14 00:00:00",
+     "endTimestamp": "2026-09-26 23:59:00", "weight": 1},
+    {"id": 4, "startTimestamp": "2026-09-27 00:00:00",
+     "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    {"id": 6389150, "startTimestamp": "2026-08-31 10:07:12",
+     "endTimestamp": None, "isDefault": True},
+]
+
+
+def test_sequential_rotation_is_not_a_gap():
+    """The 45 false findings this replaces."""
+    found = _result_for(("2026-09-14", "2026-10-31"), SEQUENTIAL)
+
+    assert found["gaps"] == [], "back-to-back creatives cover the flight"
+
+
+def test_a_real_hole_between_two_creatives_is_found():
+    # Same pair, but the second starts three days late.
+    late = [
+        dict(SEQUENTIAL[0]),
+        dict(SEQUENTIAL[1], startTimestamp="2026-09-30 00:00:00"),
+        dict(SEQUENTIAL[2]),
+    ]
+    found = _result_for(("2026-09-14", "2026-10-31"), late)
+
+    assert len(found["gaps"]) == 1
+    gap = found["gaps"][0]
+    assert str(gap["start"]) == "2026-09-27"
+    assert str(gap["end"]) == "2026-09-29"
+    assert gap["days"] == 3
+
+
+def test_the_frosty_case_is_still_caught():
+    # Placement 20 Jul, its only creative starts 24 Jul: four days
+    # at the front with nothing scheduled. Confirmed in Innovid.
+    found = _result_for(("2026-07-20", "2026-08-23"), [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": "2026-08-23 23:59:00", "weight": 1},
+        {"id": 6312749, "startTimestamp": "2026-07-21 10:02:11",
+         "endTimestamp": None, "isDefault": True},
+    ])
+
+    assert len(found["gaps"]) == 1
+    assert found["gaps"][0]["days"] == 4
+    assert found["gaps"][0]["covered_by_default"] is True
+
+
+def test_a_gap_with_no_default_is_marked_as_serving_nothing():
+    found = _result_for(("2026-07-20", "2026-08-23"), [
+        {"id": 1, "startTimestamp": "2026-07-24 00:00:00",
+         "endTimestamp": "2026-08-23 23:59:00", "weight": 1},
+    ])
+
+    assert found["gaps"][0]["covered_by_default"] is False
+
+
+def test_a_creative_stopping_before_the_placement_does_is_a_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": "2026-10-15 23:59:00", "weight": 1},
+    ])
+
+    assert len(found["gaps"]) == 1
+    assert str(found["gaps"][0]["start"]) == "2026-10-16"
+    assert found["gaps"][0]["days"] == 16
+
+
+def test_overlapping_creatives_leave_no_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": "2026-10-05 23:59:00", "weight": 1},
+        {"id": 2, "startTimestamp": "2026-09-20 00:00:00",
+         "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+
+
+def test_a_creative_ready_early_is_overflow_not_a_gap():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-08-01 00:00:00",
+         "endTimestamp": "2026-10-31 23:59:00", "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+    assert len(found["overflow"]) == 1
+
+
+def test_an_ongoing_creative_covers_to_the_end():
+    # endTimestamp null means Ongoing, not "ends today".
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+         "endTimestamp": None, "weight": 1},
+    ])
+
+    assert found["gaps"] == []
+
+
+def test_a_placement_with_only_a_default_is_called_out():
+    found = _result_for(("2026-09-14", "2026-10-31"), [
+        {"id": 6389150, "startTimestamp": "2026-08-31 10:07:12",
+         "endTimestamp": None, "isDefault": True},
+    ])
+
+    assert found["gaps"] == []
+    assert len(found["default_only"]) == 1
+
+
+def test_unreadable_placement_dates_are_skipped_not_guessed():
+    found = _result_for(("", ""), SEQUENTIAL)
+    assert found["gaps"] == []
+
+def test_a_placement_with_no_decision_set_is_reported_as_unchecked():
+    """
+    The reassurance trap, one level up.
+
+    A placement whose decision set could not be read has no nodes, and
+    skipping it quietly turns "no gaps found" into a pass over
+    placements nobody looked at.
+    """
+    result = InnovidFetchResult(
+        campaign_id="327957",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 2, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+            # Placement 2's decision set was never fetched.
+        ]}),
+        creative_nodes=parse_dset_response({
+            "id": 40316, "name": "Display 300x600",
+            "servingMethod": "Weighted Rotation",
+            "nodes": [{"id": 3, "startTimestamp": "2026-09-14 00:00:00",
+                       "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+        }),
+    )
+
+    found = result.creative_flight_gaps()
+
+    assert found["gaps"] == []
+    assert [p.placement_id for p in found["checked"]] == ["1"]
+    assert [p.placement_id for p, _ in found["unchecked"]] == ["2"]
+
+
+def test_a_placement_without_dates_is_unchecked_not_clean():
+    result = InnovidFetchResult(
+        campaign_id="x",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "", "endDate": ""},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+        ]}),
+        creative_nodes=parse_dset_response({
+            "id": 40316, "name": "d", "servingMethod": "Rotation",
+            "nodes": [{"id": 1, "startTimestamp": "2026-09-14 00:00:00",
+                       "endTimestamp": None, "weight": 1}],
+        }),
+    )
+
+    found = result.creative_flight_gaps()
+    assert found["checked"] == []
+    assert len(found["unchecked"]) == 1
+
+# ---------------------------------------------------------------
+# `serving` names the creative a node runs.
+#
+# Found by counting node field names on a real run: id, serving and
+# startTimestamp on all 17 nodes, endTimestamp and weight on 11,
+# isDefault on 6. Its exact shape is unconfirmed, so all three
+# plausible ones are handled.
+# ---------------------------------------------------------------
+
+def test_a_node_names_its_creative_through_serving():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "Display 300x600", "servingMethod": "Rotation",
+        "nodes": [
+            {"id": 3, "serving": {"id": 6389150,
+                                  "name": "PC_40938_..._V2_300x600.jpg"},
+             "startTimestamp": "2026-09-14 00:00:00",
+             "endTimestamp": "2026-09-26 23:59:00", "weight": 1},
+        ],
+    })
+
+    assert nodes[0].node_id == "3", "the rotation slot"
+    assert nodes[0].creative_id == "6389150"
+    assert nodes[0].creative_name == "PC_40938_..._V2_300x600.jpg"
+
+
+def test_a_bare_serving_id_still_gives_a_creative():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "d", "servingMethod": "Rotation",
+        "nodes": [{"id": 3, "serving": 6389150,
+                   "startTimestamp": "2026-09-14 00:00:00"}],
+    })
+
+    assert nodes[0].creative_id == "6389150"
+    assert nodes[0].creative_name == "", "no name to invent"
+
+
+def test_a_missing_serving_is_not_an_error():
+    nodes = parse_dset_response({
+        "id": 40316, "name": "d", "servingMethod": "Rotation",
+        "nodes": [{"id": 3, "startTimestamp": "2026-09-14 00:00:00"}],
+    })
+
+    assert nodes[0].creative_id == ""
+    assert nodes[0].creative_name == ""
+    assert nodes[0].node_id == "3"
+
+
+def test_the_same_creative_in_two_decision_sets_stays_distinct():
+    """
+    Camilo's case: two decision sets can share one creative. The
+    nodes must stay tied to their own decision set, or a finding
+    would be attributed to the wrong placement.
+    """
+    shared = {"id": 6389150, "name": "shared_300x600.jpg"}
+    first = parse_dset_response({
+        "id": 40316, "name": "Set A", "servingMethod": "Rotation",
+        "nodes": [{"id": 1, "serving": shared,
+                   "startTimestamp": "2026-09-14 00:00:00",
+                   "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+    })
+    second = parse_dset_response({
+        "id": 40320, "name": "Set B", "servingMethod": "Rotation",
+        "nodes": [{"id": 1, "serving": shared,
+                   "startTimestamp": "2026-09-27 00:00:00",
+                   "endTimestamp": "2026-10-31 23:59:00", "weight": 1}],
+    })
+
+    result = InnovidFetchResult(
+        campaign_id="327957",
+        placements=parse_summary_response({"items": [
+            {"placementId": 1, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 1, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40316},
+            {"placementId": 2, "level": "PLACEMENT",
+             "startDate": "2026-09-14", "endDate": "2026-10-31"},
+            {"placementId": 2, "level": "PLACEMENT-CREATIVE",
+             "decisionSetId": 40320},
+        ]}),
+        creative_nodes=first + second,
+    )
+
+    # Same creative, same id, two schedules -- each stays with its own
+    # placement rather than both being seen everywhere.
+    assert len(result.nodes_for_placement("1")) == 1
+    assert len(result.nodes_for_placement("2")) == 1
+    assert result.nodes_for_placement("1")[0].dtree_id == "40316"
+    assert result.nodes_for_placement("2")[0].dtree_id == "40320"
+
+    # And only the one that genuinely starts late is a gap.
+    found = result.creative_flight_gaps()
+    assert [g["placement"].placement_id for g in found["gaps"]] == ["2"]
 
 
 if __name__ == "__main__":

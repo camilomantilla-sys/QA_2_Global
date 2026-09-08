@@ -142,8 +142,16 @@ class InnovidPlacement:
     # creative rather than nothing.
     dtree_id: str = ""
     dtree_name: str = ""
-    legacy_dset_id: str = ""
-    legacy_dset_name: str = ""
+
+    # Two different numbers, which an earlier version collapsed into
+    # one and got wrong. `decisionSetId` identifies the decision set.
+    # `placementDecisionSetId` identifies the link between a placement
+    # and that decision set -- consecutive ids in a narrow range, the
+    # shape of a join table -- and asking /dset for one of those is
+    # what produced HTTP 400 on every single lookup.
+    dset_id: str = ""
+    dset_name: str = ""
+    dset_link_id: str = ""
 
     # Rows come at more than one level (placement, creative). Kept so
     # the two can be told apart instead of being counted together.
@@ -167,7 +175,13 @@ class InnovidCreativeNode:
 
     dtree_id: str = ""
     dtree_name: str = ""
+    node_id: str = ""
     creative_id: str = ""
+
+    # The filename, which is the only identifier a Traffic Sheet and
+    # Innovid have in common: Innovid's creative id doesn't exist
+    # until someone traffics the creative.
+    creative_name: str = ""
     start_timestamp: str = ""
     end_timestamp: str = ""
     weight: str = ""
@@ -198,6 +212,13 @@ class InnovidFetchResult:
     # every row reads as "409 / 385", which looks like a bug.
     rows_seen: int = 0
 
+    # The field names a decision-set node carries. `serving` is the
+    # one naming the creative, found by counting these on a real
+    # campaign. Kept on show because a campaign whose nodes arrive
+    # shaped differently would otherwise just produce creatives with
+    # no name. Names only, no values.
+    node_fields: dict[str, int] = field(default_factory=dict)
+
     # What each level of the flattened tree actually contains: how
     # many rows, and which fields are filled in on at least one of
     # them. The rows QA2 discards for having no placement id are in
@@ -206,12 +227,147 @@ class InnovidFetchResult:
     levels: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def nodes_for_placement(self, placement_id: str) -> list[InnovidCreativeNode]:
-        dtree_ids = {
-            p.dtree_id
-            for p in self.placements
-            if p.placement_id == str(placement_id).strip() and p.dtree_id
+        """
+        The creative nodes belonging to one placement.
+
+        Matches on every id a decision set can be named by. Keying on
+        the modern id alone linked nothing at all in a campaign that
+        has none -- and a comparison over nothing reports that
+        everything agrees, which is the failure this whole client
+        exists to prevent.
+        """
+        wanted = str(placement_id).strip()
+        dset_ids = set()
+        for row in self.placements:
+            if row.placement_id != wanted:
+                continue
+            for candidate in (row.dtree_id, row.dset_id):
+                if candidate:
+                    dset_ids.add(candidate)
+        return [n for n in self.creative_nodes if n.dtree_id in dset_ids]
+
+    def creative_flight_gaps(self) -> dict[str, list]:
+        """
+        Finds days when a placement is live with no creative scheduled.
+
+        Creatives in a decision set are considered together, not one
+        at a time. Sequential rotation is normal and correct -- one
+        creative covering 14-26 Sep and another 27 Sep-31 Oct leaves
+        no hole -- so comparing each against the placement separately
+        reports the second one as two weeks late and buries any real
+        finding under dozens of non-events.
+
+        A gap is therefore a stretch inside the placement's flight
+        that *no* creative covers. Each one records whether a default
+        creative exists, because a default still serves something --
+        usually a backup image rather than the intended creative, so
+        it is a lesser problem, not a non-problem.
+
+        `overflow` lists creatives scheduled outside their placement's
+        flight. The placement gates delivery, so those cost nothing.
+        """
+        from datetime import date, timedelta
+
+        def _as_date(value):
+            try:
+                return date.fromisoformat(str(value)[:10])
+            except (ValueError, TypeError):
+                return None
+
+        gaps: list[dict] = []
+        overflow: list[dict] = []
+        default_only: list[InnovidPlacement] = []
+        checked: list[InnovidPlacement] = []
+        unchecked: list[tuple[InnovidPlacement, str]] = []
+
+        for placement in self.placement_rows():
+            p_start = _as_date(placement.start_date)
+            p_end = _as_date(placement.end_date)
+            if not p_start or not p_end or p_end < p_start:
+                unchecked.append((placement, "no readable flight dates"))
+                continue
+
+            nodes = self.nodes_for_placement(placement.placement_id)
+            if not nodes:
+                # Skipping this quietly is how "no gaps found" comes
+                # to mean "no gaps found in the ones I looked at",
+                # which reads as a pass over unexamined placements.
+                unchecked.append((placement, "no decision set could be read"))
+                continue
+
+            checked.append(placement)
+
+            has_default = any(n.is_default for n in nodes)
+            windows = []
+            for node in nodes:
+                if node.is_default:
+                    continue
+                # No start means it has always been scheduled; no end
+                # means Ongoing. Neither is missing data.
+                start = _as_date(node.start_timestamp) or p_start
+                end = _as_date(node.end_timestamp) or p_end
+
+                if start < p_start or end > p_end:
+                    overflow.append({
+                        "placement": placement, "node": node,
+                        "start": start, "end": end,
+                    })
+
+                windows.append((max(start, p_start), min(end, p_end)))
+
+            windows = [w for w in windows if w[0] <= w[1]]
+            if not windows:
+                default_only.append(placement)
+                continue
+
+            # Walk the merged windows and note what they leave out.
+            windows.sort()
+            cursor = p_start
+            for start, end in windows:
+                if start > cursor:
+                    gaps.append({
+                        "placement": placement,
+                        "start": cursor,
+                        "end": start - timedelta(days=1),
+                        "days": (start - cursor).days,
+                        "covered_by_default": has_default,
+                    })
+                cursor = max(cursor, end + timedelta(days=1))
+
+            if cursor <= p_end:
+                gaps.append({
+                    "placement": placement,
+                    "start": cursor,
+                    "end": p_end,
+                    "days": (p_end - cursor).days + 1,
+                    "covered_by_default": has_default,
+                })
+
+        return {
+            "gaps": gaps,
+            "overflow": overflow,
+            "default_only": default_only,
+            "checked": checked,
+            "unchecked": unchecked,
         }
-        return [n for n in self.creative_nodes if n.dtree_id in dtree_ids]
+
+    def linked_node_count(self) -> int:
+        """
+        How many creative nodes could actually be tied to a placement.
+
+        Reported alongside any date comparison, because "no
+        differences found" and "nothing was compared" look identical
+        otherwise.
+        """
+        # Counted per distinct placement: the same placement appears
+        # as several rows (its own, plus one per creative), and
+        # counting rows would multiply every node by that.
+        return sum(
+            len(self.nodes_for_placement(placement_id))
+            for placement_id in {
+                r.placement_id for r in self.placements if r.placement_id
+            }
+        )
 
     def placement_rows(self) -> list[InnovidPlacement]:
         """The placement-level rows only."""
@@ -436,15 +592,57 @@ def parse_summary_response(payload: dict) -> list[InnovidPlacement]:
                     or item.get("modernDtreeId")
                 ),
                 dtree_name=_text(item.get("modernDtreeName")),
-                legacy_dset_id=_text(
-                    item.get("placementDecisionSetId")
-                    or item.get("decisionSetId")
-                ),
-                legacy_dset_name=_text(item.get("decisionSetName")),
+                dset_id=_text(item.get("decisionSetId")),
+                dset_name=_text(item.get("decisionSetName")),
+                dset_link_id=_text(item.get("placementDecisionSetId")),
                 level=_text(item.get("level")),
             )
         )
     return rows
+
+
+def count_node_fields(payload: dict, into: dict[str, int]) -> dict[str, int]:
+    """
+    Counts how many decision-set nodes carry a value for each field.
+
+    Exists to find where a node names the creative it serves, so a
+    finding can say "creative V2_300x600.jpg starts 27 Sep" rather
+    than "node 2".
+    """
+    if not isinstance(payload, dict):
+        return into
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list):
+        return into
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        for key, value in node.items():
+            into.setdefault(key, 0)
+            if _text(value):
+                into[key] += 1
+    return into
+
+
+def _serving_id(serving) -> str:
+    """
+    The creative id out of a node's `serving`.
+
+    Confirmed against campaign 327957: `serving` is an object holding
+    the creative's id and filename, matching what Innovid's Edit
+    Decision Set panel shows for the same nodes. A bare id is still
+    tolerated in case another campaign returns it that way.
+    """
+    if isinstance(serving, dict):
+        return _text(serving.get("id"))
+    return _text(serving)
+
+
+def _serving_name(serving) -> str:
+    if isinstance(serving, dict):
+        return _text(serving.get("name") or serving.get("fileName"))
+    return ""
 
 
 def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
@@ -461,6 +659,10 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
     dtree_id = _text(payload.get("id"))
     dtree_name = _text(payload.get("name"))
     serving_method = _text(payload.get("servingMethod"))
+    default_creative = ""
+    default_serving = payload.get("defaultServing")
+    if isinstance(default_serving, dict):
+        default_creative = _text(default_serving.get("id"))
 
     nodes = payload.get("nodes")
     if not isinstance(nodes, list):
@@ -474,7 +676,14 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
             InnovidCreativeNode(
                 dtree_id=dtree_id,
                 dtree_name=dtree_name,
-                creative_id=_text(node.get("id")),
+                # A node's `id` is the node, not the creative it
+                # serves -- node 1 with weight 1 is a rotation slot.
+                # `serving` is what names the creative, on every node.
+                node_id=_text(node.get("id")),
+                creative_id=_serving_id(node.get("serving")) or _text(
+                    default_creative if node.get("isDefault") else ""
+                ),
+                creative_name=_serving_name(node.get("serving")),
                 start_timestamp=_text(node.get("startTimestamp")),
                 end_timestamp=_text(node.get("endTimestamp")),
                 weight=_text(node.get("weight")),
@@ -599,6 +808,219 @@ def session_is_saved(session_path: Path | None = None) -> bool:
     return (session_path or SESSION_PATH).exists()
 
 
+# Query parameters whose values are safe to show: they describe what
+# was asked for, not who is asking. Everything else is reduced to its
+# name, because a sign-in redirect carries an authorization code in
+# the query string and no denylist of scary-looking names would have
+# caught it reliably.
+SAFE_QUERY_PARAMS = frozenset({
+    "fields", "rpp", "page", "sortBy", "sortOrder", "includeClosed",
+    "quickFilter", "filterType", "level", "campaignId", "placementIds",
+    "getFilterValues",
+})
+
+# Hosts that only ever handle signing in. Nothing there tells QA2
+# anything about campaigns, and everything there is credential-shaped.
+AUTH_HOSTS = ("uam-login.mediaocean.com", "auth0.com", "mediaocean.com")
+
+AUTH_PATHS = (
+    "/oauth2", "/oauth", "/authorize", "/uilogin", "/login?", "/signin",
+    "/saml", "/sso",
+)
+
+
+def redact_url(url: str) -> str:
+    """
+    Prepares a recorded URL for someone to paste somewhere.
+
+    Keeps the path -- which is the whole point -- and the handful of
+    query parameters that describe the request. Every other value is
+    replaced by its name.
+
+    Sign-in URLs are dropped entirely rather than redacted: an OAuth
+    redirect's `code` is a credential, and there is no version of that
+    URL worth showing.
+
+    Returns "" for anything that should not be recorded at all.
+    """
+    # Flat and in order, deliberately. An earlier version nested the
+    # host check inside another condition and a sign-in URL still came
+    # through on a real run; nothing about a credential filter should
+    # depend on reading branching correctly.
+    if not url:
+        return ""
+    if any(host in url.lower() for host in AUTH_HOSTS):
+        return ""
+    if any(marker in url.lower() for marker in AUTH_PATHS):
+        return ""
+    if _API_HOST not in url:
+        return ""
+
+    base, _, query = url.partition("?")
+    if not query:
+        return base
+
+    kept = []
+    for pair in query.split("&"):
+        name, sep, value = pair.partition("=")
+        if not sep:
+            kept.append(name)
+        elif name in SAFE_QUERY_PARAMS:
+            # `fields` is never truncated: which columns Innovid asks
+            # for is the entire reason for reading these URLs, and
+            # cutting it at 80 characters hid the answer on the first
+            # run that found it. Long id lists still get cut, since
+            # the hundredth id says nothing the first three didn't.
+            if name != "fields" and len(value) > 80:
+                value = value[:80] + "...(truncated)"
+            kept.append(f"{name}={value}")
+        else:
+            kept.append(f"{name}=<hidden>")
+
+    return f"{base}?{'&'.join(kept)}"
+
+
+# Body keys whose values describe what is being asked for. Anything
+# else is reduced to its name, same rule as the query string.
+SAFE_BODY_KEYS = frozenset({
+    "page", "rpp", "sortBy", "sortOrder", "level", "levels", "parentId",
+    "parentLevel", "placementId", "placementIds", "siteId", "expand",
+    "expandAll", "groupBy", "type", "id", "ids", "campaignId",
+    "decisionSetId", "dtreeId", "includeChildren", "fields",
+})
+
+# Only these endpoints have bodies worth reading. Keeping the list
+# short matters: a body is the most likely place for something
+# personal to turn up, and none of the others are being investigated.
+BODY_ENDPOINTS = ("/summary", "/dset/")
+
+
+def redact_body(url: str, body: str | None) -> str:
+    """
+    Summarises a request body as keys, with values shown only for the
+    keys that describe the request.
+
+    The summary endpoint is called several times with the same URL and
+    different bodies -- expanding a placement in the grid is a body
+    change, not a URL change -- so the URL alone can't explain how
+    Innovid asks for a decision set. Reading the body is the only way
+    to see that, and reading it this way keeps anything typed into a
+    search box out of the output.
+    """
+    if not body or not url:
+        return ""
+    if not any(marker in url for marker in BODY_ENDPOINTS):
+        return ""
+
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return "(body is not JSON)"
+
+    if not isinstance(parsed, dict):
+        return f"(body is a {type(parsed).__name__})"
+
+    parts = []
+    for key in sorted(parsed):
+        value = parsed[key]
+        if key not in SAFE_BODY_KEYS:
+            parts.append(f"{key}=<hidden>")
+        elif isinstance(value, (dict, list)):
+            # Structure is informative; contents may not be safe.
+            shown = json.dumps(value)
+            if len(shown) > 120:
+                shown = shown[:120] + "...(truncated)"
+            parts.append(f"{key}={shown}")
+        else:
+            parts.append(f"{key}={value}")
+
+    return "{" + ", ".join(parts) + "}"
+
+
+def record_api_calls(
+    campaign_id: str,
+    credentials: InnovidCredentials | None = None,
+    session_path: Path | None = None,
+    timeout_ms: int = 600_000,
+) -> list[str]:
+    """
+    Opens Innovid in a normal window and writes down which API calls
+    its own interface makes while a person clicks around.
+
+    QA2 keeps hitting fields the interface clearly has and the
+    documented-looking endpoints don't return -- decision set 38808 is
+    visible in the UI but absent from every row of the campaign
+    summary. Watching what the app itself asks for answers that in one
+    sitting, and it beats asking somebody to dig through DevTools.
+
+    Records request URLs only. Not headers, not cookies, not request
+    or response bodies -- so the result can be pasted into a chat
+    without carrying the session token, which is as good as a
+    password.
+    """
+    saved_session = session_path or SESSION_PATH
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise InnovidAuthError(
+            "Playwright isn't installed in the Python that's running "
+            f"QA2. Install it there with:  {_venv_python_hint()} -m "
+            "pip install -r requirements.txt"
+        )
+
+    seen: list[str] = []
+
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=False)
+        context = (
+            browser.new_context(storage_state=str(saved_session))
+            if saved_session.exists()
+            else browser.new_context()
+        )
+        page = context.new_page()
+
+        def _note(request):
+            url = redact_url(request.url)
+            if not url:
+                return
+            try:
+                body = redact_body(url, request.post_data)
+            except Exception:
+                body = ""
+            line = f"{url}\n      body: {body}" if body else url
+            if line not in seen:
+                seen.append(line)
+
+        page.on("request", _note)
+
+        try:
+            if not saved_session.exists():
+                if credentials is None:
+                    raise InnovidAuthError(
+                        "No saved session and no credentials. Run "
+                        "with --login first."
+                    )
+                _login(page, credentials, 60_000)
+
+            page.goto(
+                f"{APP_ORIGIN}/campaign/{campaign_id}",
+                wait_until="domcontentloaded",
+                timeout=60_000,
+            )
+
+            # The person drives from here.
+            _wait_until_window_closed(page, timeout_ms)
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+            browser.close()
+
+    return seen
+
+
 def establish_session(
     session_path: Path | None = None,
     login_url: str = APP_ORIGIN,
@@ -634,6 +1056,24 @@ def establish_session(
         browser = _launch_browser(p, headless=False)
         context = browser.new_context()
         page = context.new_page()
+
+        # Marca la primera respuesta buena del host de la API.
+        api_ok = {"seen": False}
+
+        def _note_api(response):
+            # Una llamada de API de verdad, no cualquier cosa servida
+            # por ese host: los endpoints de Innovid viven bajo /v1/,
+            # y es su respuesta la que deja las cookies que la sesion
+            # guardada necesita.
+            if (
+                _API_HOST in response.url
+                and "/v1/" in response.url
+                and response.status < 400
+            ):
+                api_ok["seen"] = True
+
+        page.on("response", _note_api)
+
         try:
             page.goto(login_url, wait_until="domcontentloaded", timeout=60_000)
 
@@ -643,6 +1083,22 @@ def establish_session(
                     "saved -- run it again and complete the sign-in "
                     "in the window that opens.\n"
                     f"  Left on: {page.url}"
+                )
+
+            # Reaching the campaign manager is not the same as being
+            # able to call its API: the two live on different hosts,
+            # and api.flashtalking.net sets its own cookies only once
+            # the app calls it. Saving the moment the page appears
+            # captured a session that then got HTTP 401 on every
+            # request. So wait for the app to make a call that
+            # actually succeeds, and save after that.
+            if not _wait_for_api_cookies(api_ok, 45_000, page):
+                raise InnovidAuthError(
+                    "Signed in, but Innovid's API never answered "
+                    "while the window was open, so the session would "
+                    "not have worked.\n"
+                    "  Open a campaign in that window before closing "
+                    "it, and try again."
                 )
 
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -686,6 +1142,47 @@ def _looks_like_sign_in(page) -> bool:
         return _first_visible(page, PASS_SELECTORS) is not None
     except Exception:
         return False
+
+
+def _wait_until_window_closed(page, timeout_ms: int) -> bool:
+    """
+    Blocks until the person closes the browser window, or the time
+    runs out. True if they closed it.
+
+    Closing the window is how someone says "done" without having to
+    go back to a terminal they may not even have in front of them.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        try:
+            if page.is_closed():
+                return True
+            page.wait_for_timeout(500)
+        except Exception:
+            # The page or the whole browser went away mid-wait, which
+            # is the same answer.
+            return True
+    return False
+
+
+def _wait_for_api_cookies(api_ok: dict, timeout_ms: int, page) -> bool:
+    """
+    Waits until Innovid's API has answered the app at least once.
+
+    That call is what puts the API host's cookies in the browser, and
+    those are what the saved session needs. Without it the session
+    looks fine -- the campaign manager loads -- and every API request
+    comes back 401.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if api_ok.get("seen"):
+            return True
+        try:
+            page.wait_for_timeout(500)
+        except Exception:
+            return api_ok.get("seen", False)
+    return api_ok.get("seen", False)
 
 
 def _wait_until_signed_in(page, timeout_ms: int) -> bool:
@@ -870,79 +1367,89 @@ def fetch_campaign(
             # than trusted -- reading the wrong decision set would
             # hand QA2 another creative's flight dates, which is worse
             # than reading none.
-            # Modern ids first: those are what this endpoint is for.
-            # Legacy ids are tried afterwards and give up early,
-            # because if the endpoint rejects the first few it will
-            # reject all of them, and firing fifty more doomed
-            # requests at a rate-limited internal API is rude and
-            # slow for no information.
-            modern: dict[str, str] = {}
-            legacy: dict[str, str] = {}
+            # Three places an id can come from, tried in the order
+            # they are likely to actually be the decision set. Each is
+            # its own group so that giving up on one doesn't skip the
+            # next: collapsing them is what previously meant every
+            # lookup used the link id and none used the real id.
+            groups: list[tuple[str, dict[str, str]]] = [
+                ("modern dtree id", {}),
+                ("decisionSetId", {}),
+                ("placementDecisionSetId", {}),
+            ]
             for row in result.placements:
                 if wanted and row.placement_id not in wanted:
                     continue
                 if row.dtree_id:
-                    modern.setdefault(row.dtree_id, row.dtree_name)
-                if row.legacy_dset_id:
-                    legacy.setdefault(row.legacy_dset_id, row.legacy_dset_name)
+                    groups[0][1].setdefault(row.dtree_id, row.dtree_name)
+                if row.dset_id:
+                    groups[1][1].setdefault(row.dset_id, row.dset_name)
+                if row.dset_link_id:
+                    groups[2][1].setdefault(row.dset_link_id, row.dset_name)
 
-            # An id that exists in both places only needs asking once.
-            for dset_id in modern:
-                legacy.pop(dset_id, None)
+            # Never ask twice for the same number.
+            already: set[str] = set()
+            for _, ids in groups:
+                for candidate in list(ids):
+                    if candidate in already:
+                        ids.pop(candidate)
+                    else:
+                        already.add(candidate)
 
-            wanted_dsets = dict(modern)
-            wanted_dsets.update(legacy)
+            wanted_dsets = {k: v for _, ids in groups for k, v in ids.items()}
 
             # Failures are collected rather than appended one by one:
             # a campaign whose decision sets all fail the same way
             # produced fifty identical lines, which buries every other
             # problem in the run.
             failures: list[tuple[str, str]] = []
-            skipped_legacy = 0
-            legacy_shapes: set[str] = set()
+            skipped: list[str] = []
 
-            order = sorted(modern) + sorted(legacy)
-            for index, dset_id in enumerate(order):
-                is_legacy = dset_id in legacy
+            for source, ids in groups:
+                shapes_seen: set[str] = set()
+                group_failures = 0
 
-                if is_legacy and len(legacy_shapes) == 1 and len(failures) >= (
-                    GIVE_UP_AFTER_FAILED_LOOKUPS
-                ):
-                    skipped_legacy += 1
-                    continue
+                for dset_id in sorted(ids):
+                    # Give up on this source once it keeps failing the
+                    # same way -- but only on this source. The next is
+                    # a different number and deserves its own chance.
+                    if (
+                        group_failures >= GIVE_UP_AFTER_FAILED_LOOKUPS
+                        and len(shapes_seen) == 1
+                    ):
+                        remaining = len(ids) - group_failures
+                        if remaining > 0:
+                            skipped.append(f"{remaining} more from {source}")
+                        break
 
-                expected_name = wanted_dsets[dset_id]
-                try:
-                    dset = _api_get_json(
-                        page, _dset_url(dset_id), csrf_token["value"]
-                    )
-                except Exception as exc:
-                    failures.append((dset_id, str(exc)))
-                    if is_legacy:
-                        legacy_shapes.add(str(exc).replace(dset_id, "{id}"))
-                    continue
+                    expected_name = ids[dset_id]
+                    try:
+                        dset = _api_get_json(
+                            page, _dset_url(dset_id), csrf_token["value"]
+                        )
+                    except Exception as exc:
+                        failures.append((dset_id, f"{source}: {exc}"))
+                        shapes_seen.add(str(exc).replace(dset_id, "{id}"))
+                        group_failures += 1
+                        continue
 
-                problem = _dset_mismatch(dset, dset_id, expected_name)
-                if problem:
-                    failures.append((dset_id, problem))
-                    if is_legacy:
-                        legacy_shapes.add(problem.replace(dset_id, "{id}"))
-                    continue
+                    problem = _dset_mismatch(dset, dset_id, expected_name)
+                    if problem:
+                        failures.append((dset_id, f"{source}: {problem}"))
+                        shapes_seen.add(problem.replace(dset_id, "{id}"))
+                        group_failures += 1
+                        continue
 
-                result.creative_nodes.extend(parse_dset_response(dset))
+                    count_node_fields(dset, result.node_fields)
+                    result.creative_nodes.extend(parse_dset_response(dset))
 
             for message in _summarise_dset_failures(failures, len(wanted_dsets)):
                 result.errors.append(message)
 
-            if skipped_legacy:
+            if skipped:
                 result.errors.append(
-                    f"Stopped after {GIVE_UP_AFTER_FAILED_LOOKUPS} "
-                    f"identical failures and skipped {skipped_legacy} "
-                    "more decision set(s). These ids come from "
-                    "decisionSetId, which this endpoint does not "
-                    "accept -- it reads the modern id "
-                    "(placementModernDtreeId), which this campaign's "
-                    "summary did not return."
+                    "Stopped early on sources that kept failing "
+                    f"identically: {', '.join(skipped)}."
                 )
 
         except InnovidAuthError as exc:
@@ -1233,6 +1740,19 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET", body=Non
             "a problem on their side, not with the sign-in or with "
             "QA2 -- if their own campaign manager is also showing "
             "errors, the thing to do is wait and try later."
+        )
+
+    if status in (401, 403):
+        # La causa casi siempre es la sesion, no la peticion. Volcar
+        # la URL completa con sus 30 campos no dice nada util y tapa
+        # lo unico que hay que hacer.
+        raise InnovidAuthError(
+            f"Innovid rejected the request (HTTP {status}). The saved "
+            "sign-in is no longer valid.\n"
+            "  Run this once, open a campaign in the window that "
+            "appears, then close it:\n"
+            f"    {_venv_python_hint()} check_innovid_connection.py "
+            "--login"
         )
 
     if status != 200:
