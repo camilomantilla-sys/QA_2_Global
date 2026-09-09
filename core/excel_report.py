@@ -139,12 +139,15 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
     row = 1
     if logo_path is not None and logo_path.exists():
         img = XLImage(str(logo_path))
+        # Proporcion real: un ancho fijo con un alto fijo deforma
+        # cualquier logo que no sea el banner original.
+        ratio = (img.height / img.width) if img.width else 0.56
         img.width = 180
-        img.height = 100
+        img.height = round(180 * ratio)
         ws.add_image(img, "A1")
-        row = 7
+        row = max(2, round(img.height / 20) + 2)
 
-    ws.cell(row=row, column=1, value="INNOVID QA2 AUTOMATION").font = (
+    ws.cell(row=row, column=1, value="INNOVID QA AUTOMATION").font = (
         TITLE_FONT
     )
     row += 1
