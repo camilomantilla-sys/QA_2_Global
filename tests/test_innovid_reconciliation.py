@@ -89,6 +89,7 @@ def _node(name, start, end, weight=1, node_id=1, creative_id=6389150):
 
 V1 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V1_300x600.jpg"
 V2 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V2_300x600.jpg"
+V3 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V3_300x600.jpg"
 
 
 def _findings(reconciliation):
@@ -252,34 +253,107 @@ def test_filename_differences_do_not_break_the_match():
 # --- peso de rotacion --------------------------------------------
 
 def test_matching_weight_passes_and_a_different_one_fails():
+    # Un peso de rotacion es relativo, asi que se compara el reparto,
+    # no el numero suelto: la TS trae fracciones de Excel y en Innovid
+    # se escriben porcentajes enteros.
     ts = _ts("11087616", [
-        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="1",
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="0.25",
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="0.75",
                          start=date(2026, 9, 14), end=date(2026, 10, 31)),
     ])
     got = _innovid("11087616", 40316, [
-        _node(V2, "2026-09-14", "2026-10-31", weight=1),
+        _node(V2, "2026-09-14", "2026-10-31", weight=25),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=75),
     ])
-    assert _by_rule(_findings(reconcile(ts, got)), "INV-002")[0].status.name == "PASS"
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
 
-    ts_50 = _ts("11087616", [
-        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="50",
-                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    got_swapped = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=75),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=25),
     ])
-    got_5 = _innovid("11087616", 40316, [
+    assert "FAIL" in {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got_swapped)), "INV-002")
+    }
+
+
+def test_innovids_whole_percent_is_not_a_failure_against_excels_decimals():
+    # Innovid solo admite enteros en el decision set: un 13,33% de la
+    # TS se traduce a 13%. Exigir el decimal marcaria como error algo
+    # que nadie puede corregir.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         rotation_weight="0.13333333333333333"),
+        ExpectedCreative(name=V3, intent=GREEN,
+                         rotation_weight="0.8666666666666667"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=13),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=87),
+    ])
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+
+def test_a_lone_creative_takes_the_whole_rotation_whatever_is_written():
+    # Consecuencia deliberada de comparar el reparto: si el decision
+    # set tiene un solo creativo, se lleva el 100% diga 50 o diga 5.
+    # No es un peso mal puesto -- no hay con quien repartir. Que
+    # falten los demas creativos lo reporta INV-001, que es la
+    # pregunta de verdad en ese caso.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="50"),
+    ])
+    got = _innovid("11087616", 40316, [
         _node(V2, "2026-09-14", "2026-10-31", weight=5),
     ])
-    assert _by_rule(_findings(reconcile(ts_50, got_5)), "INV-002")[0].status.name == "FAIL"
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
 
 
-def test_even_is_an_instruction_not_a_number_to_compare():
+def test_even_becomes_the_share_it_means():
+    # "Even" es que roten por igual. Con el grupo entero en Even, cada
+    # creativo se lleva 100/N y ya se puede comparar contra Innovid,
+    # que es lo que pidio Camilo.
     ts = _ts("11087616", [
-        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="Even",
-                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="Even"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="Even"),
     ])
     got = _innovid("11087616", 40316, [
-        _node(V2, "2026-09-14", "2026-10-31", weight=1),
+        _node(V2, "2026-09-14", "2026-10-31", weight=50),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=50),
     ])
-    assert _by_rule(_findings(reconcile(ts, got)), "INV-002") == []
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+
+def test_even_against_an_uneven_rotation_fails():
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="Even"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="Even"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=90),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=10),
+    ])
+    assert "FAIL" in {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
 
 
 # --- verification partner ----------------------------------------
