@@ -45,6 +45,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from core.colors import RED
+from core.review import bulk_groups
 from core.engine import run_rules
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
@@ -2502,15 +2503,96 @@ if True:
                     "record."
                 )
 
+                # Lo que ya se aprobo vive en session_state y no en el
+                # editor: un lote toca decenas de filas a la vez, y el
+                # data_editor solo relee su contenido cuando cambia su
+                # key. Sin esto, aprobar en bloque no se veia hasta
+                # tocar otra cosa.
+                _review_state: dict = st.session_state.setdefault(
+                    "qa2_review_state", {}
+                )
+                _review_nonce = st.session_state.setdefault(
+                    "qa2_review_nonce", 0
+                )
+
+                # Un grupo = misma regla y mismo hallazgo. Los 25
+                # "Placement Name mismatch" de una solicitud son una
+                # sola decision tomada 25 veces; aprobarlos uno por uno
+                # solo gasta el tiempo del revisor.
+                _bulk_groups = bulk_groups(review_findings)
+
+                if _bulk_groups:
+                    st.markdown("**Approve a whole group at once**")
+                    _bulk_choice = st.selectbox(
+                        "Group",
+                        options=list(_bulk_groups),
+                        key="qa2_review_bulk_group",
+                        label_visibility="collapsed",
+                    )
+                    _bulk_items = _bulk_groups[_bulk_choice]
+                    _bulk_note = st.text_input(
+                        "Observation applied to the whole group",
+                        key="qa2_review_bulk_note",
+                        placeholder=(
+                            "Why the whole group is fine -- e.g. "
+                            "\"Innovid pads the numeric segment and "
+                            "truncates the name; trafficking is "
+                            "unaffected.\""
+                        ),
+                    )
+                    _bulk_cols = st.columns([3, 2])
+                    if _bulk_cols[0].button(
+                        f"Approve all {len(_bulk_items)}",
+                        use_container_width=True,
+                        # La observacion no es decorativa: es el
+                        # registro de POR QUE se dio por bueno. En
+                        # bloque pesa mas todavia, porque una sola
+                        # frase responde por decenas de hallazgos.
+                        disabled=not _bulk_note.strip(),
+                        help=(
+                            "Write the observation first -- it's the "
+                            "record of why this group was approved."
+                        ),
+                    ):
+                        for _item in _bulk_items:
+                            _review_state[_item.finding_id] = {
+                                "approved": True,
+                                "note": _bulk_note.strip(),
+                            }
+                        st.session_state["qa2_review_nonce"] = (
+                            _review_nonce + 1
+                        )
+                        st.rerun()
+
+                    if _review_state and _bulk_cols[1].button(
+                        "Clear all approvals",
+                        use_container_width=True,
+                    ):
+                        _review_state.clear()
+                        st.session_state["qa2_review_nonce"] = (
+                            _review_nonce + 1
+                        )
+                        st.rerun()
+
+                    st.divider()
+
                 _review_base_df = pd.DataFrame(
                     [
                         {
-                            "Approve": False,
+                            "Approve": bool(
+                                _review_state.get(
+                                    finding.finding_id, {}
+                                ).get("approved")
+                            ),
                             "Rule": finding.rule_id,
                             "Placement ID": finding.placement_id,
                             "Creative ID": finding.creative_id,
                             "Finding": finding.message,
-                            "Observation": "",
+                            "Observation": str(
+                                _review_state.get(
+                                    finding.finding_id, {}
+                                ).get("note", "")
+                            ),
                         }
                         for finding in review_findings
                     ]
@@ -2523,19 +2605,29 @@ if True:
                     disabled=[
                         "Rule", "Placement ID", "Creative ID", "Finding",
                     ],
-                    key="qa2_review_approval",
+                    key=f"qa2_review_approval_{_review_nonce}",
                 )
 
                 review_overrides: dict[str, dict] = {}
 
+                # Lo que quede marcado en la tabla es la verdad final:
+                # el revisor puede desmarcar a mano cualquier fila que
+                # el lote haya aprobado de mas.
                 for finding, (_, _row) in zip(
                     review_findings, _edited_review_df.iterrows()
                 ):
+                    _note = str(_row.get("Observation") or "").strip()
                     if bool(_row.get("Approve")):
                         review_overrides[finding.finding_id] = {
                             "approved": True,
-                            "note": str(_row.get("Observation") or "").strip(),
+                            "note": _note,
                         }
+                        _review_state[finding.finding_id] = {
+                            "approved": True,
+                            "note": _note,
+                        }
+                    else:
+                        _review_state.pop(finding.finding_id, None)
 
                 if review_overrides:
                     st.info(
