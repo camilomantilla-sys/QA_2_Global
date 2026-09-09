@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.findings import Capability, FindingsBuffer, Status  # noqa: E402
 from rules import rotation  # noqa: E402
-from rules.rotation import _as_percent  # noqa: E402
+from core.normalize import percent_label as _as_percent  # noqa: E402
 
 
 @dataclass

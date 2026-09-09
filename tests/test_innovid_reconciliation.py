@@ -414,3 +414,44 @@ if __name__ == "__main__":
 
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+# ---------------------------------------------------------------- sello de subida
+
+DOVE_TS = (
+    "Scent-and-Softness-Your-Skin-Deserves-Both_Scrapbook_Core-Body-Wash"
+    "_Renew_NONE_NA_160x600-NA_DISP_08s_BYNW_EN_STP_MikMak_MOD_BASE_003"
+    "_Green-v01"
+)
+DOVE_INNOVID = (
+    DOVE_TS
+    + "__38383730-3934-5731-b931-623638616639__145194828.zip"
+)
+
+
+def test_innovids_upload_stamp_does_not_break_the_match():
+    """
+    Al subir el archivo Innovid le pega "__<uuid>__<id>.zip". La TS
+    nunca lo lleva, asi que el mismo creativo llegaba con dos nombres
+    y se reportaba a la vez como "no esta en Innovid" y "no esta en la
+    Traffic Sheet". Camilo lo vio con este creativo exacto.
+    """
+    from core.matching import norm_creative
+    assert norm_creative(DOVE_TS) == norm_creative(DOVE_INNOVID)
+
+
+def test_the_variant_at_the_end_of_the_name_still_tells_them_apart():
+    # Estos creativos se distinguen por el ultimo tramo: _Renew,
+    # _Refresh, _Uplift. Recortar de mas los volveria el mismo.
+    from core.matching import norm_creative
+    assert norm_creative(DOVE_TS) != norm_creative(
+        DOVE_TS.replace("_Renew_", "_Refresh_")
+    )
+
+
+def test_only_a_full_uuid_is_stripped():
+    # Recortar cualquier "__loquesea" final se llevaria nombres reales.
+    from core.matching import norm_creative
+    for tail in ("__final_v2", "__2026", "__base", "__38383730-3934"):
+        name = "banner_300x250" + tail
+        assert norm_creative(name) == name.lower(), tail

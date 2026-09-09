@@ -151,3 +151,27 @@ def to_bool(value: object) -> bool | None:
     if text in ("no", "n", "false", "0"):
         return False
     return None
+
+
+def percent_label(value: object) -> str:
+    """
+    Un peso de rotacion como lo escribiria una persona.
+
+    Excel guarda un 13,33% como 0.13333333333333333. Mostrarlo crudo
+    llena el reporte de decimales que nadie puede contrastar contra la
+    hoja. Los pesos de un grupo suman 1.0000 exacto, asi que son
+    fracciones y se leen como porcentaje.
+
+    Lo que no sea numero (EVEN, texto libre) se devuelve tal cual:
+    inventarle un porcentaje seria peor que mostrarlo como esta.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.endswith("%"):
+        return text
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return f"{number * 100:.2f}".rstrip("0").rstrip(".") + "%"
