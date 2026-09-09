@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import subprocess
 import sys
 import tempfile
 import warnings
@@ -10,7 +11,7 @@ import zipfile
 from io import BytesIO
 from collections import Counter, defaultdict
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd  # type: ignore
@@ -64,6 +65,8 @@ from core.innovid_api import (
     fetch_campaign,
     load_credentials,
     session_is_saved,
+    session_expires_at,
+    session_has_expired,
 )
 from core.innovid_reconciliation import reconcile as reconcile_innovid
 from rules import innovid as innovid_rules
@@ -1594,28 +1597,71 @@ with st.sidebar:
         st.caption(f"QA build: `{running_version()}`")
 
 
+        # Que el archivo exista no es que la sesion sirva. Antes decia
+        # "Signed in" en verde con solo encontrarlo, y la sesion
+        # caducada se descubria a mitad del QA con un 401 de Innovid.
         _has_session = session_is_saved()
-        if _has_session:
-            st.success(f"Signed in — using {SESSION_PATH.name}")
+        _expired = _has_session and session_has_expired()
+        _expiry = session_expires_at() if _has_session else None
+
+        if _has_session and not _expired:
+            if _expiry is not None:
+                _left = _expiry - datetime.now(timezone.utc)
+                _hours = int(_left.total_seconds() // 3600)
+                st.success(
+                    "Signed in — the saved sign-in is good for "
+                    + (
+                        f"{_hours} more hour(s)."
+                        if _hours >= 1
+                        else "less than an hour."
+                    )
+                )
+            else:
+                st.success(f"Signed in — using {SESSION_PATH.name}")
+        elif _expired:
+            st.warning(
+                "The saved sign-in has expired. Sign in again below "
+                "-- the checks against Innovid can't run until you do."
+            )
         else:
-            # The full interpreter path, not "python": on Windows a
-            # bare "python" resolves to the system install, which has
-            # none of QA's packages -- the exact wall this hit the
-            # first time it was set up.
             st.info(
-                "Not signed in yet. Open a terminal in the QA folder "
-                "and run this once:\n\n"
-                f"`{sys.executable} check_innovid_connection.py "
-                "--login`\n\n"
-                "A browser opens, you sign in as usual, and the "
-                "session is saved. Your password is never read."
+                "Not signed in to Innovid yet. Sign in below; a "
+                "browser window opens and you sign in as usual. "
+                "Your password is never read."
+            )
+
+        # Firmar desde la app y no desde una terminal. Se lanza el
+        # mismo CLI ya probado en un proceso aparte, con el
+        # interprete de este entorno: en Windows un "python" pelado
+        # cae en la instalacion del sistema, que no tiene ninguno de
+        # los paquetes de QA -- el muro exacto contra el que choco
+        # esto la primera vez.
+        if st.button(
+            "Sign in to Innovid" if not _has_session else "Sign in again",
+            use_container_width=True,
+            key="qa2_innovid_login",
+            help=(
+                "Opens a browser window. Sign in as usual, then close "
+                "it -- the session is saved for next time."
+            ),
+        ):
+            subprocess.Popen(
+                [sys.executable, "check_innovid_connection.py", "--login"],
+                cwd=str(PROJECT_ROOT),
+            )
+            st.info(
+                "A browser window is opening. Sign in, open a "
+                "campaign so Innovid finishes loading, then close the "
+                "window and press R here to refresh."
             )
 
         check_innovid = st.checkbox(
             "Check this request against Innovid",
             value=False,
             key="qa2_check_innovid",
-            disabled=not _has_session,
+            # Una sesion caducada no sirve: dejar marcar la casilla
+            # solo llevaria a un 401 a mitad del QA.
+            disabled=not _has_session or _expired,
             help=(
                 "Opens Innovid in the background and reads the "
                 "campaign. Takes a few seconds the first time; the "
@@ -2530,7 +2576,7 @@ if True:
                         label_visibility="collapsed",
                     )
                     _bulk_items = _bulk_groups[_bulk_choice]
-                    _bulk_note = st.text_input(
+                    st.text_input(
                         "Observation applied to the whole group",
                         key="qa2_review_bulk_note",
                         placeholder=(
@@ -2541,28 +2587,46 @@ if True:
                         ),
                     )
                     _bulk_cols = st.columns([3, 2])
+
+                    # El boton NO se deshabilita por falta de
+                    # observacion. Streamlit solo reevalua un
+                    # text_input cuando pierde el foco o se pulsa
+                    # Enter: quien escribe y va directo al boton lo
+                    # encuentra dibujado como cuando el campo estaba
+                    # vacio, y un boton deshabilitado se traga el clic
+                    # sin decir por que. Se valida AL pulsar, que es
+                    # cuando el valor escrito ya llego.
                     if _bulk_cols[0].button(
                         f"Approve all {len(_bulk_items)}",
                         use_container_width=True,
-                        # La observacion no es decorativa: es el
-                        # registro de POR QUE se dio por bueno. En
-                        # bloque pesa mas todavia, porque una sola
-                        # frase responde por decenas de hallazgos.
-                        disabled=not _bulk_note.strip(),
                         help=(
-                            "Write the observation first -- it's the "
-                            "record of why this group was approved."
+                            "Writes the observation into every item in "
+                            "the group and marks them approved."
                         ),
                     ):
-                        for _item in _bulk_items:
-                            _review_state[_item.finding_id] = {
-                                "approved": True,
-                                "note": _bulk_note.strip(),
-                            }
-                        st.session_state["qa2_review_nonce"] = (
-                            _review_nonce + 1
-                        )
-                        st.rerun()
+                        _note = str(
+                            st.session_state.get("qa2_review_bulk_note", "")
+                        ).strip()
+
+                        if not _note:
+                            # La observacion es el registro de POR QUE
+                            # se dio por bueno, y en bloque pesa mas:
+                            # una frase responde por decenas.
+                            st.warning(
+                                "Write the observation first -- it's "
+                                "the record of why these "
+                                f"{len(_bulk_items)} were approved."
+                            )
+                        else:
+                            for _item in _bulk_items:
+                                _review_state[_item.finding_id] = {
+                                    "approved": True,
+                                    "note": _note,
+                                }
+                            st.session_state["qa2_review_nonce"] = (
+                                _review_nonce + 1
+                            )
+                            st.rerun()
 
                     if _review_state and _bulk_cols[1].button(
                         "Clear all approvals",
