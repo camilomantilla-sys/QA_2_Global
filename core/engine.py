@@ -8,7 +8,7 @@ Recibe:
 Devuelve:
   - FindingsBuffer con todos los resultados QA2.
 """
-from core.findings import FindingsBuffer
+from core.findings import Capability, FindingsBuffer
 from core.tag_matching import match_tags
 from rules import attribution
 from rules import creatives
@@ -16,6 +16,7 @@ from rules import dset
 from rules import dtree
 from rules import naming
 from rules import placements
+from rules import rotation
 from rules import tags
 from rules import urls
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
@@ -39,9 +40,23 @@ def run_rules(
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
 
+    # El peso de rotacion no esta en ningun archivo. Cuando el
+    # placement corre por Decision Tree, la columna Rotation del
+    # export dice "Decision Tree" y el porcentaje se queda dentro
+    # del decision set. Declararlo aqui es lo que hace que una
+    # rotacion que nadie pudo comparar salga NOT_VERIFIED en vez
+    # de PASS.
+    buffer.capabilities.declare(
+        Capability.ROTATION_WEIGHT,
+        innovid_reconciliation is not None,
+        "the rotation weight lives in the Innovid decision set, "
+        "not in any export -- connect Innovid to read it",
+    )
+
     placements.evaluate(match_result, buffer)
     naming.evaluate(match_result, buffer)
     creatives.evaluate(match_result, buffer)
+    rotation.evaluate(match_result, buffer)
     urls.evaluate(match_result, buffer)
     # La cuenta manda sobre si hay atribucion que revisar: solo
     # Adobe maneja CGEN.

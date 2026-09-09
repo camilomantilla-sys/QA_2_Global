@@ -119,6 +119,11 @@ class Capability(str, Enum):
     PIXEL_DATA = "pixel_data"
     NETWORK_ACCESS = "network_access"
     TS_COLOR_STATE = "ts_color_state"
+    # El peso de rotacion NO viaja en ningun export. Cuando el
+    # placement usa Decision Tree, la columna Rotation del export
+    # dice literalmente "Decision Tree" y el porcentaje se queda
+    # dentro del decision set, al que solo llega la API de Innovid.
+    ROTATION_WEIGHT = "rotation_weight"
 
 @dataclass(frozen=True, slots=True)
 class CapabilityState:
