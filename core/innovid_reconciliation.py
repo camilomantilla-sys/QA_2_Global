@@ -280,3 +280,27 @@ def _node_date(value: str) -> date | None:
         return date.fromisoformat(str(value)[:10])
     except (ValueError, TypeError):
         return None
+
+
+def flights_by_creative(reconciliation) -> dict[tuple[str, str], CreativeFlightCheck]:
+    """
+    Indice (placement, nombre normalizado) -> lo que Innovid tiene.
+
+    La tabla de creativos necesita poner lado a lado lo que pide la TS
+    y lo que hay en el decision set, fila por fila. Sin este indice
+    tendria que recorrer la lista entera por cada creativo, y sobre
+    todo tendria que repetir aqui la definicion de "mismo creativo",
+    que ya vive en norm_creative -- dos definiciones que se separan
+    con el tiempo es justo como aparecen los falsos negativos.
+
+    Cuando el mismo nombre sale en varios nodos, gana el primero pero
+    el check conserva `candidates`, para que quien lea sepa que habia
+    mas de uno.
+    """
+    index: dict[tuple[str, str], CreativeFlightCheck] = {}
+    if reconciliation is None:
+        return index
+    for check in reconciliation.flights:
+        key = (str(check.placement_id), norm_creative(check.creative_name))
+        index.setdefault(key, check)
+    return index

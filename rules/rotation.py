@@ -18,37 +18,15 @@ regla se calla para no duplicar el hallazgo.
 """
 from core.colors import WHITE
 from core.findings import Capability, Domain, EntityType, Status
+from core.normalize import percent_label
 
 ROTATION_FIELD = "rotation_weight"
-
-
-def _as_percent(value: str) -> str:
-    """
-    Excel guarda un 13,33% como 0.13333333333333333. Mostrarlo crudo
-    llena el reporte de decimales que nadie puede contrastar contra la
-    hoja. Los pesos de cada grupo suman 1.0000 exacto, asi que son
-    fracciones y se leen como porcentaje.
-
-    Lo que no sea un numero (EVEN, o texto libre) se devuelve tal cual:
-    inventarle un porcentaje seria peor que mostrarlo como esta.
-    """
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    try:
-        number = float(text.rstrip("%"))
-    except ValueError:
-        return text
-    if text.endswith("%"):
-        return text
-    percent = number * 100
-    return f"{percent:.2f}".rstrip("0").rstrip(".") + "%"
 
 
 def _weights_label(creatives) -> str:
     seen: list[str] = []
     for creative in creatives:
-        label = _as_percent(creative.rotation_weight)
+        label = percent_label(creative.rotation_weight)
         if label and label not in seen:
             seen.append(label)
     return ", ".join(seen)

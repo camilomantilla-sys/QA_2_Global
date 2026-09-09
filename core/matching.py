@@ -28,6 +28,18 @@ CONF_LOW = "LOW"
 CONF_NONE = "NONE"
 
 _EXT = re.compile(r"\.(jpg|jpeg|png|gif|mp4|mov|webm|html|htm|zip|svg)$", re.I)
+
+# El sello que Innovid pega al subir el archivo: el uuid del asset y
+# su id numerico. Se exige la forma completa del uuid a proposito --
+# recortar cualquier "__loquesea" final se llevaria por delante
+# nombres reales, y estos creativos se distinguen justamente por el
+# ultimo tramo del nombre (_Refresh, _Renew, _Uplift...). El id
+# numerico es opcional: no todas las subidas lo traen.
+_UPLOAD_STAMP = re.compile(
+    r"__[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"(?:__\d+)?$",
+    re.I,
+)
 _IS_DEFAULT = re.compile(r"\bdefault\b", re.I)
 
 def _as_date(value: object) -> date | None:
@@ -51,9 +63,17 @@ def norm_creative(value: object) -> str:
     resto del nombre sea identico. Sin colapsar los espacios aqui,
     match_creatives fallaba y reportaba el creativo como faltante
     (falso FAIL en CRE-001 / URL-001).
+
+    Al subir el archivo, Innovid le pega ademas su propio sello:
+    "__<uuid>__<id>.zip". La TS nunca lo lleva -- nadie lo escribe a
+    mano, lo genera Innovid -- asi que el mismo creativo llegaba con
+    dos nombres distintos a cada lado y se reportaba a la vez como
+    "no esta en Innovid" y "no esta en la Traffic Sheet". En la
+    solicitud de Dove lo traian 320 de las 1113 filas del export.
     """
     s = norm_compare(str(value or ""))
     s = _EXT.sub("", s).strip()
+    s = _UPLOAD_STAMP.sub("", s).strip()
     return re.sub(r"\s+", "", s)
 
 # ------------------------------------------------------------------ modelo

@@ -68,7 +68,10 @@ from core.innovid_api import (
     session_expires_at,
     session_has_expired,
 )
-from core.innovid_reconciliation import reconcile as reconcile_innovid
+from core.innovid_reconciliation import (
+    flights_by_creative,
+    reconcile as reconcile_innovid,
+)
 from rules import innovid as innovid_rules
 from core.dv_omni_reconciliation import reconcile_dv_omni
 from core.team_roster import (
@@ -92,8 +95,13 @@ from core.tag_inventory import (
     TagInventory,
     build_tag_inventory_from_results,
 )
-from core.matching import match
-from core.normalize import norm_compare, norm_dims, site_names_match
+from core.matching import match, norm_creative
+from core.normalize import (
+    norm_compare,
+    norm_dims,
+    percent_label,
+    site_names_match,
+)
 from core.tag_matching import match_tags
 from core.pdf_report import ReportMeta, build_pdf_report
 from core.excel_report import build_excel_report
@@ -3630,6 +3638,32 @@ if True:
 
                     creative_rows = []
 
+                    # Lo que Innovid tiene, indexado por creativo. Se
+                    # arma una vez por placement y no por fila.
+                    _innovid_flights = flights_by_creative(
+                        innovid_reconciliation
+                    )
+                    _innovid_ran = innovid_reconciliation is not None
+
+                    def _dates(start, end) -> str:
+                        if not start and not end:
+                            return ""
+                        return f"{start or '?'} \u2192 {end or '?'}"
+
+                    def _innovid_cell(check, value: str) -> str:
+                        """
+                        Una celda vacia se lee como "no tiene". Cuando
+                        nadie pregunto, o Innovid no devolvio el
+                        creativo, eso no es lo mismo y tiene que
+                        decirlo -- es la diferencia entre "esta mal" y
+                        "no se sabe".
+                        """
+                        if not _innovid_ran:
+                            return "not checked"
+                        if check is None:
+                            return "not returned"
+                        return value
+
                     if placement_match is not None:
                         for creative_link in creative_links:
                             expected_creative = (
@@ -3640,15 +3674,22 @@ if True:
                                 creative_link.actual
                             )
 
+                            _check = _innovid_flights.get(
+                                (
+                                    str(placement_match.placement_id),
+                                    norm_creative(expected_creative.name),
+                                )
+                            )
+
                             creative_rows.append(
                                 {
                                     "Intent": (
                                         expected_creative.intent
                                     ),
-                                    "Expected Creative": (
+                                    "TS Creative": (
                                         expected_creative.name
                                     ),
-                                    "Found Creative": (
+                                    "Innovid Creative": (
                                         (
                                             actual_creative.filename
                                             or actual_creative.name
@@ -3656,19 +3697,33 @@ if True:
                                         if actual_creative
                                         else ""
                                     ),
-                                    "Creative ID": (
+                                    "TS Creative ID": (
+                                        expected_creative.creative_id
+                                    ),
+                                    "Innovid Creative ID": (
                                         actual_creative.creative_id
                                         if actual_creative
-                                        else (
-                                            expected_creative.creative_id
-                                        )
+                                        else ""
                                     ),
-                                    "Match key": (
-                                        creative_link.trace.winner
-                                        or "-"
+                                    "TS Dates": _dates(
+                                        expected_creative.start,
+                                        expected_creative.end,
                                     ),
-                                    "Confidence": (
-                                        creative_link.confidence
+                                    "Innovid Dates": _innovid_cell(
+                                        _check,
+                                        _dates(
+                                            _check.actual_start,
+                                            _check.actual_end,
+                                        ) if _check else "",
+                                    ),
+                                    "TS Rotation": percent_label(
+                                        expected_creative.rotation_weight
+                                    ),
+                                    "Innovid Rotation": _innovid_cell(
+                                        _check,
+                                        percent_label(
+                                            _check.actual_weight
+                                        ) if _check else "",
                                     ),
                                     "Status": (
                                         actual_creative.state_label
@@ -3706,6 +3761,13 @@ if True:
                                             if creative_link.triangle
                                             else "NOT_VERIFIED"
                                         )
+                                    ),
+                                    "Match key": (
+                                        creative_link.trace.winner
+                                        or "-"
+                                    ),
+                                    "Confidence": (
+                                        creative_link.confidence
                                     ),
                                 }
                             )
