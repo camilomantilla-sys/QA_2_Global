@@ -29,6 +29,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Cuando se cargo este modulo. Streamlit recarga ui/app_v2.py al
@@ -813,6 +814,61 @@ def _launch_browser(playwright, headless: bool):
 
 def session_is_saved(session_path: Path | None = None) -> bool:
     return (session_path or SESSION_PATH).exists()
+
+
+def session_expires_at(session_path: Path | None = None) -> datetime | None:
+    """
+    Cuando caduca la sesion guardada, leyendo solo el archivo.
+
+    Antes la app decia "Signed in" con que el archivo existiera, y la
+    sesion caducada solo se descubria cuando Innovid contestaba 401 a
+    mitad del QA. El archivo trae la fecha de caducidad de cada cookie:
+    preguntarselo no cuesta una llamada de red y evita afirmar que hay
+    sesion cuando ya no la hay.
+
+    Manda la que caduque primero entre las cookies de Innovid: en
+    cuanto una muere, la sesion deja de servir. Se ignoran las del
+    proveedor de identidad, que sobreviven a la sesion de Innovid y
+    darian una fecha optimista.
+
+    None cuando no se puede saber: sin archivo, ilegible, o con
+    cookies de sesion pura (expires -1), que mueren al cerrar el
+    navegador y no llevan fecha. None significa "no se sabe", nunca
+    "esta bien".
+    """
+    path = session_path or SESSION_PATH
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+    stamps = [
+        cookie.get("expires")
+        for cookie in data.get("cookies", [])
+        if _API_HOST in str(cookie.get("domain", ""))
+        or "flashtalking" in str(cookie.get("domain", ""))
+    ]
+    usable = [
+        float(stamp) for stamp in stamps
+        if isinstance(stamp, (int, float)) and float(stamp) > 0
+    ]
+    if not usable:
+        return None
+
+    try:
+        return datetime.fromtimestamp(min(usable), tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def session_has_expired(session_path: Path | None = None) -> bool:
+    """
+    True solo cuando consta que caduco. Sin fecha no se afirma nada:
+    inventar un "esta vencida" mandaria a alguien a firmar de nuevo
+    una sesion que servia.
+    """
+    expiry = session_expires_at(session_path)
+    return expiry is not None and expiry <= datetime.now(timezone.utc)
 
 
 # Query parameters whose values are safe to show: they describe what
