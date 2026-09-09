@@ -69,6 +69,9 @@ from core.innovid_api import (
     session_has_expired,
 )
 from core.innovid_reconciliation import (
+    AMBIGUOUS,
+    EXTRA_IN_INNOVID,
+    MISSING_IN_INNOVID,
     flights_by_creative,
     reconcile as reconcile_innovid,
 )
@@ -2265,10 +2268,40 @@ if True:
                 pl_result,
             )
 
-            # Run TS vs Innovid rules first.
+            # Innovid guarda tres cosas que ningun export trae: las
+            # fechas de vuelo del creativo dentro del decision set, su
+            # peso de rotacion y el Verification Partner.
+            #
+            # Se descarga ANTES de correr las reglas, y no despues.
+            # Corriendo primero las reglas, el motor no sabia que
+            # Innovid iba a contestar y daba por no verificada cada
+            # rotacion, con un "connect Innovid" en pantalla mientras
+            # la tabla de al lado mostraba los datos de Innovid.
+            innovid_reconciliation = None
+            innovid_result = None
+
+            if st.session_state.get("qa2_check_innovid"):
+                _campaign_id = str(
+                    getattr(match_result, "ts_campaign_id", "") or ""
+                ).strip()
+                if _campaign_id:
+                    _worked_ids = tuple(sorted(
+                        str(pm.placement_id) for pm in match_result.matched
+                    ))
+                    with st.spinner(
+                        f"Reading campaign {_campaign_id} from Innovid…"
+                    ):
+                        innovid_result = cached_fetch_innovid(
+                            _campaign_id, _worked_ids
+                        )
+                    innovid_reconciliation = reconcile_innovid(
+                        match_result, innovid_result
+                    )
+
             findings_buffer = run_rules(
                 match_result,
                 account=selected_account,
+                innovid_reconciliation=innovid_reconciliation,
             )
 
             tag_matches = []
@@ -2435,94 +2468,76 @@ if True:
             # rotation weight, and the Verification Partner. Only
             # asked for when the QA ticks the box, and only for the
             # placements this request worked.
-            innovid_reconciliation = None
-            innovid_result = None
+            campaign_id = str(
+                getattr(match_result, "ts_campaign_id", "") or ""
+            ).strip()
 
-            if st.session_state.get("qa2_check_innovid"):
-                campaign_id = str(
-                    getattr(match_result, "ts_campaign_id", "") or ""
-                ).strip()
+            if st.session_state.get("qa2_check_innovid") and not campaign_id:
+                st.warning(
+                    "The Traffic Sheet doesn't declare a Campaign "
+                    "ID in Campaign Information, so there is "
+                    "nothing to look up in Innovid. The rest of "
+                    "the QA ran normally."
+                )
 
-                if not campaign_id:
+            if innovid_result is not None:
+
+                # Said out loud, not just folded into the
+                # findings: an expired session or a bad day at
+                # Innovid is something to act on, and it looks
+                # nothing like a placement that happens to be
+                # fine.
+                if innovid_result.errors:
                     st.warning(
-                        "The Traffic Sheet doesn't declare a Campaign "
-                        "ID in Campaign Information, so there is "
-                        "nothing to look up in Innovid. The rest of "
-                        "the QA ran normally."
+                        "Innovid didn't answer everything. These "
+                        "checks are reported as not verified:\n\n"
+                        + "\n\n".join(
+                            f"- {error}"
+                            for error in innovid_result.errors
+                        )
                     )
-                else:
-                    worked_ids = tuple(sorted(
-                        str(pm.placement_id) for pm in match_result.matched
-                    ))
-                    with st.spinner(
-                        f"Reading campaign {campaign_id} from Innovid…"
+
+                    # Solo cuando el fallo es de sesion o de
+                    # token. Los 400 de placementDecisionSetId
+                    # salen en cada corrida y son conocidos:
+                    # diagnosticar por ellos abriria un navegador
+                    # de mas cada vez, para no decir nada nuevo.
+                    _auth_trouble = any(
+                        word in " ".join(innovid_result.errors).lower()
+                        for word in ("session", "token", "sign-in",
+                                     "401", "403")
+                    )
+
+                if innovid_result.errors and _auth_trouble:
+                    # El diagnostico aqui mismo, no en la terminal.
+                    # Pedir que se corra un comando aparte y se
+                    # pegue la salida convertia cada fallo en una
+                    # ida y vuelta; esto lo responde de una.
+                    with st.expander(
+                        "What Innovid actually returned "
+                        "(names and shapes only, no values)"
                     ):
-                        innovid_result = cached_fetch_innovid(
-                            campaign_id, worked_ids
+                        with st.spinner("Looking…"):
+                            try:
+                                report = diagnose_session(campaign_id)
+                            except Exception as exc:  # noqa: BLE001
+                                report = [f"The check failed: {exc}"]
+                        st.code("\n".join(report), language="text")
+                        st.caption(
+                            "Safe to share: cookie and storage "
+                            "names, whether a token was found and "
+                            "where, and Innovid's own error text. "
+                            "No cookie values, no tokens."
                         )
-
-                    # Said out loud, not just folded into the
-                    # findings: an expired session or a bad day at
-                    # Innovid is something to act on, and it looks
-                    # nothing like a placement that happens to be
-                    # fine.
-                    if innovid_result.errors:
-                        st.warning(
-                            "Innovid didn't answer everything. These "
-                            "checks are reported as not verified:\n\n"
-                            + "\n\n".join(
-                                f"- {error}"
-                                for error in innovid_result.errors
-                            )
-                        )
-
-                        # Solo cuando el fallo es de sesion o de
-                        # token. Los 400 de placementDecisionSetId
-                        # salen en cada corrida y son conocidos:
-                        # diagnosticar por ellos abriria un navegador
-                        # de mas cada vez, para no decir nada nuevo.
-                        _auth_trouble = any(
-                            word in " ".join(innovid_result.errors).lower()
-                            for word in ("session", "token", "sign-in",
-                                         "401", "403")
-                        )
-
-                    if innovid_result.errors and _auth_trouble:
-                        # El diagnostico aqui mismo, no en la terminal.
-                        # Pedir que se corra un comando aparte y se
-                        # pegue la salida convertia cada fallo en una
-                        # ida y vuelta; esto lo responde de una.
-                        with st.expander(
-                            "What Innovid actually returned "
-                            "(names and shapes only, no values)"
-                        ):
-                            with st.spinner("Looking…"):
-                                try:
-                                    report = diagnose_session(campaign_id)
-                                except Exception as exc:  # noqa: BLE001
-                                    report = [f"The check failed: {exc}"]
-                            st.code("\n".join(report), language="text")
-                            st.caption(
-                                "Safe to share: cookie and storage "
-                                "names, whether a token was found and "
-                                "where, and Innovid's own error text. "
-                                "No cookie values, no tokens."
-                            )
-                    elif not innovid_result.placements:
-                        st.warning(
-                            f"Innovid returned no placements for "
-                            f"campaign {campaign_id}. Check that the "
-                            "Campaign ID in the Traffic Sheet is the "
-                            "one Innovid uses."
-                        )
-
-                    innovid_reconciliation = reconcile_innovid(
-                        match_result, innovid_result
+                elif not innovid_result.placements:
+                    st.warning(
+                        f"Innovid returned no placements for "
+                        f"campaign {campaign_id}. Check that the "
+                        "Campaign ID in the Traffic Sheet is the "
+                        "one Innovid uses."
                     )
-                    innovid_rules.evaluate(
-                        innovid_reconciliation,
-                        findings_buffer,
-                    )
+
+
 
         # ----------------------------------------------------
         # Review approval: REVIEW -> PASS
@@ -3657,16 +3672,26 @@ if True:
 
                     def _innovid_cell(check, value: str) -> str:
                         """
-                        Una celda vacia se lee como "no tiene". Cuando
-                        nadie pregunto, o Innovid no devolvio el
-                        creativo, eso no es lo mismo y tiene que
-                        decirlo -- es la diferencia entre "esta mal" y
-                        "no se sabe".
+                        Una celda vacia se lee como "no tiene". Cada
+                        motivo por el que no hay dato es distinto y
+                        tiene que decir cual es: es la diferencia
+                        entre "esta mal" y "no se sabe".
                         """
                         if not _innovid_ran:
                             return "not checked"
                         if check is None:
+                            # Innovid contesto, pero este creativo no
+                            # entro en la comparacion: su placement no
+                            # volvio, o su decision set no se pudo
+                            # leer. Los 400 de placementDecisionSetId
+                            # caen aqui.
                             return "not returned"
+                        if check.status == MISSING_IN_INNOVID:
+                            return "not in decision set"
+                        if check.status == EXTRA_IN_INNOVID:
+                            return "not in the Traffic Sheet"
+                        if check.status == AMBIGUOUS:
+                            return f"duplicated x{check.candidates}"
                         return value
 
                     # Un peso de rotacion es relativo: 0.1333 en la

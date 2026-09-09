@@ -356,6 +356,53 @@ def test_even_against_an_uneven_rotation_fails():
     }
 
 
+def test_a_rotation_mismatch_fails_the_whole_qa():
+    """
+    Regla de Camilo: "si la rotacion no hace match, debe marcar failed
+    el QA porque es un error significativo".
+
+    Un creativo rotando al peso equivocado entrega impresiones que no
+    son las que se compraron, y eso no es una nota al pie.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="0.25"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="0.75"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=75),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2,
+              creative_id=6389151, weight=25),
+    ])
+    assert _findings(reconcile(ts, got)).scorecard().verdict == "FAILED"
+
+
+def test_a_creative_date_mismatch_fails_the_whole_qa_too():
+    # Las fechas del creativo si importan, a diferencia de las del
+    # placement: un creativo que arranca tarde no entrego lo pedido.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    assert _findings(reconcile(ts, got)).scorecard().verdict == "FAILED"
+
+
+def test_an_ongoing_creative_against_a_dated_ts_is_not_a_failure():
+    # Camilo: si la TS cierra el 31 de diciembre, que Innovid diga
+    # "ongoing" esta bien. Sin fecha en Innovid no hay nada que
+    # contradiga a la TS.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 12, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
+    assert "ongoing" in findings[0].actual
+
+
 # --- verification partner ----------------------------------------
 
 def test_a_configured_verification_partner_passes():
