@@ -18,15 +18,22 @@ regla se calla para no duplicar el hallazgo.
 """
 from core.colors import WHITE
 from core.findings import Capability, Domain, EntityType, Status
-from core.normalize import percent_label
+from core.normalize import normalize_weights
 
 ROTATION_FIELD = "rotation_weight"
 
 
 def _weights_label(creatives) -> str:
+    """
+    Los pesos pedidos, en porcentaje y sin repetir.
+
+    Se normalizan como grupo y no uno a uno: un peso de rotacion es
+    relativo, y la escala solo se ve mirando el reparto entero.
+    """
     seen: list[str] = []
-    for creative in creatives:
-        label = percent_label(creative.rotation_weight)
+    for label in normalize_weights(
+        [creative.rotation_weight for creative in creatives]
+    ):
         if label and label not in seen:
             seen.append(label)
     return ", ".join(seen)

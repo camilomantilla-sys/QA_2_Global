@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.findings import Capability, FindingsBuffer, Status  # noqa: E402
 from rules import rotation  # noqa: E402
-from core.normalize import percent_label as _as_percent  # noqa: E402
+from core.normalize import normalize_weights  # noqa: E402
 
 
 @dataclass
@@ -119,17 +119,22 @@ def test_the_reason_says_where_the_weight_lives():
 
 def test_weights_are_shown_as_percentages():
     # Excel guarda 13,33% como 0.13333333333333333.
-    findings = _run([_creative(weight="0.13333333333333333")])
-    assert findings[0].expected == "13.33%"
+    links = [_creative(weight="0.13333333333333333", name=f"c{i}")
+             for i in range(6)]
+    links += [_creative(weight="0.06666666666666667", name=f"d{i}")
+              for i in range(3)]
+    assert _run(links)[0].expected == "13.33%, 6.67%"
 
 
-def test_even_and_free_text_are_left_alone():
-    for value in ("EVEN", "Even", "TBD"):
-        assert _as_percent(value) == value
+def test_free_text_mixed_with_numbers_is_left_alone():
+    # No se puede deducir que parte le toca sin inventarla.
+    assert normalize_weights(["TBD", "0.5", "0.5"])[0] == "TBD"
 
 
-def test_a_value_already_written_as_a_percentage_is_not_multiplied():
-    assert _as_percent("15%") == "15%"
+def test_a_group_already_in_percentages_is_left_as_recorded():
+    # Unos porcentajes reales suman 99 o 101 por redondeo; volver a
+    # repartirlos convertiria un 13 exacto de Innovid en 13,13%.
+    assert normalize_weights(["13%", "13%", "74%"]) == ["13%", "13%", "74%"]
 
 
 def test_distinct_weights_are_listed_once_each():

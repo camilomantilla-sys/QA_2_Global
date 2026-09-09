@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from core.matching import norm_creative
-from core.normalize import norm_compare
+from core.normalize import norm_compare, normalize_weights
 
 MATCHED = "MATCHED"
 MISSING_IN_INNOVID = "MISSING_IN_INNOVID"
@@ -51,6 +51,14 @@ class CreativeFlightCheck:
 
     expected_weight: str = ""
     actual_weight: str = ""
+
+    # Los mismos pesos en porcentaje, ya llevados a la misma escala.
+    # La TS guarda 13,33% como 0.1333 y Innovid lo da como 13: sin
+    # esto la regla comparaba escalas distintas y la tabla mostraba
+    # el 13 de Innovid como 1300%. Se calculan por placement, donde
+    # la rotacion reparte el 100%.
+    expected_weight_pct: str = ""
+    actual_weight_pct: str = ""
 
     dset_id: str = ""
     dset_name: str = ""
@@ -162,7 +170,27 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
 
         _compare_creatives(pid, expected, nodes, out)
 
+    _normalize_weights(out)
+
     return out
+
+
+def _normalize_weights(out: InnovidReconciliation) -> None:
+    """
+    Lleva los pesos de los dos lados a porcentajes, placement por
+    placement. Cada rotacion reparte el 100% entre sus creativos, asi
+    que el placement es el grupo que revela la escala de cada fuente.
+    """
+    by_placement: dict[str, list[CreativeFlightCheck]] = {}
+    for check in out.flights:
+        by_placement.setdefault(check.placement_id, []).append(check)
+
+    for checks in by_placement.values():
+        expected = normalize_weights([c.expected_weight for c in checks])
+        actual = normalize_weights([c.actual_weight for c in checks])
+        for check, exp, act in zip(checks, expected, actual):
+            check.expected_weight_pct = exp
+            check.actual_weight_pct = act
 
 
 def _is_site_served_1x1(pm) -> bool:

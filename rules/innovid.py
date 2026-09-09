@@ -133,12 +133,17 @@ def _rotation_weights(reconciliation, buffer):
         if check.intent == WHITE or check.status != MATCHED:
             continue
 
-        expected = norm_compare(check.expected_weight)
-        actual = norm_compare(check.actual_weight)
+        # Se comparan los porcentajes ya normalizados, no los valores
+        # crudos: la TS guarda 13,33% como 0.1333 y Innovid lo da como
+        # 13. Comparados en crudo no coincidian nunca, y el hallazgo
+        # decia que la rotacion estaba mal cuando era la misma.
+        expected = norm_compare(check.expected_weight_pct)
+        actual = norm_compare(check.actual_weight_pct)
 
-        # Sin peso declarado no hay nada que validar. "Even" en la TS
-        # es una instruccion de reparto, no un numero comparable con
-        # el peso por nodo que devuelve Innovid.
+        # Sin peso declarado no hay nada que validar. Un "EVEN" suelto
+        # sigue sin ser comparable: es una instruccion de reparto. Solo
+        # cuando TODO el grupo dice EVEN se convierte en su porcentaje,
+        # y entonces llega aqui ya como numero.
         if not expected or expected in ("even", "n/a", "na"):
             continue
 
@@ -148,8 +153,12 @@ def _rotation_weights(reconciliation, buffer):
             entity_type=EntityType.CREATIVE,
             placement_id=check.placement_id,
             reason=f"Innovid decision set · {check.creative_name}",
-            expected=check.expected_weight,
-            actual=check.actual_weight or "(not set)",
+            expected=check.expected_weight_pct or check.expected_weight,
+            actual=(
+                check.actual_weight_pct
+                or check.actual_weight
+                or "(not set)"
+            ),
         )
 
         if not actual:
@@ -244,16 +253,33 @@ def _span(start, end) -> str:
 
 def _same_weight(expected: str, actual: str) -> bool:
     """
-    '1x' en Innovid y '1' en la TS son el mismo peso, igual que
-    '50%' y '50'.
-    """
-    def _number(text: str) -> str:
-        t = text.replace("x", "").replace("%", "").strip()
-        # Solo se recortan los ceros DESPUES del punto: "1.00" es "1",
-        # pero "50" no es "5". Recortarlos siempre hacia que un peso
-        # del 50% se leyera igual que uno del 5%.
-        if "." in t:
-            t = t.rstrip("0").rstrip(".")
-        return t
+    Los dos lados llegan ya como porcentaje del mismo reparto, pero
+    no con la misma precision: la TS sale de una formula de Excel y
+    trae 13,33%, mientras que en Innovid se escribe a mano y solo
+    admite enteros, 13%. Son la misma rotacion, y exigir el decimal
+    marcaria como error algo que nadie puede corregir.
 
-    return _number(expected) == _number(actual)
+    Un punto porcentual de margen es lo que cabe en ese redondeo. Con
+    mas, un 13% y un 15% pasarian por iguales, y esa si es una
+    diferencia que alguien tiene que ver.
+    """
+    def _number(text: str) -> float | None:
+        candidate = text.replace("x", "").replace("%", "").strip()
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+
+    left, right = _number(expected), _number(actual)
+    if left is None or right is None:
+        # Alguno no es un numero ("EVEN", texto libre): la unica
+        # comparacion honesta que queda es la literal.
+        return expected.strip().lower() == actual.strip().lower()
+
+    return abs(left - right) <= ROUNDING_TOLERANCE_PP
+
+
+# Innovid solo admite porcentajes enteros en el decision set, asi que
+# un 13,33% de la TS se traduce a 13%. El margen cubre ese redondeo y
+# nada mas.
+ROUNDING_TOLERANCE_PP = 1.0

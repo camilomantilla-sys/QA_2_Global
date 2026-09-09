@@ -153,25 +153,79 @@ def to_bool(value: object) -> bool | None:
     return None
 
 
-def percent_label(value: object) -> str:
-    """
-    Un peso de rotacion como lo escribiria una persona.
+_EVEN = {"even", "evenly", "equal", "rotate even", "even rotation"}
 
-    Excel guarda un 13,33% como 0.13333333333333333. Mostrarlo crudo
-    llena el reporte de decimales que nadie puede contrastar contra la
-    hoja. Los pesos de un grupo suman 1.0000 exacto, asi que son
-    fracciones y se leen como porcentaje.
 
-    Lo que no sea numero (EVEN, texto libre) se devuelve tal cual:
-    inventarle un porcentaje seria peor que mostrarlo como esta.
+def normalize_weights(values) -> list[str]:
     """
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    if text.endswith("%"):
-        return text
-    try:
-        number = float(text)
-    except ValueError:
-        return text
-    return f"{number * 100:.2f}".rstrip("0").rstrip(".") + "%"
+    Pesos de rotacion de un grupo, en porcentajes que suman 100.
+
+    Cada lado guarda la rotacion en su propia escala:
+
+      Traffic Sheet   0.13333333333333333   (Excel guarda 13,33% asi)
+      Innovid         13                    (el porcentaje)
+      Innovid         1, 2, 1               (a veces son cuotas: 1x, 2x)
+
+    Multiplicar todo por 100 convertia el 13 de Innovid en 1300%.
+
+    La escala se deduce del grupo, porque una rotacion completa
+    reparte el 100% entre sus creativos:
+
+      suma ~1     fracciones      -> x100
+      suma ~100   ya porcentajes  -> tal cual
+      cualquier   cuotas          -> cada uno entre el total
+
+    El caso "ya porcentajes" se trata aparte a proposito, en vez de
+    dividir siempre entre el total: unos porcentajes reales suman 99 o
+    101 por redondeo, y repartirlos otra vez convertiria un 13 exacto
+    de Innovid en 13,13%. Se respeta lo que la fuente registro.
+
+    El grupo tiene que estar completo: se llama con todos los
+    creativos del placement. Con media rotacion, el reparto por cuotas
+    daria porcentajes inflados.
+
+    EVEN no es un numero: es "que roten por igual". Si TODO el grupo
+    dice EVEN, cada creativo se lleva 100/N. Mezclado con numeros se
+    deja como esta, porque su parte no se puede deducir sin
+    inventarla.
+    """
+    raw = ["" if v is None else str(v).strip() for v in values]
+    if not raw:
+        return []
+
+    def _number(text: str) -> float | None:
+        candidate = text.rstrip("%").replace("x", "").strip()
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+
+    parsed = [_number(text) for text in raw]
+    numeric = [value for value in parsed if value is not None]
+
+    if not numeric:
+        if all(text.lower() in _EVEN for text in raw if text):
+            share = 100.0 / len(raw)
+            return [_label(share) if text else "" for text in raw]
+        return raw
+
+    total = sum(numeric)
+
+    if abs(total - 100.0) <= 2.0:
+        scale = lambda value: value
+    elif abs(total - 1.0) <= 0.02:
+        scale = lambda value: value * 100.0
+    elif total > 0:
+        scale = lambda value: value / total * 100.0
+    else:
+        # Todo en cero: no hay reparto, y dividir seria inventarlo.
+        return raw
+
+    return [
+        text if value is None else _label(scale(value))
+        for text, value in zip(raw, parsed)
+    ]
+
+
+def _label(number: float) -> str:
+    return f"{number:.2f}".rstrip("0").rstrip(".") + "%"

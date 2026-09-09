@@ -96,10 +96,11 @@ from core.tag_inventory import (
     build_tag_inventory_from_results,
 )
 from core.matching import match, norm_creative
+from core.urls import account_uses_cgen
 from core.normalize import (
     norm_compare,
     norm_dims,
-    percent_label,
+    normalize_weights,
     site_names_match,
 )
 from core.tag_matching import match_tags
@@ -3648,7 +3649,11 @@ if True:
                     def _dates(start, end) -> str:
                         if not start and not end:
                             return ""
-                        return f"{start or '?'} \u2192 {end or '?'}"
+                        # Sin fecha final el creativo corre sin cierre:
+                        # eso es "ongoing", no un dato que falte. Un
+                        # "?" ahi hacia parecer un hueco algo que es el
+                        # estado normal de un creativo abierto.
+                        return f"{start or '?'} \u2192 {end or 'ongoing'}"
 
                     def _innovid_cell(check, value: str) -> str:
                         """
@@ -3663,6 +3668,18 @@ if True:
                         if check is None:
                             return "not returned"
                         return value
+
+                    # Un peso de rotacion es relativo: 0.1333 en la
+                    # TS y 13 en Innovid son lo mismo. Se normalizan
+                    # por placement, que es donde la rotacion reparte
+                    # su 100%, con la misma funcion que usa la regla.
+                    _ts_weights = dict(zip(
+                        (id(cl) for cl in creative_links),
+                        normalize_weights(
+                            [cl.expected.rotation_weight
+                             for cl in creative_links]
+                        ),
+                    )) if placement_match is not None else {}
 
                     if placement_match is not None:
                         for creative_link in creative_links:
@@ -3716,14 +3733,13 @@ if True:
                                             _check.actual_end,
                                         ) if _check else "",
                                     ),
-                                    "TS Rotation": percent_label(
-                                        expected_creative.rotation_weight
+                                    "TS Rotation": _ts_weights.get(
+                                        id(creative_link), ""
                                     ),
                                     "Innovid Rotation": _innovid_cell(
                                         _check,
-                                        percent_label(
-                                            _check.actual_weight
-                                        ) if _check else "",
+                                        _check.actual_weight_pct
+                                        if _check else "",
                                     ),
                                     "Status": (
                                         actual_creative.state_label
@@ -3753,13 +3769,27 @@ if True:
                                             else "NOT_VERIFIED"
                                         )
                                     ),
+                                    # La columna leia el triangulo en
+                                    # crudo y mostraba INCOMPLETE en
+                                    # cuentas que no manejan CGEN,
+                                    # justo lo que ATR-001 ya deja de
+                                    # revisar. La tabla decia que
+                                    # faltaba algo que nadie va a
+                                    # poner.
                                     "Attribution": (
                                         "N/A (removed)"
                                         if expected_creative.intent == RED
                                         else (
-                                            creative_link.triangle.result
-                                            if creative_link.triangle
-                                            else "NOT_VERIFIED"
+                                            f"N/A (no CGEN on "
+                                            f"{selected_account})"
+                                            if account_uses_cgen(
+                                                selected_account
+                                            ) is False
+                                            else (
+                                                creative_link.triangle.result
+                                                if creative_link.triangle
+                                                else "NOT_VERIFIED"
+                                            )
                                         )
                                     ),
                                     "Match key": (
