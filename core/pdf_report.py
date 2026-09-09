@@ -187,13 +187,20 @@ def _styles():
 def _header_flowables(meta: ReportMeta, styles, logo_path: Path | None):
     row = []
     if logo_path is not None and logo_path.exists():
-        img = Image(str(logo_path), width=42 * mm, height=23.6 * mm)
+        # El alto sale de la proporcion real del archivo. Fijar los dos
+        # lados aplastaba cualquier logo que no tuviera exactamente la
+        # forma del banner con el que se escribio esto.
+        img = Image(str(logo_path))
+        width = 42 * mm
+        ratio = (img.imageHeight / img.imageWidth) if img.imageWidth else 0.56
+        img.drawWidth = width
+        img.drawHeight = width * ratio
         row.append(img)
 
     title_block = [
-        Paragraph("INNOVID QA2 AUTOMATION", styles["title"]),
+        Paragraph("INNOVID QA AUTOMATION", styles["title"]),
         Paragraph(
-            "QA2 Report &mdash; Traffic Sheet vs Innovid validation",
+            "QA Report &mdash; Traffic Sheet vs Innovid validation",
             styles["subtitle"],
         ),
     ]
@@ -221,7 +228,7 @@ def _header_flowables(meta: ReportMeta, styles, logo_path: Path | None):
 def _verdict_flowable(meta: ReportMeta, styles):
     color = VERDICT_COLORS.get(meta.verdict, WPP_MUTED)
     data = [
-        [Paragraph("OVERALL QA2 RESULT", styles["muted"])],
+        [Paragraph("OVERALL QA RESULT", styles["muted"])],
         [
             Paragraph(
                 f'<font color="{color.hexval()}"><b>{meta.verdict_label}</b>'
@@ -536,7 +543,7 @@ def _footer(canvas, doc):
     canvas.setFont(BODY_FONT, 7.5)
     canvas.setFillColor(WPP_MUTED)
     canvas.drawString(
-        20 * mm, 10 * mm, "WPP Media · Innovid QA2 Automation"
+        20 * mm, 10 * mm, "WPP Media · Innovid QA Automation"
     )
     canvas.drawRightString(
         PAGE_W - 20 * mm, 10 * mm, f"Page {doc.page}"
@@ -567,7 +574,7 @@ def build_pdf_report(
         rightMargin=20 * mm,
         topMargin=14 * mm,
         bottomMargin=16 * mm,
-        title="Innovid QA2 Automation Report",
+        title="Innovid QA Automation Report",
     )
 
     story = []

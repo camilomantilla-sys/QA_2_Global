@@ -23,6 +23,23 @@ import streamlit as st  # type: ignore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# El logo oficial, con el banner degradado viejo como respaldo.
+# Se busca en orden: basta con guardar el archivo nuevo con uno de
+# estos nombres en ui/assets/ para que la app lo tome.
+_LOGO_CANDIDATES = (
+    "wpp-media-logo.png",
+    "wpp-media-logo.svg",
+    "wpp-media-logo.png.png",
+)
+
+
+def logo_path() -> Path | None:
+    for name in _LOGO_CANDIDATES:
+        candidate = PROJECT_ROOT / "ui" / "assets" / name
+        if candidate.exists():
+            return candidate
+    return None
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -183,7 +200,7 @@ VERDICT_COLORS = {
 class _RestoredUpload:
     """
     Stand-in for Streamlit's UploadedFile, built from bytes stored in
-    a QA2 session bundle -- exposes just the surface the app actually
+    a QA session bundle -- exposes just the surface the app actually
     touches (.name, .size, .getbuffer(), .getvalue()) so a restored
     file can be passed anywhere a live upload is expected.
     """
@@ -207,7 +224,7 @@ def _workbook_path(directory: str, file_name: str, file_bytes: bytes) -> Path:
 
     Innovid exports its placement views named .XLS while the file is
     really a modern .xlsx -- it starts with "PK", a zip. openpyxl
-    refuses those on the extension alone, so QA2 rejected a file it
+    refuses those on the extension alone, so QA rejected a file it
     could read perfectly, and the only way through was renaming every
     export by hand. The content decides the extension here; the
     original name is kept otherwise, since parsers use it for context.
@@ -751,7 +768,7 @@ def show_verdict(verdict: str) -> None:
         <div class="verdict-card"
              style="border-left:10px solid {color};">
             <div class="verdict-caption">
-                OVERALL QA2 RESULT
+                OVERALL QA RESULT
             </div>
             <div class="verdict-value"
                  style="color:{color};">
@@ -768,7 +785,7 @@ def show_verdict(verdict: str) -> None:
 # ============================================================
 
 st.set_page_config(
-    page_title="Innovid QA2 Automation",
+    page_title="Innovid QA Automation",
     page_icon="✅",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -898,11 +915,17 @@ st.markdown(
             border-right: 1px solid #DDE0F0;
         }
 
+        /* El logo es una marca en azul marino sobre fondo
+           transparente, no un banner a sangre: necesita fondo claro
+           y aire alrededor. Sin el fondo blanco desaparece en cuanto
+           el sidebar se ve oscuro. */
         .wpp-logo-wrap {
+            background: #ffffff;
             border-radius: 14px;
             overflow: hidden;
             margin-bottom: 18px;
-            box-shadow: 0 6px 16px rgba(0, 0, 80, 0.18);
+            padding: 14px 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 80, 0.10);
         }
 
         .qa-header {
@@ -1070,7 +1093,7 @@ st.markdown(
 st.markdown(
     """
     <div class="qa-header">
-        <h1>INNOVID QA2 AUTOMATION</h1>
+        <h1>INNOVID QA AUTOMATION</h1>
         <p>
             Validation of Traffic Sheet, Placement-Creative View,
             Placement View, and Tag files
@@ -1099,15 +1122,15 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     st.caption(
         "**Official pixel** is the one field that matters: paste the "
         "vendor's current reference (with its macros, e.g. "
-        "[%placementID%]) and QA2 flags REVIEW if what's implemented "
-        "in Innovid doesn't match it anymore. What QA2 searches for is "
+        "[%placementID%]) and QA flags REVIEW if what's implemented "
+        "in Innovid doesn't match it anymore. What QA searches for is "
         "derived automatically -- the vendor name for the TS's "
         "\"Vendors / Pixels\" column, and the official pixel's own "
         "domain for Innovid. Leave Account blank for a vendor shared "
         "across all three WPP accounts; set it (e.g. \"Wendy's\") for "
         "one that only applies to that account -- pick the matching "
-        "Account in the sidebar when you run QA2. Saved to "
-        "config/vendor_pixels.json; applies on the next QA2 run for "
+        "Account in the sidebar when you run QA. Saved to "
+        "config/vendor_pixels.json; applies on the next QA run for "
         "everyone who pulls this repo after the file is committed."
     )
 
@@ -1300,25 +1323,30 @@ with st.expander("👥 Team by account"):
 # ============================================================
 
 with st.sidebar:
-    _logo_path = PROJECT_ROOT / "ui" / "assets" / "wpp-media-logo.png.png"
+    _logo_path = logo_path()
 
-    if _logo_path.exists():
+    if _logo_path is not None:
         _logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode()
+        _logo_mime = (
+            "image/svg+xml"
+            if _logo_path.suffix.lower() == ".svg"
+            else "image/png"
+        )
         st.markdown(
             f"""
             <div class="wpp-logo-wrap">
-                <img src="data:image/png;base64,{_logo_b64}"
+                <img src="data:{_logo_mime};base64,{_logo_b64}"
                      style="width:100%; display:block;">
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.header("QA2 Files")
+    st.header("QA Files")
 
     with st.expander("📂 Load a saved session (optional)"):
         st.caption(
-            "If the implementer already ran QA2 and used \"Save "
+            "If the implementer already ran QA and used \"Save "
             "session bundle\" below, load that .zip here (same "
             "SharePoint folder as the TS) to skip re-uploading the "
             "same files -- you'll only need to review and check "
@@ -1546,7 +1574,7 @@ with st.sidebar:
     _stale = stale_modules()
     if _stale:
         st.error(
-            "**Restart QA2.** The code changed after the app started, "
+            "**Restart QA.** The code changed after the app started, "
             "so it is still running the old "
             + ", ".join(m.split(".")[-1] for m in _stale)
             + ". Stop it in the terminal (Ctrl+C) and launch it again "
@@ -1562,7 +1590,7 @@ with st.sidebar:
             "nothing to type."
         )
 
-        st.caption(f"QA2 build: `{running_version()}`")
+        st.caption(f"QA build: `{running_version()}`")
 
 
         _has_session = session_is_saved()
@@ -1571,10 +1599,10 @@ with st.sidebar:
         else:
             # The full interpreter path, not "python": on Windows a
             # bare "python" resolves to the system install, which has
-            # none of QA2's packages -- the exact wall this hit the
+            # none of QA's packages -- the exact wall this hit the
             # first time it was set up.
             st.info(
-                "Not signed in yet. Open a terminal in the QA2 folder "
+                "Not signed in yet. Open a terminal in the QA folder "
                 "and run this once:\n\n"
                 f"`{sys.executable} check_innovid_connection.py "
                 "--login`\n\n"
@@ -1620,7 +1648,7 @@ with st.sidebar:
             "Say whose request this is -- it decides which checks "
             "apply.\n\n"
             "Attribution (ATR-001): only Adobe uses the CGEN "
-            "triangle. Pick Unilever, Wendy's or BlackRock and QA2 "
+            "triangle. Pick Unilever, Wendy's or BlackRock and QA "
             "stops asking for a CGEN those accounts never have.\n\n"
             "Vendor pixels (PIX-002 / PIX-A01): some rules are "
             "account- or campaign-specific (Inmarket and DISQO are "
@@ -1702,7 +1730,7 @@ with st.sidebar:
     )
 
     analyze_button = st.button(
-        "Run QA2",
+        "Run QA",
         type="primary",
         use_container_width=True,
     )
@@ -1710,7 +1738,7 @@ with st.sidebar:
     # st.button() only returns True on the single rerun triggered by
     # the click itself -- on every later rerun (e.g. changing a filter
     # in the results tabs) it goes back to False. Without persisting
-    # this in session_state, touching any filter after running QA2
+    # this in session_state, touching any filter after running QA
     # would drop back to the landing screen and appear to "reset"
     # the whole app, discarding the analysis.
     if "qa2_has_run" not in st.session_state:
@@ -1795,7 +1823,7 @@ with st.sidebar:
                 "Bundles the uploaded TS, Innovid exports and tag "
                 "files plus your Campaign/Profile/Account picks into "
                 "one .zip. Drop it in the same SharePoint folder as "
-                "the TS -- QA2 loads it from \"Load a saved session\" "
+                "the TS -- QA loads it from \"Load a saved session\" "
                 "above and skips re-uploading everything, straight "
                 "to reviewing and checking QA2 Sign-off."
             ),
@@ -2173,7 +2201,7 @@ if True:
         # ----------------------------------------------------
 
         with st.spinner(
-            "Running QA2 matching and validations..."
+            "Running QA matching and validations..."
         ):
             match_result = match(
                 ts_result,
@@ -3046,12 +3074,7 @@ if True:
             files_df=files_dataframe,
             placements_df=pd.DataFrame(placements_rows_for_pdf),
             evidence_images=evidence_images,
-            logo_path=(
-                PROJECT_ROOT
-                / "ui"
-                / "assets"
-                / "wpp-media-logo.png.png"
-            ),
+            logo_path=logo_path(),
         )
 
         tag_coverage_rows_for_excel = [
@@ -3122,12 +3145,7 @@ if True:
                 pd.DataFrame(tag_coverage_rows_for_excel)
                 if tag_coverage_rows_for_excel else None
             ),
-            logo_path=(
-                PROJECT_ROOT
-                / "ui"
-                / "assets"
-                / "wpp-media-logo.png.png"
-            ),
+            logo_path=logo_path(),
         )
 
         download_columns = st.columns(2)
@@ -3136,7 +3154,7 @@ if True:
             "Download PDF Report",
             data=pdf_report_bytes,
             file_name=(
-                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
             ),
             mime="application/pdf",
             use_container_width=True,
@@ -3146,7 +3164,7 @@ if True:
             "Download Excel Report",
             data=excel_report_bytes,
             file_name=(
-                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             ),
             mime=(
                 "application/vnd.openxmlformats-officedocument"
@@ -4036,7 +4054,7 @@ if True:
                             index=False,
                             encoding="utf-8-sig",
                         ),
-                        file_name="qa2_findings_grouped.csv",
+                        file_name="qa_findings_grouped.csv",
                         mime="text/csv",
                         use_container_width=True,
                     )
@@ -4056,7 +4074,7 @@ if True:
                         index=False,
                         encoding="utf-8-sig",
                     ),
-                    file_name="qa2_findings.csv",
+                    file_name="qa_findings.csv",
                     mime="text/csv",
                     use_container_width=True,
                 )
@@ -4249,7 +4267,7 @@ if True:
 
     except Exception as error:
         st.error(
-            "QA2 could not complete processing."
+            "QA could not complete processing."
         )
 
         st.exception(error)
