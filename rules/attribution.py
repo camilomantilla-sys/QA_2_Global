@@ -1,39 +1,67 @@
 from core.findings import Domain
-from core.urls import TRI_INCOMPLETE
+from core.urls import TRI_INCOMPLETE, account_uses_cgen
 
 
-def _declares_cgen(match_result) -> bool:
-    """
-    ¿Esta cuenta maneja CGEN?
-
-    El triangulo de atribucion se apoya en el CGEN que declara la TS.
-    BlackRock, Unilever y Wendy's no lo manejan: no tienen ni la columna.
-    Sin esto, cada placement de esas cuentas emitia un NOT_VERIFIED
-    pidiendo un dato que nunca va a existir, y el veredicto se quedaba
-    en NEEDS_REVIEW aunque todo lo demas estuviera perfecto.
-    """
+def _cgen_values(match_result) -> int:
+    """Cuantos CGEN con valor trae la TS."""
+    found = 0
     for pm in match_result.matched:
         if str(pm.expected.cgen or "").strip():
-            return True
+            found += 1
         for creative in pm.expected.creatives:
             if str(creative.cgen or "").strip():
-                return True
-    return False
+                found += 1
+    return found
 
 
-def evaluate(match_result, buffer):
+def evaluate(match_result, buffer, account: str = ""):
+    """
+    El triangulo de atribucion se apoya en el CGEN que declara la TS,
+    y solo Adobe lo maneja. Quien elige la cuenta en la app manda: si
+    dice Unilever, no hay atribucion que revisar aunque la hoja traiga
+    un CGEN suelto. Sin cuenta elegida decide la hoja, como antes.
+    """
+    if not match_result.matched:
+        return
 
-    if not _declares_cgen(match_result):
-        if match_result.matched:
-            buffer.info(
-                rule_id="ATR-001",
-                domain=Domain.ATTRIBUTION,
-                message=(
-                    "Attribution isn't checked: this Traffic Sheet "
-                    "declares no CGEN, so the account doesn't use the "
-                    "attribution triangle."
-                ),
-            )
+    declared = account_uses_cgen(account)
+    found = _cgen_values(match_result)
+
+    if declared is False:
+        # La cuenta elegida no maneja CGEN. Saltamos, pero si la hoja
+        # traia CGEN igual lo decimos: o la cuenta esta mal elegida, o
+        # alguien puso un dato que nadie va a revisar. Callarlo seria
+        # esconder justo el caso que hay que mirar.
+        buffer.info(
+            rule_id="ATR-001",
+            domain=Domain.ATTRIBUTION,
+            message=(
+                f"Attribution isn't checked: {account} doesn't use the "
+                "attribution triangle."
+                + (
+                    f" Note: the Traffic Sheet still declares {found} "
+                    "CGEN value(s). Check the account is the right one."
+                    if found else ""
+                )
+            ),
+        )
+        return
+
+    if declared is None and not found:
+        buffer.info(
+            rule_id="ATR-001",
+            domain=Domain.ATTRIBUTION,
+            message=(
+                "Attribution isn't checked: this Traffic Sheet "
+                "declares no CGEN, so the account doesn't use the "
+                "attribution triangle."
+                + (
+                    ""
+                    if account
+                    else " Pick the Account / Campaign to say so outright."
+                )
+            ),
+        )
         return
 
     for pm in match_result.matched:
@@ -69,8 +97,9 @@ def evaluate(match_result, buffer):
                         else ""
                     ),
                     recommended_action=(
-                        "Confirm whether this account declares a CGEN, "
-                        "and upload the Placement View if it applies."
+                        "Pick the Account / Campaign in the sidebar if "
+                        "this account doesn't use CGEN, and upload the "
+                        "Placement View if it applies."
                     ),
                 )
 

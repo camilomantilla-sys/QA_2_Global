@@ -147,7 +147,15 @@ TS_ROTATIONS = SheetSpec(
         r"^\d{1,2}\.\d{1,2}\.\d{2,4}\s+UPDATE$",
         r"^Options to denote",
         r"^Example .* Rotation$",
-        r"Default .* Ad$",
+        # Anclado al inicio a proposito. Sin el "^" tambien descartaba
+        # rotaciones reales como "160x600 Default Web Ad", que es como
+        # se llaman de verdad los default web ads: la TS quedaba sin
+        # creativos y QA2 informaba que no habia nada que revisar.
+        # La fila de la plantilla se llama exactamente "Default
+        # In-stream Ad", y eso es lo unico que debe descartar aqui;
+        # los ejemplos que comparten nombre con una rotacion real los
+        # separa el color, no este patron.
+        r"^Default .* Ad$",
         r"^\[object Object\]$",
     ],
     entity_identity_any=["creative_name", "creative_id"],

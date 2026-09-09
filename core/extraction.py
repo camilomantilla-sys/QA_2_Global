@@ -155,7 +155,27 @@ def read_sheet(path: Path, sheet_name: str,
 
     last_content_row = 0
 
+    # Una fila oculta no es parte de la solicitud. Las Traffic Sheets
+    # llevan ejemplos de la plantilla ocultos entre el trabajo real
+    # ("client_geo_creativename_728x90" y compania), y leerlos mete en
+    # el QA creativos que nadie pidio revisar. Es la regla que usa el
+    # equipo: lo oculto no se lee.
+    hidden_rows = {
+        index
+        for index, dim in ws.row_dimensions.items()
+        if getattr(dim, "hidden", False)
+    }
+    if hidden_rows:
+        anomalies.append(Anomaly(
+            "EXT-HIDDEN-ROWS", "INFO",
+            f"{len(hidden_rows)} hidden row(s) skipped: a hidden row "
+            "is not part of the request.",
+            detail={"rows": sorted(hidden_rows)[:40]},
+        ))
+
     for row_obj in ws.iter_rows(min_row=1, max_row=read_limit):
+        if row_obj and row_obj[0].row in hidden_rows:
+            continue
         row_has_content = False
         for c in row_obj:
             fill = _fill_rgb(c) if capture_fill else None

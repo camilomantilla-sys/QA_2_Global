@@ -79,6 +79,13 @@ class ExpectedCreative:
     sequence: str = ""
     dims: str = ""            # <-- NUEVA
 
+    # Que celdas venian pintadas en la TS. La hoja marca el CAMPO que
+    # cambia, no la fila entera: un cambio de rotacion pinta solo la
+    # celda de Rotation (%) sobre un creativo que ya existia. Sin
+    # esto, las reglas leen esas filas como creativos nuevos y
+    # validan el creativo entero en vez de lo que se pidio.
+    intent_fields: frozenset[str] = frozenset()
+
     @property
     def key_norm(self) -> str:
         return norm_creative(self.name)
@@ -359,6 +366,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 end=_as_date(row.values.get("end_date")),
                 rotation_weight=str(row.values.get("rotation_weight") or ""),
                 sequence=str(row.values.get("sequence") or ""),
+                intent_fields=frozenset(row.intent_fields or ()),
             ))
 
     # --- placements trabajados

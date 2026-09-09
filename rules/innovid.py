@@ -177,6 +177,12 @@ def _rotation_weights(reconciliation, buffer):
 
 def _verification_partner(reconciliation, buffer):
     for check in reconciliation.partners:
+        # Un 1x1 site-served no lleva Verification Partner: el sitio
+        # sirve el creativo, no hay nada que verificar. Reportarlo
+        # llenaria el QA de revisiones sobre placements correctos.
+        if check.site_served_1x1:
+            continue
+
         common = dict(
             rule_id="INV-003",
             domain=Domain.ATTRIBUTION,

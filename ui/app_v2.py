@@ -23,11 +23,29 @@ import streamlit as st  # type: ignore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# El logo oficial, con el banner degradado viejo como respaldo.
+# Se busca en orden: basta con guardar el archivo nuevo con uno de
+# estos nombres en ui/assets/ para que la app lo tome.
+_LOGO_CANDIDATES = (
+    "wpp-media-logo.png",
+    "wpp-media-logo.svg",
+    "wpp-media-logo.png.png",
+)
+
+
+def logo_path() -> Path | None:
+    for name in _LOGO_CANDIDATES:
+        candidate = PROJECT_ROOT / "ui" / "assets" / name
+        if candidate.exists():
+            return candidate
+    return None
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
 from core.colors import RED
+from core.review import bulk_groups
 from core.engine import run_rules
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
@@ -42,6 +60,7 @@ from core.adobe_pixel_reconciliation import (
 from core.dv_reconciliation import reconcile_dv_tags
 from core.innovid_api import (
     SESSION_PATH,
+    diagnose_session,
     fetch_campaign,
     load_credentials,
     session_is_saved,
@@ -182,7 +201,7 @@ VERDICT_COLORS = {
 class _RestoredUpload:
     """
     Stand-in for Streamlit's UploadedFile, built from bytes stored in
-    a QA2 session bundle -- exposes just the surface the app actually
+    a QA session bundle -- exposes just the surface the app actually
     touches (.name, .size, .getbuffer(), .getvalue()) so a restored
     file can be passed anywhere a live upload is expected.
     """
@@ -206,7 +225,7 @@ def _workbook_path(directory: str, file_name: str, file_bytes: bytes) -> Path:
 
     Innovid exports its placement views named .XLS while the file is
     really a modern .xlsx -- it starts with "PK", a zip. openpyxl
-    refuses those on the extension alone, so QA2 rejected a file it
+    refuses those on the extension alone, so QA rejected a file it
     could read perfectly, and the only way through was renaming every
     export by hand. The content decides the extension here; the
     original name is kept otherwise, since parsers use it for context.
@@ -238,6 +257,66 @@ def cached_parse_ts(file_bytes: bytes, file_name: str, profile_name: str | None)
         detected_profile, detection_evidence = detect_profile(path)
         ts_result = parse_ts(path, profile_name=profile_name)
         return detected_profile, detection_evidence, ts_result
+
+
+def stale_modules() -> list[str]:
+    """
+    Files that changed on disk after the code from them was loaded.
+
+    Streamlit reloads ui/app_v2.py when it changes, but Python keeps
+    modules it has already imported. So the app can show a brand new
+    commit marker while still running last week's core -- which is
+    exactly how an error message that no longer exists in the source
+    kept appearing, and how a git sha shown in the sidebar gave false
+    assurance that the fix had arrived.
+    """
+    import importlib
+    import os
+
+    stale: list[str] = []
+    for name in ("core.innovid_api", "core.innovid_reconciliation",
+                 "rules.innovid"):
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        loaded_at = getattr(module, "MODULE_LOADED_AT", None)
+        path = getattr(module, "__file__", None)
+        if loaded_at is None or not path:
+            continue
+        try:
+            if os.path.getmtime(path) > loaded_at + 1:
+                stale.append(name)
+        except OSError:
+            continue
+    return stale
+
+
+@st.cache_data(show_spinner=False)
+def running_version() -> str:
+    """
+    Which commit the repository is on.
+
+    Says nothing about what is loaded in memory -- see
+    stale_modules() for that.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    try:
+        sha = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        return "unknown"
+
+    if not sha:
+        return "unknown"
+    return f"{sha}{' + local edits' if dirty else ''}"
 
 
 INNOVID_CACHE_SECONDS = 900
@@ -690,7 +769,7 @@ def show_verdict(verdict: str) -> None:
         <div class="verdict-card"
              style="border-left:10px solid {color};">
             <div class="verdict-caption">
-                OVERALL QA2 RESULT
+                OVERALL QA RESULT
             </div>
             <div class="verdict-value"
                  style="color:{color};">
@@ -707,7 +786,7 @@ def show_verdict(verdict: str) -> None:
 # ============================================================
 
 st.set_page_config(
-    page_title="Innovid QA2 Automation",
+    page_title="Innovid QA Automation",
     page_icon="✅",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -837,11 +916,17 @@ st.markdown(
             border-right: 1px solid #DDE0F0;
         }
 
+        /* El logo es una marca en azul marino sobre fondo
+           transparente, no un banner a sangre: necesita fondo claro
+           y aire alrededor. Sin el fondo blanco desaparece en cuanto
+           el sidebar se ve oscuro. */
         .wpp-logo-wrap {
+            background: #ffffff;
             border-radius: 14px;
             overflow: hidden;
             margin-bottom: 18px;
-            box-shadow: 0 6px 16px rgba(0, 0, 80, 0.18);
+            padding: 14px 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 80, 0.10);
         }
 
         .qa-header {
@@ -1009,7 +1094,7 @@ st.markdown(
 st.markdown(
     """
     <div class="qa-header">
-        <h1>INNOVID QA2 AUTOMATION</h1>
+        <h1>INNOVID QA AUTOMATION</h1>
         <p>
             Validation of Traffic Sheet, Placement-Creative View,
             Placement View, and Tag files
@@ -1038,15 +1123,15 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     st.caption(
         "**Official pixel** is the one field that matters: paste the "
         "vendor's current reference (with its macros, e.g. "
-        "[%placementID%]) and QA2 flags REVIEW if what's implemented "
-        "in Innovid doesn't match it anymore. What QA2 searches for is "
+        "[%placementID%]) and QA flags REVIEW if what's implemented "
+        "in Innovid doesn't match it anymore. What QA searches for is "
         "derived automatically -- the vendor name for the TS's "
         "\"Vendors / Pixels\" column, and the official pixel's own "
         "domain for Innovid. Leave Account blank for a vendor shared "
         "across all three WPP accounts; set it (e.g. \"Wendy's\") for "
         "one that only applies to that account -- pick the matching "
-        "Account in the sidebar when you run QA2. Saved to "
-        "config/vendor_pixels.json; applies on the next QA2 run for "
+        "Account in the sidebar when you run QA. Saved to "
+        "config/vendor_pixels.json; applies on the next QA run for "
         "everyone who pulls this repo after the file is committed."
     )
 
@@ -1239,25 +1324,30 @@ with st.expander("👥 Team by account"):
 # ============================================================
 
 with st.sidebar:
-    _logo_path = PROJECT_ROOT / "ui" / "assets" / "wpp-media-logo.png.png"
+    _logo_path = logo_path()
 
-    if _logo_path.exists():
+    if _logo_path is not None:
         _logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode()
+        _logo_mime = (
+            "image/svg+xml"
+            if _logo_path.suffix.lower() == ".svg"
+            else "image/png"
+        )
         st.markdown(
             f"""
             <div class="wpp-logo-wrap">
-                <img src="data:image/png;base64,{_logo_b64}"
+                <img src="data:{_logo_mime};base64,{_logo_b64}"
                      style="width:100%; display:block;">
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.header("QA2 Files")
+    st.header("QA Files")
 
     with st.expander("📂 Load a saved session (optional)"):
         st.caption(
-            "If the implementer already ran QA2 and used \"Save "
+            "If the implementer already ran QA and used \"Save "
             "session bundle\" below, load that .zip here (same "
             "SharePoint folder as the TS) to skip re-uploading the "
             "same files -- you'll only need to review and check "
@@ -1479,6 +1569,19 @@ with st.sidebar:
 
     st.divider()
 
+    # Fuera de cualquier desplegable: este aviso invalida todo lo
+    # que la app diga despues, y dentro de un expander cerrado no lo
+    # ve nadie -- que es exactamente lo que paso.
+    _stale = stale_modules()
+    if _stale:
+        st.error(
+            "**Restart QA.** The code changed after the app started, "
+            "so it is still running the old "
+            + ", ".join(m.split(".")[-1] for m in _stale)
+            + ". Stop it in the terminal (Ctrl+C) and launch it again "
+            "-- reloading this page is not enough."
+        )
+
     with st.expander("🔗 Check against Innovid (optional)"):
         st.caption(
             "Reads three things straight from Innovid that no export "
@@ -1488,16 +1591,19 @@ with st.sidebar:
             "nothing to type."
         )
 
+        st.caption(f"QA build: `{running_version()}`")
+
+
         _has_session = session_is_saved()
         if _has_session:
             st.success(f"Signed in — using {SESSION_PATH.name}")
         else:
             # The full interpreter path, not "python": on Windows a
             # bare "python" resolves to the system install, which has
-            # none of QA2's packages -- the exact wall this hit the
+            # none of QA's packages -- the exact wall this hit the
             # first time it was set up.
             st.info(
-                "Not signed in yet. Open a terminal in the QA2 folder "
+                "Not signed in yet. Open a terminal in the QA folder "
                 "and run this once:\n\n"
                 f"`{sys.executable} check_innovid_connection.py "
                 "--login`\n\n"
@@ -1540,15 +1646,19 @@ with st.sidebar:
         index=0,
         key="qa2_account_select",
         help=(
-            "Some vendor pixel rules only apply to one account or "
-            "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
-            "Adobe's official pixels vary per campaign -- Acrobat, "
-            "Firefly, STE...). Pick the one this Traffic Sheet "
-            "belongs to so PIX-002/PIX-A01 apply the right rows from "
-            "the Pixels by account panels. Add new options there by "
-            "filling Account (WPP) or Campaign (Adobe) on a row. "
-            "Picked here first so Implemented By / QA3 By below can "
-            "suggest names from that account's team roster."
+            "Say whose request this is -- it decides which checks "
+            "apply.\n\n"
+            "Attribution (ATR-001): only Adobe uses the CGEN "
+            "triangle. Pick Unilever, Wendy's or BlackRock and QA "
+            "stops asking for a CGEN those accounts never have.\n\n"
+            "Vendor pixels (PIX-002 / PIX-A01): some rules are "
+            "account- or campaign-specific (Inmarket and DISQO are "
+            "Wendy's-only; Adobe's official pixels vary per campaign "
+            "-- Acrobat, Firefly, STE...). Add new options by filling "
+            "Account (WPP) or Campaign (Adobe) on a row in the "
+            "Pixels by account panels.\n\n"
+            "Team: Implemented By / QA2 By / QA3 By below suggest "
+            "names from this account's roster."
         ),
     )
     if selected_account == "All / unknown":
@@ -1621,7 +1731,7 @@ with st.sidebar:
     )
 
     analyze_button = st.button(
-        "Run QA2",
+        "Run QA",
         type="primary",
         use_container_width=True,
     )
@@ -1629,7 +1739,7 @@ with st.sidebar:
     # st.button() only returns True on the single rerun triggered by
     # the click itself -- on every later rerun (e.g. changing a filter
     # in the results tabs) it goes back to False. Without persisting
-    # this in session_state, touching any filter after running QA2
+    # this in session_state, touching any filter after running QA
     # would drop back to the landing screen and appear to "reset"
     # the whole app, discarding the analysis.
     if "qa2_has_run" not in st.session_state:
@@ -1714,7 +1824,7 @@ with st.sidebar:
                 "Bundles the uploaded TS, Innovid exports and tag "
                 "files plus your Campaign/Profile/Account picks into "
                 "one .zip. Drop it in the same SharePoint folder as "
-                "the TS -- QA2 loads it from \"Load a saved session\" "
+                "the TS -- QA loads it from \"Load a saved session\" "
                 "above and skips re-uploading everything, straight "
                 "to reviewing and checking QA2 Sign-off."
             ),
@@ -2092,7 +2202,7 @@ if True:
         # ----------------------------------------------------
 
         with st.spinner(
-            "Running QA2 matching and validations..."
+            "Running QA matching and validations..."
         ):
             match_result = match(
                 ts_result,
@@ -2101,7 +2211,10 @@ if True:
             )
 
             # Run TS vs Innovid rules first.
-            findings_buffer = run_rules(match_result)
+            findings_buffer = run_rules(
+                match_result,
+                account=selected_account,
+            )
 
             tag_matches = []
             tag_inventory = None
@@ -2307,6 +2420,39 @@ if True:
                                 for error in innovid_result.errors
                             )
                         )
+
+                        # Solo cuando el fallo es de sesion o de
+                        # token. Los 400 de placementDecisionSetId
+                        # salen en cada corrida y son conocidos:
+                        # diagnosticar por ellos abriria un navegador
+                        # de mas cada vez, para no decir nada nuevo.
+                        _auth_trouble = any(
+                            word in " ".join(innovid_result.errors).lower()
+                            for word in ("session", "token", "sign-in",
+                                         "401", "403")
+                        )
+
+                    if innovid_result.errors and _auth_trouble:
+                        # El diagnostico aqui mismo, no en la terminal.
+                        # Pedir que se corra un comando aparte y se
+                        # pegue la salida convertia cada fallo en una
+                        # ida y vuelta; esto lo responde de una.
+                        with st.expander(
+                            "What Innovid actually returned "
+                            "(names and shapes only, no values)"
+                        ):
+                            with st.spinner("Looking…"):
+                                try:
+                                    report = diagnose_session(campaign_id)
+                                except Exception as exc:  # noqa: BLE001
+                                    report = [f"The check failed: {exc}"]
+                            st.code("\n".join(report), language="text")
+                            st.caption(
+                                "Safe to share: cookie and storage "
+                                "names, whether a token was found and "
+                                "where, and Innovid's own error text. "
+                                "No cookie values, no tokens."
+                            )
                     elif not innovid_result.placements:
                         st.warning(
                             f"Innovid returned no placements for "
@@ -2357,15 +2503,96 @@ if True:
                     "record."
                 )
 
+                # Lo que ya se aprobo vive en session_state y no en el
+                # editor: un lote toca decenas de filas a la vez, y el
+                # data_editor solo relee su contenido cuando cambia su
+                # key. Sin esto, aprobar en bloque no se veia hasta
+                # tocar otra cosa.
+                _review_state: dict = st.session_state.setdefault(
+                    "qa2_review_state", {}
+                )
+                _review_nonce = st.session_state.setdefault(
+                    "qa2_review_nonce", 0
+                )
+
+                # Un grupo = misma regla y mismo hallazgo. Los 25
+                # "Placement Name mismatch" de una solicitud son una
+                # sola decision tomada 25 veces; aprobarlos uno por uno
+                # solo gasta el tiempo del revisor.
+                _bulk_groups = bulk_groups(review_findings)
+
+                if _bulk_groups:
+                    st.markdown("**Approve a whole group at once**")
+                    _bulk_choice = st.selectbox(
+                        "Group",
+                        options=list(_bulk_groups),
+                        key="qa2_review_bulk_group",
+                        label_visibility="collapsed",
+                    )
+                    _bulk_items = _bulk_groups[_bulk_choice]
+                    _bulk_note = st.text_input(
+                        "Observation applied to the whole group",
+                        key="qa2_review_bulk_note",
+                        placeholder=(
+                            "Why the whole group is fine -- e.g. "
+                            "\"Innovid pads the numeric segment and "
+                            "truncates the name; trafficking is "
+                            "unaffected.\""
+                        ),
+                    )
+                    _bulk_cols = st.columns([3, 2])
+                    if _bulk_cols[0].button(
+                        f"Approve all {len(_bulk_items)}",
+                        use_container_width=True,
+                        # La observacion no es decorativa: es el
+                        # registro de POR QUE se dio por bueno. En
+                        # bloque pesa mas todavia, porque una sola
+                        # frase responde por decenas de hallazgos.
+                        disabled=not _bulk_note.strip(),
+                        help=(
+                            "Write the observation first -- it's the "
+                            "record of why this group was approved."
+                        ),
+                    ):
+                        for _item in _bulk_items:
+                            _review_state[_item.finding_id] = {
+                                "approved": True,
+                                "note": _bulk_note.strip(),
+                            }
+                        st.session_state["qa2_review_nonce"] = (
+                            _review_nonce + 1
+                        )
+                        st.rerun()
+
+                    if _review_state and _bulk_cols[1].button(
+                        "Clear all approvals",
+                        use_container_width=True,
+                    ):
+                        _review_state.clear()
+                        st.session_state["qa2_review_nonce"] = (
+                            _review_nonce + 1
+                        )
+                        st.rerun()
+
+                    st.divider()
+
                 _review_base_df = pd.DataFrame(
                     [
                         {
-                            "Approve": False,
+                            "Approve": bool(
+                                _review_state.get(
+                                    finding.finding_id, {}
+                                ).get("approved")
+                            ),
                             "Rule": finding.rule_id,
                             "Placement ID": finding.placement_id,
                             "Creative ID": finding.creative_id,
                             "Finding": finding.message,
-                            "Observation": "",
+                            "Observation": str(
+                                _review_state.get(
+                                    finding.finding_id, {}
+                                ).get("note", "")
+                            ),
                         }
                         for finding in review_findings
                     ]
@@ -2378,19 +2605,29 @@ if True:
                     disabled=[
                         "Rule", "Placement ID", "Creative ID", "Finding",
                     ],
-                    key="qa2_review_approval",
+                    key=f"qa2_review_approval_{_review_nonce}",
                 )
 
                 review_overrides: dict[str, dict] = {}
 
+                # Lo que quede marcado en la tabla es la verdad final:
+                # el revisor puede desmarcar a mano cualquier fila que
+                # el lote haya aprobado de mas.
                 for finding, (_, _row) in zip(
                     review_findings, _edited_review_df.iterrows()
                 ):
+                    _note = str(_row.get("Observation") or "").strip()
                     if bool(_row.get("Approve")):
                         review_overrides[finding.finding_id] = {
                             "approved": True,
-                            "note": str(_row.get("Observation") or "").strip(),
+                            "note": _note,
                         }
+                        _review_state[finding.finding_id] = {
+                            "approved": True,
+                            "note": _note,
+                        }
+                    else:
+                        _review_state.pop(finding.finding_id, None)
 
                 if review_overrides:
                     st.info(
@@ -2929,12 +3166,7 @@ if True:
             files_df=files_dataframe,
             placements_df=pd.DataFrame(placements_rows_for_pdf),
             evidence_images=evidence_images,
-            logo_path=(
-                PROJECT_ROOT
-                / "ui"
-                / "assets"
-                / "wpp-media-logo.png.png"
-            ),
+            logo_path=logo_path(),
         )
 
         tag_coverage_rows_for_excel = [
@@ -3005,12 +3237,7 @@ if True:
                 pd.DataFrame(tag_coverage_rows_for_excel)
                 if tag_coverage_rows_for_excel else None
             ),
-            logo_path=(
-                PROJECT_ROOT
-                / "ui"
-                / "assets"
-                / "wpp-media-logo.png.png"
-            ),
+            logo_path=logo_path(),
         )
 
         download_columns = st.columns(2)
@@ -3019,7 +3246,7 @@ if True:
             "Download PDF Report",
             data=pdf_report_bytes,
             file_name=(
-                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
             ),
             mime="application/pdf",
             use_container_width=True,
@@ -3029,7 +3256,7 @@ if True:
             "Download Excel Report",
             data=excel_report_bytes,
             file_name=(
-                f"qa2_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             ),
             mime=(
                 "application/vnd.openxmlformats-officedocument"
@@ -3919,7 +4146,7 @@ if True:
                             index=False,
                             encoding="utf-8-sig",
                         ),
-                        file_name="qa2_findings_grouped.csv",
+                        file_name="qa_findings_grouped.csv",
                         mime="text/csv",
                         use_container_width=True,
                     )
@@ -3939,7 +4166,7 @@ if True:
                         index=False,
                         encoding="utf-8-sig",
                     ),
-                    file_name="qa2_findings.csv",
+                    file_name="qa_findings.csv",
                     mime="text/csv",
                     use_container_width=True,
                 )
@@ -4132,7 +4359,7 @@ if True:
 
     except Exception as error:
         st.error(
-            "QA2 could not complete processing."
+            "QA could not complete processing."
         )
 
         st.exception(error)

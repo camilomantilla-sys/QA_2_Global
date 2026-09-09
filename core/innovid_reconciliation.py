@@ -67,6 +67,11 @@ class VerificationPartnerCheck:
     actual_status: str = ""
     configured: bool = False
 
+    # Los 1x1 site-served no llevan Verification Partner: el sitio
+    # sirve el creativo y no hay nada que verificar. Pedir revision
+    # por cada uno seria ruido sobre algo que esta bien puesto.
+    site_served_1x1: bool = False
+
 
 @dataclass
 class InnovidReconciliation:
@@ -128,6 +133,7 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             actual_partner=innovid_placement.verification_partner,
             actual_status=innovid_placement.verification_status,
             configured=bool(innovid_placement.verification_partner),
+            site_served_1x1=_is_site_served_1x1(pm),
         ))
 
         nodes = [
@@ -157,6 +163,23 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
         _compare_creatives(pid, expected, nodes, out)
 
     return out
+
+
+def _is_site_served_1x1(pm) -> bool:
+    """
+    Un 1x1 de tracking servido por el sitio.
+
+    Se mira el formato que ya derivo la TS y, como respaldo, las
+    dimensiones: un 1x1 puede llegar por cualquiera de los dos y
+    equivocarse aqui significa pedir revision de algo correcto.
+    """
+    expected = getattr(pm, "expected", None)
+    if expected is None:
+        return False
+
+    if norm_compare(getattr(expected, "fmt", "")) == "1x1":
+        return True
+    return norm_compare(getattr(expected, "dims", "")) == "1x1"
 
 
 def _expected_creatives(pm) -> list:

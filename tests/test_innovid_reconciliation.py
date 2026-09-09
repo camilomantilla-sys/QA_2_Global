@@ -48,12 +48,15 @@ class FakeMatchResult:
     matched: list = field(default_factory=list)
 
 
-def _ts(placement_id: str, creatives: list[ExpectedCreative]) -> FakeMatchResult:
+def _ts(placement_id: str, creatives: list[ExpectedCreative],
+        fmt: str = "display", dims: str = "300x600") -> FakeMatchResult:
     expected = ExpectedPlacement(
         placement_id=placement_id,
         start=date(2026, 9, 14),
         end=date(2026, 10, 31),
         creatives=creatives,
+        fmt=fmt,
+        dims=dims,
     )
     return FakeMatchResult(matched=[FakeMatch(placement_id, expected)])
 
@@ -353,6 +356,43 @@ def test_extra_creatives_are_still_reported_when_the_ts_declares_some():
     rec = reconcile(ts, got)
     extras = [c for c in rec.flights if c.status == EXTRA_IN_INNOVID]
     assert len(extras) == 1 and extras[0].creative_name == V2
+
+def test_a_1x1_is_not_asked_for_a_verification_partner():
+    """
+    Regla del negocio, de Camilo: a los 1x1 no se les valida
+    Verification Partner. El sitio sirve el creativo y no hay nada
+    que verificar, asi que pedir revision seria ruido sobre
+    placements correctos.
+    """
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="1x1", dims="1x1")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    rec = reconcile(ts, got)
+    assert rec.partners[0].site_served_1x1 is True
+    assert _by_rule(_findings(rec), "INV-003") == []
+
+
+def test_a_1x1_recognised_by_dimensions_alone():
+    # El formato puede no venir derivado; las dimensiones bastan.
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="", dims="1x1")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    assert _by_rule(_findings(reconcile(ts, got)), "INV-003") == []
+
+
+def test_a_display_placement_is_still_checked():
+    # La exencion no puede tragarse el caso normal.
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="display", dims="300x600")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings and findings[0].status.name == "REVIEW"
 
 
 if __name__ == "__main__":
