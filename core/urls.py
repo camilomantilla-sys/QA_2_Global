@@ -16,6 +16,33 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+# Que cuentas NO manejan CGEN.
+#
+# El triangulo de atribucion solo existe donde hay CGEN, y hoy eso es
+# Adobe. Unilever, Wendy's y BlackRock no lo manejan: no tienen ni la
+# columna. Antes esto se adivinaba mirando si algun CGEN venia con
+# valor, y bastaba un ejemplo de la plantilla para que QA2 concluyera
+# que la cuenta si lo manejaba y luego reclamara el dato en cada
+# placement real, donde nunca va a existir.
+#
+# Solo se listan las que NO lo manejan. Del lado de Adobe el selector
+# ofrece tambien campanas (Acrobat, Firefly, STE...), y una lista de
+# "las que si" las dejaria fuera cada vez que alguien agregue una
+# campana nueva. Lo que no esta aqui lo decide la hoja.
+NON_CGEN_ACCOUNTS = {"unilever", "wendy's", "wendys", "blackrock"}
+
+
+def account_uses_cgen(account: str) -> bool | None:
+    """
+    False cuando la cuenta elegida no maneja CGEN; None cuando no se
+    eligio cuenta o no la conocemos -- ahi decide la hoja.
+    """
+    key = str(account or "").strip().lower()
+    if not key:
+        return None
+    return False if key in NON_CGEN_ACCOUNTS else None
+
+
 # Params that identify the CGEN inside the URL, in priority order
 CGEN_URL_PARAMS = ["sdid", "s_did"]
 

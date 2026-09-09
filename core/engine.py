@@ -35,6 +35,7 @@ def run_rules(
     dv_omni_reconciliation=None,
     default_ad_reconciliation=None,
     innovid_reconciliation=None,
+    account: str = "",
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
 
@@ -42,7 +43,9 @@ def run_rules(
     naming.evaluate(match_result, buffer)
     creatives.evaluate(match_result, buffer)
     urls.evaluate(match_result, buffer)
-    attribution.evaluate(match_result, buffer)
+    # La cuenta manda sobre si hay atribucion que revisar: solo
+    # Adobe maneja CGEN.
+    attribution.evaluate(match_result, buffer, account=account)
     dtree.evaluate(match_result, buffer)
     dset.evaluate(match_result, buffer)
 

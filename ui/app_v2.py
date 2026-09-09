@@ -1617,15 +1617,19 @@ with st.sidebar:
         index=0,
         key="qa2_account_select",
         help=(
-            "Some vendor pixel rules only apply to one account or "
-            "campaign (e.g. Inmarket and DISQO are Wendy's-only; "
-            "Adobe's official pixels vary per campaign -- Acrobat, "
-            "Firefly, STE...). Pick the one this Traffic Sheet "
-            "belongs to so PIX-002/PIX-A01 apply the right rows from "
-            "the Pixels by account panels. Add new options there by "
-            "filling Account (WPP) or Campaign (Adobe) on a row. "
-            "Picked here first so Implemented By / QA3 By below can "
-            "suggest names from that account's team roster."
+            "Say whose request this is -- it decides which checks "
+            "apply.\n\n"
+            "Attribution (ATR-001): only Adobe uses the CGEN "
+            "triangle. Pick Unilever, Wendy's or BlackRock and QA2 "
+            "stops asking for a CGEN those accounts never have.\n\n"
+            "Vendor pixels (PIX-002 / PIX-A01): some rules are "
+            "account- or campaign-specific (Inmarket and DISQO are "
+            "Wendy's-only; Adobe's official pixels vary per campaign "
+            "-- Acrobat, Firefly, STE...). Add new options by filling "
+            "Account (WPP) or Campaign (Adobe) on a row in the "
+            "Pixels by account panels.\n\n"
+            "Team: Implemented By / QA2 By / QA3 By below suggest "
+            "names from this account's roster."
         ),
     )
     if selected_account == "All / unknown":
@@ -2178,7 +2182,10 @@ if True:
             )
 
             # Run TS vs Innovid rules first.
-            findings_buffer = run_rules(match_result)
+            findings_buffer = run_rules(
+                match_result,
+                account=selected_account,
+            )
 
             tag_matches = []
             tag_inventory = None
