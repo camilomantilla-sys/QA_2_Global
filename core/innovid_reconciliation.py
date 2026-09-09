@@ -63,6 +63,13 @@ class CreativeFlightCheck:
     dset_id: str = ""
     dset_name: str = ""
 
+    # Como se encontro el creativo: por nombre de archivo, o por
+    # creative id cuando el nombre no coincidia. Un renombrado en
+    # Innovid no es un creativo ausente, y darlo por ausente dejaba
+    # sin revisar sus fechas y su rotacion.
+    matched_by: str = "name"
+    actual_name: str = ""
+
     # Cuando un mismo nombre aparece en mas de un nodo del mismo
     # decision set no se elige uno: elegir mal es peor que no elegir.
     candidates: int = 1
@@ -231,7 +238,21 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
         if key:
             by_name.setdefault(key, []).append(node)
 
+    # Segundo indice, por creative id. Innovid a veces guarda el
+    # creativo con otro nombre que el pedido en la TS -- un
+    # "STA-BASE_011_NA-v01" que alla figura como "STA-R1_011_NA" --
+    # pero conserva el mismo id. Buscar solo por nombre lo daba por
+    # ausente y de paso dejaba sin revisar sus fechas y su rotacion,
+    # que era justo lo que habia que mirar. El nombre distinto no se
+    # tapa: se reporta aparte.
+    by_id: dict[str, list] = {}
+    for node in nodes:
+        key = str(node.creative_id or "").strip()
+        if key:
+            by_id.setdefault(key, []).append(node)
+
     seen: set[str] = set()
+    seen_ids: set[str] = set()
 
     for creative in expected:
         key = norm_creative(creative.name)
@@ -240,6 +261,14 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
         seen.add(key)
 
         candidates = by_name.get(key, [])
+        matched_by = "name"
+
+        if not candidates:
+            creative_id = str(creative.creative_id or "").strip()
+            candidates = by_id.get(creative_id, []) if creative_id else []
+            if candidates:
+                matched_by = "creative_id"
+                seen_ids.add(creative_id)
 
         if not candidates:
             out.flights.append(CreativeFlightCheck(
@@ -268,6 +297,7 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
                 dset_id=candidates[0].dtree_id,
                 dset_name=candidates[0].dtree_name,
                 candidates=len(candidates),
+                matched_by=matched_by,
             ))
             continue
 
@@ -285,12 +315,17 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
             actual_weight=node.weight,
             dset_id=node.dtree_id,
             dset_name=node.dtree_name,
+            matched_by=matched_by,
+            actual_name=node.creative_name or "",
         ))
 
     for key, candidates in by_name.items():
         if key in seen:
             continue
         for node in candidates:
+            # Ya se conto: la TS lo encontro por id, con otro nombre.
+            if str(node.creative_id or "").strip() in seen_ids:
+                continue
             out.flights.append(CreativeFlightCheck(
                 placement_id=pid,
                 creative_name=node.creative_name or node.creative_id,

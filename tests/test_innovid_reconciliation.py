@@ -516,25 +516,6 @@ def test_a_display_placement_is_still_checked():
     assert findings and findings[0].status.name == "REVIEW"
 
 
-if __name__ == "__main__":
-    passed = failed = 0
-    for name, fn in sorted(globals().items()):
-        if not name.startswith("test_") or not callable(fn):
-            continue
-        try:
-            fn()
-        except AssertionError as exc:
-            failed += 1
-            print(f"FAIL {name}: {exc}")
-        except Exception as exc:  # noqa: BLE001
-            failed += 1
-            print(f"ERROR {name}: {type(exc).__name__}: {exc}")
-        else:
-            passed += 1
-            print(f"ok   {name}")
-
-    print(f"\n{passed} passed, {failed} failed")
-    sys.exit(1 if failed else 0)
 
 
 # ---------------------------------------------------------------- sello de subida
@@ -576,3 +557,108 @@ def test_only_a_full_uuid_is_stripped():
     for tail in ("__final_v2", "__2026", "__base", "__38383730-3934"):
         name = "banner_300x250" + tail
         assert norm_creative(name) == name.lower(), tail
+
+
+# --- renombrado en Innovid, mismo id ------------------------------
+
+TS_NAME = (
+    "Luxurious-Culture_Luxe-Fragrances_Premium-Body-Wash_Serum-Dewy_NONE_NA"
+    "_728x90_DISP_NONE_SHNW_EN_STP_MikMak_STA-BASE_011_NA-v01"
+)
+INNOVID_NAME = (
+    "Luxurious-Culture_Luxe-Fragrances_Premium-Body-Wash_Serum-Dewy_NONE_NA"
+    "_728x90_DISP_NONE_SHNW_EN_STP_MikMak_STA-R1_011_NA.zip"
+)
+
+
+def _renamed():
+    """El caso real del placement 10738915: mismo id, otro nombre."""
+    ts = _ts("10738915", [
+        ExpectedCreative(name=TS_NAME, creative_id="6115782", intent=GREEN,
+                         rotation_weight="1",
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("10738915", 40316, [
+        _node(INNOVID_NAME, "2026-09-14", "2026-10-31",
+              creative_id=6115782, weight=100),
+    ])
+    return reconcile(ts, got)
+
+
+def test_a_creative_renamed_in_innovid_is_found_by_its_id():
+    # Buscar solo por nombre lo daba por ausente.
+    rec = _renamed()
+    assert len(rec.flights) == 1
+    assert rec.flights[0].status == MATCHED
+    assert rec.flights[0].matched_by == "creative_id"
+
+
+def test_a_renamed_creative_still_gets_its_dates_and_rotation_checked():
+    # Lo importante: darlo por ausente dejaba sin revisar justo lo que
+    # habia que mirar.
+    findings = _findings(_renamed())
+    assert [f.status.name for f in _by_rule(findings, "INV-001")] == ["PASS"]
+    assert [f.status.name for f in _by_rule(findings, "INV-002")] == ["PASS"]
+
+
+def test_the_different_name_is_still_called_out():
+    # Encontrarlo no es taparlo: alguien tiene que decidir si el
+    # renombrado fue intencional.
+    findings = _by_rule(_findings(_renamed()), "INV-004")
+    assert len(findings) == 1
+    assert findings[0].status.name == "REVIEW"
+    assert "STA-BASE" in findings[0].expected
+    assert "STA-R1" in findings[0].actual
+
+
+def test_the_renamed_node_is_not_also_reported_as_extra():
+    # Contarlo dos veces -- ausente de un lado y sobrante del otro --
+    # es lo que hacia antes.
+    statuses = [c.status for c in _renamed().flights]
+    assert EXTRA_IN_INNOVID not in statuses
+    assert MISSING_IN_INNOVID not in statuses
+
+
+def test_a_name_match_is_not_reported_as_a_rename():
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, creative_id="6389150", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    rec = reconcile(ts, got)
+    assert rec.flights[0].matched_by == "name"
+    assert _by_rule(_findings(rec), "INV-004") == []
+
+
+def test_a_creative_with_neither_name_nor_id_in_innovid_is_still_missing():
+    # El respaldo por id no puede convertir un ausente real en un
+    # match: seria aprobar algo que no existe.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V1, creative_id="9999999", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    statuses = {c.creative_name: c.status for c in reconcile(ts, got).flights}
+    assert statuses[V1] == MISSING_IN_INNOVID
+
+if __name__ == "__main__":
+    passed = failed = 0
+    for name, fn in sorted(globals().items()):
+        if not name.startswith("test_") or not callable(fn):
+            continue
+        try:
+            fn()
+        except AssertionError as exc:
+            failed += 1
+            print(f"FAIL {name}: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"ERROR {name}: {type(exc).__name__}: {exc}")
+        else:
+            passed += 1
+            print(f"ok   {name}")
+
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)
