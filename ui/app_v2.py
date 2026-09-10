@@ -1169,19 +1169,25 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
         ]
     )
 
-    _edited_vendor_df = st.data_editor(
-        _vendor_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        column_config={
-            "Column": st.column_config.SelectboxColumn(
-                options=[SURVEY, IMPRESSION]
-            ),
-        },
-        key="qa2_vendor_editor",
-    )
+    # Editor y boton dentro de un formulario: una celda recien escrita
+    # solo se confirma al pulsar Enter o al hacer clic fuera, asi que
+    # escribir y pulsar Guardar directamente perdia la edicion y
+    # parecia que el boton no hacia nada.
+    with st.form("qa2_vendor_form"):
+        _edited_vendor_df = st.data_editor(
+            _vendor_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "Column": st.column_config.SelectboxColumn(
+                    options=[SURVEY, IMPRESSION]
+                ),
+            },
+            key="qa2_vendor_editor",
+        )
+        _vendor_submitted = st.form_submit_button("Save pixel table")
 
-    if st.button("Save pixel table", key="qa2_vendor_save"):
+    if _vendor_submitted:
         # TS terms / Host terms aren't shown any more (they're derived
         # from Vendor and Official pixel), but the rules still read
         # them -- so carry whatever each row already had forward
@@ -1263,14 +1269,20 @@ with st.expander("⚙️ Pixels by account (editable) -- Adobe"):
         ]
     )
 
-    _edited_adobe_vendor_df = st.data_editor(
-        _adobe_vendor_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="qa2_adobe_vendor_editor",
-    )
+    # Editor y boton dentro de un formulario: una celda recien escrita
+    # solo se confirma al pulsar Enter o al hacer clic fuera, asi que
+    # escribir y pulsar Guardar directamente perdia la edicion y
+    # parecia que el boton no hacia nada.
+    with st.form("qa2_adobe_vendor_form"):
+        _edited_adobe_vendor_df = st.data_editor(
+            _adobe_vendor_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="qa2_adobe_vendor_editor",
+        )
+        _adobe_submitted = st.form_submit_button("Save Adobe pixel table")
 
-    if st.button("Save Adobe pixel table", key="qa2_adobe_vendor_save"):
+    if _adobe_submitted:
         _new_adobe_rows = [
             {
                 "name": str(_row.get("Vendor") or "").strip(),
@@ -1310,14 +1322,21 @@ with st.expander("👥 Team by account"):
         }
     )
 
-    _edited_team_df = st.data_editor(
-        _team_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="qa2_team_editor",
-    )
+    # Editor y boton dentro de un formulario. Fuera de el, una celda
+    # recien escrita solo se confirma al pulsar Enter o al hacer clic
+    # en otro sitio: quien escribia un nombre y pulsaba Guardar
+    # directamente perdia la edicion, se guardaba lo de antes y
+    # parecia que el boton no hacia nada.
+    with st.form("qa2_team_form"):
+        _edited_team_df = st.data_editor(
+            _team_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="qa2_team_editor",
+        )
+        _team_submitted = st.form_submit_button("Save team roster")
 
-    if st.button("Save team roster", key="qa2_team_save"):
+    if _team_submitted:
         _new_roster = {
             account: [
                 str(name).strip()
@@ -2559,11 +2578,44 @@ if True:
             if finding.status.value == "REVIEW"
         ]
 
+        # Lo que ya se aprobo vive en session_state y no en el editor:
+        # un lote toca decenas de filas a la vez, y el data_editor solo
+        # relee su contenido cuando cambia su key. Sin esto, aprobar en
+        # bloque no se veia hasta tocar otra cosa.
+        #
+        # Se lee ANTES del expander porque su titulo tiene que decir
+        # cuantos quedan. Contando solo review_findings, el titulo
+        # seguia diciendo "(25)" despues de aprobar los 25 -- la
+        # aprobacion funcionaba y parecia que no, que es peor que si
+        # fallara.
+        _review_state: dict = st.session_state.setdefault(
+            "qa2_review_state", {}
+        )
+
         if review_findings:
+            _approved_now = sum(
+                1 for finding in review_findings
+                if _review_state.get(finding.finding_id, {}).get("approved")
+            )
+            _pending = len(review_findings) - _approved_now
+
             with st.expander(
-                f"📝 QA2 Review ({len(review_findings)})",
+                f"📝 QA2 Review ({_pending} left"
+                + (f", {_approved_now} approved" if _approved_now else "")
+                + ")",
                 expanded=True,
             ):
+                if _approved_now:
+                    st.success(
+                        f"{_approved_now} of {len(review_findings)} "
+                        "approved and counted as PASS. "
+                        + (
+                            f"{_pending} still to review."
+                            if _pending
+                            else "Nothing left to review here."
+                        )
+                    )
+
                 st.caption(
                     "QA2 is mandatory: whoever does the second-pass "
                     "review goes through each item below, writes why "
@@ -2572,15 +2624,6 @@ if True:
                     "checks Approve. Only then does the finding become "
                     "PASS below, with the observation kept in the "
                     "record."
-                )
-
-                # Lo que ya se aprobo vive en session_state y no en el
-                # editor: un lote toca decenas de filas a la vez, y el
-                # data_editor solo relee su contenido cuando cambia su
-                # key. Sin esto, aprobar en bloque no se veia hasta
-                # tocar otra cosa.
-                _review_state: dict = st.session_state.setdefault(
-                    "qa2_review_state", {}
                 )
                 _review_nonce = st.session_state.setdefault(
                     "qa2_review_nonce", 0
