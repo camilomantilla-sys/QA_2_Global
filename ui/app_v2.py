@@ -604,8 +604,12 @@ def findings_dataframe(findings) -> pd.DataFrame:
 
 def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
     """
-    Turns an approved REVIEW finding into PASS, carrying the QA's
-    observation forward as the reason a human can read later.
+    Turns an approved REVIEW or FAIL finding into PASS, carrying the
+    QA's observation forward as the reason a human can read later.
+
+    A FAIL is signed off, not silenced: the observation is what makes
+    it acceptable, and it stays on the record in the report and in
+    the Excel as "MANUALLY Approved by ...".
 
     `overrides` is {finding_id: {"approved": bool, "note": str}} from
     the sign-off panel. A REVIEW finding not in `overrides` (or not
@@ -619,7 +623,11 @@ def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
     for finding in findings:
         entry = overrides.get(finding.finding_id)
 
-        if not entry or not entry.get("approved") or finding.status.value != "REVIEW":
+        if (
+            not entry
+            or not entry.get("approved")
+            or finding.status.value not in ("REVIEW", "FAIL")
+        ):
             out.append(finding)
             continue
 
@@ -2573,9 +2581,18 @@ if True:
         # immediately, including in the same run's PDF/Excel.
         # ----------------------------------------------------
 
+        # FAIL entra al panel, no solo REVIEW. Los mismatch de fecha de
+        # INV-001 salen como FAIL, y el panel solo ofrecia REVIEW: se
+        # podia ver el fallo pero no habia forma de firmarlo, y el QA
+        # se quedaba en rojo para siempre por un creativo que arrancaba
+        # un dia antes a proposito, para poder testearlo.
+        #
+        # Firmar un FAIL no lo tapa: la desviacion queda escrita en el
+        # reporte y en el Excel como "MANUALLY Approved by ...".
+        REVIEWABLE = ("REVIEW", "FAIL")
         review_findings = [
             finding for finding in findings_buffer.findings
-            if finding.status.value == "REVIEW"
+            if finding.status.value in REVIEWABLE
         ]
 
         # Lo que ya se aprobo vive en session_state y no en el editor:
@@ -2623,7 +2640,12 @@ if True:
                     "context -- the email/Wrike callouts, etc.), and "
                     "checks Approve. Only then does the finding become "
                     "PASS below, with the observation kept in the "
-                    "record."
+                    "record.\n\n"
+                    "Failures are here too. Signing one off does not "
+                    "hide it: it stays in the report and in the Excel "
+                    "as \"MANUALLY Approved by ...\" with your "
+                    "reason, which is why a FAIL needs an observation "
+                    "and a REVIEW doesn't."
                 )
                 _review_nonce = st.session_state.setdefault(
                     "qa2_review_nonce", 0
@@ -2719,6 +2741,10 @@ if True:
                                     finding.finding_id, {}
                                 ).get("approved")
                             ),
+                            # Firmar un FAIL no es lo mismo que firmar
+                            # un REVIEW: quien revisa tiene que ver
+                            # cual esta firmando.
+                            "Status": finding.status.value,
                             "Rule": finding.rule_id,
                             "Placement ID": finding.placement_id,
                             "Creative ID": finding.creative_id,
@@ -2738,12 +2764,14 @@ if True:
                     use_container_width=True,
                     hide_index=True,
                     disabled=[
-                        "Rule", "Placement ID", "Creative ID", "Finding",
+                        "Status", "Rule", "Placement ID", "Creative ID",
+                        "Finding",
                     ],
                     key=f"qa2_review_approval_{_review_nonce}",
                 )
 
                 review_overrides: dict[str, dict] = {}
+                _unsigned: list = []
 
                 # Lo que quede marcado en la tabla es la verdad final:
                 # el revisor puede desmarcar a mano cualquier fila que
@@ -2752,6 +2780,19 @@ if True:
                     review_findings, _edited_review_df.iterrows()
                 ):
                     _note = str(_row.get("Observation") or "").strip()
+
+                    # Un FAIL sin observacion se queda sin firmar. Es
+                    # una desviacion real: darla por buena en silencio
+                    # es justo lo que el QA existe para evitar. Un
+                    # REVIEW si puede ir sin nota.
+                    if (
+                        bool(_row.get("Approve"))
+                        and finding.status.value == "FAIL"
+                        and not _note
+                    ):
+                        _unsigned.append(finding)
+                        continue
+
                     if bool(_row.get("Approve")):
                         review_overrides[finding.finding_id] = {
                             "approved": True,
@@ -2763,6 +2804,16 @@ if True:
                         }
                     else:
                         _review_state.pop(finding.finding_id, None)
+
+                if _unsigned:
+                    st.warning(
+                        f"{len(_unsigned)} failure(s) are ticked but "
+                        "have no observation, so they are not signed "
+                        "off. A FAIL is a real deviation -- say why "
+                        "it is acceptable and it becomes a PASS with "
+                        "that reason on the record. Use the group "
+                        "box above to write one line for all of them."
+                    )
 
                 # La cabecera del panel se dibuja ANTES de esta tabla,
                 # asi que cuando alguien marca una casilla a mano el

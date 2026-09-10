@@ -8,20 +8,56 @@ dedica a mirar los hallazgos que si son distintos entre si.
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable
+
+
+def _reason_key(finding) -> str:
+    """
+    El mensaje sin los nombres que cambian de una fila a otra.
+
+    "Versatility_Get-you-a-bar... flights on other dates" y
+    "Superiority_High-Standards... flights on other dates" son el mismo
+    motivo dicho sobre dos creativos. Agrupando por el mensaje literal
+    salian 95 grupos de uno y el lote no servia para nada; agrupando
+    solo por regla se mezclarian motivos distintos de la misma regla,
+    que es peor. Se quitan los identificadores y queda el motivo.
+    """
+    message = str(getattr(finding, "message", "") or "")
+    for value in (
+        getattr(finding, "creative_name", ""),
+        getattr(finding, "placement_name", ""),
+        getattr(finding, "creative_id", ""),
+        getattr(finding, "placement_id", ""),
+    ):
+        text = str(value or "").strip()
+        if len(text) > 3:
+            message = message.replace(text, "")
+    # Los nombres de archivo que no vienen en el hallazgo se reconocen
+    # por su forma: tramos largos con guiones bajos o extension.
+    message = re.sub(r"\S*_\S*\.(zip|jpg|png|gif|html|mp4)\b", "", message)
+    message = re.sub(r"\b\d{6,}\b", "", message)
+    return " ".join(message.split()).strip(" .:-")
 
 
 def group_review_findings(findings: Iterable) -> dict[tuple[str, str], list]:
     """
-    Agrupa por (regla, mensaje) conservando el orden de aparicion.
+    Agrupa por (regla + estado, motivo) conservando el orden.
 
-    Mismo mensaje y misma regla = mismo motivo. No se agrupa por regla
-    a secas: dos hallazgos de PLC-006 pueden decir cosas distintas, y
-    aprobarlos juntos seria aprobar a ciegas el que no se leyo.
+    El motivo es el mensaje sin los nombres que cambian de fila a
+    fila. Sin eso, cada "<creativo> flights on other dates" era su
+    propio grupo y no habia nada que aprobar en bloque. El estado
+    entra en la clave porque un FAIL y un REVIEW de la misma regla no
+    se firman con el mismo criterio.
     """
     groups: dict[tuple[str, str], list] = {}
     for finding in findings:
-        groups.setdefault((finding.rule_id, finding.message), []).append(finding)
+        status = getattr(getattr(finding, "status", None), "value", "")
+        key = (
+            f"{finding.rule_id} [{status}]" if status else finding.rule_id,
+            _reason_key(finding) or finding.message,
+        )
+        groups.setdefault(key, []).append(finding)
     return groups
 
 
