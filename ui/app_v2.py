@@ -346,11 +346,11 @@ def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
     and without it a checkbox tick would launch a browser and hit
     Innovid again.
 
-    Only successes are kept. A cached failure is worse than no cache:
-    it repeats an error the code may already have fixed, and the
-    person on the other side is told the same wrong thing for fifteen
-    minutes while wondering why the fix did nothing. A failed attempt
-    is simply retried.
+    An answer that carried placements is kept even if part of it
+    failed. A total failure is not: that is usually an expired
+    session or a bad day at Innovid, and repeating a stale error for
+    fifteen minutes while someone wonders why the fix did nothing is
+    worse than no cache at all.
 
     Never raises: Innovid has bad days and the rest of the QA has to
     run anyway. A failure comes back inside `.errors`.
@@ -371,7 +371,20 @@ def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
         headless=True,
     )
 
-    if not result.errors:
+    # Se guarda si trajo datos, aunque parte fallara.
+    #
+    # Antes se exigia CERO errores. Los 400 de placementDecisionSetId
+    # salen en todas las campanas de esta cuenta, asi que el caché no
+    # guardaba nunca: cada clic en la app -- una casilla, un filtro,
+    # el boton de aprobar -- relanzaba el navegador y volvia a leer
+    # la campana entera. Desde fuera eso se ve como que el boton no
+    # hace nada.
+    #
+    # Volver a preguntar no arregla esos errores: son estables, la
+    # API rechaza esos ids siempre. Lo que si merece reintento es no
+    # haber traido nada, que suele ser sesion caducada o un mal dia
+    # de Innovid.
+    if result.placements:
         store[key] = (_time.monotonic(), result)
     else:
         store.pop(key, None)
