@@ -27,6 +27,7 @@ COLUMNS = [
     "TS Start Date", "Innovid Start Date",
     "TS End Date", "Innovid End Date",
     "TS Dset / Dtree", "Innovid Dset / Dtree",
+    "TS Dimensions", "Innovid Dimensions",
     "TS Creative ID", "Innovid Creative ID",
     "TS Creative Name", "Innovid Creative Name",
     "TS Creative Dates", "Innovid Creative Dates",
@@ -50,6 +51,7 @@ PAIRS = [
     ("TS Start Date", "Innovid Start Date"),
     ("TS End Date", "Innovid End Date"),
     ("TS Dset / Dtree", "Innovid Dset / Dtree"),
+    ("TS Dimensions", "Innovid Dimensions"),
     ("TS Creative ID", "Innovid Creative ID"),
     ("TS Creative Name", "Innovid Creative Name"),
     ("TS Creative Dates", "Innovid Creative Dates"),
@@ -59,6 +61,23 @@ PAIRS = [
 ]
 
 _WORST = ["FAIL", "REVIEW", "NOT_VERIFIED", "INFO", "PASS"]
+
+
+# Innovid solo admite porcentajes enteros en el decision set, asi que
+# un 13,33% de la TS se escribe alli como 13%. Es la misma rotacion,
+# y exigir el decimal marcaria como diferencia algo que nadie puede
+# corregir. El mismo margen que usa INV-002.
+ROUNDING_TOLERANCE_PP = 1.0
+
+
+def _percent(value: str) -> float | None:
+    text = value.strip()
+    if not text.endswith("%"):
+        return None
+    try:
+        return float(text[:-1])
+    except ValueError:
+        return None
 
 
 def cells_agree(left: object, right: object) -> bool:
@@ -74,6 +93,14 @@ def cells_agree(left: object, right: object) -> bool:
         return False
     if a == b:
         return True
+
+    # Porcentajes: se comparan como numeros, con el margen del
+    # redondeo. Como texto, "13.33%" y "13%" no coincidian nunca y la
+    # rotacion salia sin pintar en todas las filas.
+    left_pct, right_pct = _percent(a), _percent(b)
+    if left_pct is not None and right_pct is not None:
+        return abs(left_pct - right_pct) <= ROUNDING_TOLERANCE_PP
+
     # Los nombres de creativo se comparan con el criterio del motor,
     # que ya sabe del sello de subida de Innovid y de los espacios.
     return norm_creative(a) == norm_creative(b) or norm_compare(a) == norm_compare(b)
@@ -129,6 +156,8 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
             "Innovid Dset / Dtree": _text(
                 actual.group_name if actual else ""
             ),
+            "TS Dimensions": _text(pm.expected.dims),
+            "Innovid Dimensions": _text(actual.dims if actual else ""),
             "Verification Partner": _text(
                 partners.get(pid, "")
             ),
@@ -234,9 +263,19 @@ def _findings_index(findings) -> dict:
         name = norm_creative(getattr(finding, "creative_name", "") or "")
         key = (pid, name)
         index.setdefault(key, set()).add(finding.status.value)
-        index.setdefault(("notes",) + key, set()).add(
-            f"[{finding.status.value}] {finding.rule_id}: {finding.message}"
-        )
+        note = f"[{finding.status.value}] {finding.rule_id}: {finding.message}"
+
+        # Una aprobacion manual deja su rastro en el reason del
+        # hallazgo ("Approved by X: porque..."). Ese es el registro de
+        # POR QUE alguien lo dio por bueno, y sin el, el entregable
+        # muestra un PASS que no se distingue de uno que salio bien
+        # solo. Quien reciba el archivo tiene que poder ver cual fue.
+        reason = str(getattr(finding, "reason", "") or "")
+        if "Approved" in reason:
+            approval = reason.split("|")[-1].strip() if "|" in reason else reason
+            note += f" -- MANUALLY {approval}"
+
+        index.setdefault(("notes",) + key, set()).add(note)
     return index
 
 

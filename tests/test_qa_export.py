@@ -43,6 +43,7 @@ class _ActualPlacement:
     start: date | None = None
     end: date | None = None
     group_name: str = ""
+    dims: str = ""
 
 
 @dataclass
@@ -88,12 +89,14 @@ def _case(creative_name="banner_300x250", innovid_name=None,
             placement_id="10738901", name="P3G1_TTD_300x250",
             start=date(2026, 4, 22), end=date(2026, 12, 31),
             group_name="ACT DL TTD Display 300x250",
+            dims="300x250",
             creatives=[link.expected for link in links],
         ),
         actual=_ActualPlacement(
             placement_id="10738901", name="P3G1_TTD_300x250",
             start=date(2026, 4, 22), end=date(2026, 12, 31),
             group_name="ACT DL TTD Display 300x250",
+            dims="300x250",
         ),
         creative_links=links,
     )])
@@ -204,6 +207,51 @@ def test_every_pair_names_real_columns():
     for left, right in PAIRS:
         assert left in COLUMNS, left
         assert right in COLUMNS, right
+
+
+def test_excels_decimals_agree_with_innovids_whole_percent():
+    # Innovid solo admite enteros en el decision set: un 13,33% de la
+    # TS se escribe alli como 13%. Como texto no coincidian nunca y la
+    # rotacion salia sin pintar en todas las filas.
+    assert cells_agree("13.33%", "13%")
+    assert cells_agree("6.67%", "7%")
+
+
+def test_a_real_rotation_difference_is_still_a_difference():
+    # Con mas margen, un 13% pasaria por 15%, y esa si hay que verla.
+    assert not cells_agree("13.33%", "20%")
+    assert not cells_agree("50%", "5%")
+
+
+def test_dimensions_are_carried_on_both_sides():
+    row = build_qa_rows(_case())[0]
+    assert row["TS Dimensions"] == "300x250"
+    assert row["Innovid Dimensions"] == "300x250"
+
+
+def test_a_manual_approval_says_so_in_the_notes():
+    # Un PASS aprobado a mano no se distingue de uno que salio bien
+    # solo. Quien reciba el archivo tiene que poder verlo.
+    from core.findings import Status
+    from dataclasses import replace as _replace
+    buffer = FindingsBuffer()
+    finding = buffer.review("PLC-006", Domain.IDENTITY,
+                            "Placement Name mismatch",
+                            placement_id="10738901")
+    approved = _replace(
+        finding, status=Status.PASS,
+        reason="Approved by Camilo: Innovid trunca el nombre.",
+    )
+    rows = build_qa_rows(_case(), [approved])
+    assert "MANUALLY Approved by Camilo" in rows[0]["Notes"]
+
+
+def test_a_finding_nobody_approved_says_nothing_about_approvals():
+    buffer = FindingsBuffer()
+    buffer.review("PLC-006", Domain.IDENTITY, "Placement Name mismatch",
+                  placement_id="10738901")
+    rows = build_qa_rows(_case(), buffer.findings)
+    assert "MANUALLY" not in rows[0]["Notes"]
 
 
 if __name__ == "__main__":

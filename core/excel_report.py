@@ -39,6 +39,13 @@ WPP_BG = "F6F8FC"
 # taparia las pocas que no coinciden, que son las que hay que ver.
 AGREE_FILL = PatternFill("solid", start_color="E8F8E4", end_color="E8F8E4")
 
+# Naranja de desacuerdo: los dos lados traen dato y no dicen lo mismo.
+# Estas son las celdas que hay que mirar, asi que llevan mas color que
+# el verde. Un par donde falta uno de los dos lados no se pinta de
+# ninguno: no es un desacuerdo, es que no hay con que comparar, y
+# teñirlo mandaria a revisar algo que nadie ha contradicho.
+DISAGREE_FILL = PatternFill("solid", start_color="FFE0B2", end_color="FFE0B2")
+
 STATUS_FILLS = {
     "PASS": "D9F7EC",
     "FAIL": "FDE2E2",
@@ -332,15 +339,27 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
 
     index = {name: pos for pos, name in enumerate(QA_COLUMNS, start=1)}
 
-    # Verde donde los dos lados coinciden. Se pintan LAS DOS celdas del
-    # par: pintar solo la de Innovid haria pensar que el verde es un
-    # veredicto sobre Innovid y no sobre el acuerdo entre ambos.
+    # Verde donde los dos lados coinciden, naranja donde no. Se pintan
+    # LAS DOS celdas del par: pintar solo la de Innovid haria pensar
+    # que el color es un veredicto sobre Innovid y no sobre el acuerdo
+    # entre ambos.
     for offset, row in enumerate(qa_rows, start=2):
         for left, right in PAIRS:
-            if not cells_agree(row.get(left), row.get(right)):
+            left_value = str(row.get(left) or "").strip()
+            right_value = str(row.get(right) or "").strip()
+
+            if not left_value or not right_value:
+                # Falta un lado: no hay acuerdo ni desacuerdo, hay una
+                # comparacion que no se pudo hacer. Sin color.
                 continue
+
+            fill = (
+                AGREE_FILL
+                if cells_agree(left_value, right_value)
+                else DISAGREE_FILL
+            )
             for column in (left, right):
-                ws.cell(row=offset, column=index[column]).fill = AGREE_FILL
+                ws.cell(row=offset, column=index[column]).fill = fill
 
 
 def build_excel_report(
