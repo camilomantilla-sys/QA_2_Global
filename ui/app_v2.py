@@ -99,6 +99,7 @@ from core.tag_inventory import (
     build_tag_inventory_from_results,
 )
 from core.matching import match, norm_creative
+from core.qa_export import build_qa_rows
 from core.urls import account_uses_cgen
 from core.normalize import (
     norm_compare,
@@ -3326,6 +3327,11 @@ if True:
                 if tag_coverage_rows_for_excel else None
             ),
             logo_path=logo_path(),
+            qa_rows=build_qa_rows(
+                match_result,
+                findings_buffer.findings,
+                innovid_reconciliation,
+            ),
         )
 
         download_columns = st.columns(2)

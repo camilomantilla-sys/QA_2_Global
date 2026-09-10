@@ -94,6 +94,30 @@ def _flight_dates(reconciliation, buffer):
             )
             continue
 
+        # Encontrado por id porque el nombre no coincidia: Innovid lo
+        # tiene renombrado. Sus fechas y su rotacion SI se revisan
+        # (por eso llega aqui como MATCHED), pero el nombre distinto
+        # es un callout por derecho propio: alguien tiene que decidir
+        # si el renombrado fue intencional.
+        if check.matched_by == "creative_id" and check.actual_name:
+            buffer.review(
+                rule_id="INV-004",
+                domain=Domain.IDENTITY,
+                entity_type=EntityType.CREATIVE,
+                placement_id=check.placement_id,
+                reason=f"Innovid decision set · creative id matched",
+                message=(
+                    f"{check.creative_name} is in Innovid under another "
+                    "name, with the same creative id"
+                ),
+                expected=check.creative_name,
+                actual=check.actual_name,
+                recommended_action=(
+                    "Confirm the rename was intentional, or align the "
+                    "name in Innovid with the Traffic Sheet."
+                ),
+            )
+
         # MATCHED: comparar solo lo que ambos lados declaran.
         if check.expected_start is None and check.expected_end is None:
             buffer.not_verified(
