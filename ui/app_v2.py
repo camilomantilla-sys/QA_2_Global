@@ -335,6 +335,27 @@ def running_version() -> str:
     return f"{sha}{' + local edits' if dirty else ''}"
 
 
+@st.cache_data(show_spinner=False)
+def running_checkout() -> tuple[str, str]:
+    """
+    De que carpeta y de que rama sale el codigo que se esta ejecutando.
+
+    Un sha suelto no distingue "no hiciste pull" de "estas corriendo
+    otra copia del proyecto". La carpeta si.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    try:
+        branch = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        branch = ""
+    return str(root), branch or "unknown"
+
+
 INNOVID_CACHE_SECONDS = 900
 
 
@@ -1647,7 +1668,20 @@ with st.sidebar:
             "nothing to type."
         )
 
-        st.caption(f"QA build: `{running_version()}`")
+        _root, _branch = running_checkout()
+        st.caption(
+            f"QA build: `{running_version()}` on `{_branch}`  \n"
+            f"from `{_root}`"
+        )
+
+        # Fuera del try gigante de la seccion de resultados, y antes
+        # que ella: si un clic llego al servidor, esto lo dice pase
+        # lo que pase mas abajo. Sin este testigo, "el boton no hace
+        # nada" y "el boton hace algo que se pierde despues" se ven
+        # exactamente igual desde el navegador.
+        _beacon = st.session_state.get("qa2_click_beacon")
+        if _beacon:
+            st.caption(f"Last click received: `{_beacon}`")
 
 
         # Que el archivo exista no es que la sesion sirva. Antes decia
@@ -2666,27 +2700,58 @@ if True:
                     ).get("approved")
                 )
 
-                def _sign(findings, note: str) -> None:
-                    """Firma y deja constancia de que se firmo."""
+                def _sign(finding_ids, note_key: str) -> None:
                     """
-                    Firma y deja la tabla lista en ESTA misma pasada.
+                    Firma, desde on_click.
 
-                    Subir el nonce cambia la key del editor, que se
-                    dibuja mas abajo: por eso no hace falta un rerun.
+                    Un callback corre ANTES de que el script se
+                    vuelva a ejecutar, asi que no depende de que el
+                    resto de la pagina llegue a dibujarse ni del
+                    orden en que lo haga -- que es justo lo que se
+                    rompia. Todo lo que toca sale de session_state,
+                    no de variables de la pasada anterior: los ids
+                    llegan por `args`, y la observacion se lee por su
+                    key, ya actualizada cuando el callback corre.
                     """
-                    for item in findings:
-                        entry = _review_state.setdefault(
-                            item.finding_id, {}
-                        )
+                    state = st.session_state.setdefault(
+                        "qa2_review_state", {}
+                    )
+                    note = str(
+                        st.session_state.get(note_key) or ""
+                    ).strip()
+                    for finding_id in finding_ids:
+                        entry = state.setdefault(finding_id, {})
                         entry["approved"] = True
                         if note or "note" not in entry:
                             entry["note"] = note
+
                     st.session_state["qa2_review_nonce"] = (
-                        _review_nonce + 1
+                        int(st.session_state.get("qa2_review_nonce", 0))
+                        + 1
                     )
+                    stamp = datetime.now().strftime("%H:%M:%S")
                     st.session_state["qa2_review_last_action"] = (
-                        f"{len(findings)} signed off at "
-                        f"{datetime.now().strftime('%H:%M:%S')}"
+                        f"{len(finding_ids)} signed off at {stamp}"
+                    )
+                    st.session_state["qa2_click_beacon"] = (
+                        f"approve {len(finding_ids)} at {stamp}"
+                    )
+
+                def _clear_all() -> None:
+                    """Lo mismo al reves, y por la misma razon."""
+                    st.session_state.get(
+                        "qa2_review_state", {}
+                    ).clear()
+                    st.session_state["qa2_review_nonce"] = (
+                        int(st.session_state.get("qa2_review_nonce", 0))
+                        + 1
+                    )
+                    stamp = datetime.now().strftime("%H:%M:%S")
+                    st.session_state["qa2_review_last_action"] = (
+                        f"cleared at {stamp}"
+                    )
+                    st.session_state["qa2_click_beacon"] = (
+                        f"clear at {stamp}"
                     )
 
                 _pending = len(review_findings) - _approved_before
@@ -2710,20 +2775,23 @@ if True:
                 # No se deshabilita nunca: firmar lo ya firmado no
                 # hace dano, y el contador de pendientes va siempre un
                 # turno por detras.
-                if st.button(
+                st.button(
                     f"Approve all {len(review_findings)}",
                     key="qa2_review_approve_all",
                     use_container_width=True,
                     type="primary",
-                ):
-                    _sign(review_findings, str(_all_note or "").strip())
+                    on_click=_sign,
+                    args=(
+                        [f.finding_id for f in review_findings],
+                        "qa2_review_all_note",
+                    ),
+                )
 
-                if _review_state and st.button(
-                    "Clear all approvals", key="qa2_review_clear"
-                ):
-                    _review_state.clear()
-                    st.session_state["qa2_review_nonce"] = (
-                        _review_nonce + 1
+                if _review_state:
+                    st.button(
+                        "Clear all approvals",
+                        key="qa2_review_clear",
+                        on_click=_clear_all,
                     )
 
                 # Por grupo, para quien quiera firmar solo una parte
@@ -2753,12 +2821,16 @@ if True:
                         "Observation for this group",
                         key="qa2_review_bulk_note",
                     )
-                    if st.button(
+                    st.button(
                         f"Approve these {len(_bulk_items)}",
                         key="qa2_review_approve_group",
                         use_container_width=True,
-                    ):
-                        _sign(_bulk_items, str(_note or "").strip())
+                        on_click=_sign,
+                        args=(
+                            [f.finding_id for f in _bulk_items],
+                            "qa2_review_bulk_note",
+                        ),
+                    )
 
                 st.divider()
 
@@ -2905,6 +2977,8 @@ if True:
                             f"streamlit        {st.__version__}",
                             f"python           {sys.version.split()[0]}",
                             f"build            {running_version()}",
+                            f"folder           {running_checkout()[0]}",
+                            f"branch           {running_checkout()[1]}",
                             f"findings shown   {len(review_findings)}",
                             f"approvals held   {len(_review_state)}",
                             f"editor key       {_editor_key}",
