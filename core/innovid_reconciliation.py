@@ -265,15 +265,26 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
             continue
         seen.add(key)
 
-        candidates = by_name.get(key, [])
-        matched_by = "name"
+        # El ID manda, el nombre es el respaldo.
+        #
+        # Dentro del decision set, el creativo se identifica por su
+        # creative id: es lo que Innovid usa de verdad. Los nombres
+        # llegan con lo que Innovid les pega al mostrarlos y con la
+        # descripcion en vez del filename, asi que buscar por nombre
+        # primero fallaba en creativos que estaban perfectamente ahi.
+        # La Traffic Sheet trae el id en las 878 filas de Dove.
+        #
+        # El nombre sigue siendo el respaldo, y el unico camino en una
+        # TS que no declare ids -- que las hay, y tienen que seguir
+        # funcionando.
+        creative_id = str(creative.creative_id or "").strip()
+        candidates = by_id.get(creative_id, []) if creative_id else []
+        matched_by = "creative_id" if candidates else "name"
 
-        if not candidates:
-            creative_id = str(creative.creative_id or "").strip()
-            candidates = by_id.get(creative_id, []) if creative_id else []
-            if candidates:
-                matched_by = "creative_id"
-                seen_ids.add(creative_id)
+        if candidates:
+            seen_ids.add(creative_id)
+        else:
+            candidates = by_name.get(key, [])
 
         if not candidates:
             out.flights.append(CreativeFlightCheck(

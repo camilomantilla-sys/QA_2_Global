@@ -19,6 +19,7 @@ from core.innovid_reconciliation import (
     MISSING_IN_INNOVID,
 )
 from core.intent import requested
+from core.matching import norm_creative
 from core.normalize import norm_compare
 
 WHITE = "WHITE"
@@ -105,7 +106,18 @@ def _flight_dates(reconciliation, buffer):
         # (por eso llega aqui como MATCHED), pero el nombre distinto
         # es un callout por derecho propio: alguien tiene que decidir
         # si el renombrado fue intencional.
-        if check.matched_by == "creative_id" and check.actual_name:
+        # Solo cuando el nombre difiere de verdad. Emparejar por id es
+        # ahora el camino normal, no la excepcion, asi que sin esta
+        # comprobacion INV-004 saltaria en todos los creativos: el
+        # nombre de Innovid arrastra su sello de subida y eso no es un
+        # renombrado. norm_creative lo quita, con el mismo criterio
+        # que usa el resto del motor.
+        if (
+            check.matched_by == "creative_id"
+            and check.actual_name
+            and norm_creative(check.actual_name)
+            != norm_creative(check.creative_name)
+        ):
             buffer.review(
                 rule_id="INV-004",
                 domain=Domain.IDENTITY,

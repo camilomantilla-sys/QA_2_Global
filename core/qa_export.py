@@ -217,8 +217,15 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                     creative_actual.creative_id if creative_actual else ""
                 ),
                 "TS Creative Name": _text(cl.expected.name),
+                # Creative_Name y no Filename. El export trae los dos
+                # y en las 1113 filas de Dove son distintos: Filename
+                # arrastra el ".zip (6112823)" que Innovid le pega, y
+                # Creative_Name es el nombre limpio, el mismo que
+                # escribe la Traffic Sheet. Mostrar el sucio hacia que
+                # la columna saliera en naranja teniendo delante dos
+                # nombres iguales.
                 "Innovid Creative Name": _text(
-                    (creative_actual.filename or creative_actual.name)
+                    (creative_actual.name or creative_actual.filename)
                     if creative_actual else ""
                 ),
                 "TS Creative Dates": _span(cl.expected.start, cl.expected.end),
