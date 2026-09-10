@@ -254,6 +254,43 @@ def test_a_finding_nobody_approved_says_nothing_about_approvals():
     assert "MANUALLY" not in rows[0]["Notes"]
 
 
+def test_innovids_trailing_id_is_not_a_difference():
+    # Innovid pega el id al final de lo que muestra. La TS nunca lo
+    # lleva, asi que comparado en crudo el nombre no coincidia nunca
+    # y esas columnas salian siempre en naranja.
+    assert cells_agree(
+        "ACT GM W18+ TTD Display 160X600 UG",
+        "ACT GM W18+ TTD Display 160X600 UG (34605)",
+    )
+
+
+def test_the_extension_and_the_id_come_off_together():
+    # Llegan en ese orden: "....zip (6112823)".
+    assert cells_agree(
+        "Scent_Core-Body-Wash_Renew_003_Green-v01",
+        "Scent_Core-Body-Wash_Renew_003_Green-v01.zip (6112823)",
+    )
+
+
+def test_a_placement_name_with_its_id_appended_still_matches():
+    assert cells_agree(
+        "GR_DISP_CRDV_NONE_TTDI_BSAY_NA_W18-160X600 UG ACT",
+        "GR_DISP_CRDV_NONE_TTDI_BSAY_NA_W18-160X600 UG ACT (10738914)",
+    )
+
+
+def test_a_real_name_difference_survives_the_stripping():
+    # Recortar de mas fundiria creativos que si son distintos.
+    assert not cells_agree(
+        "creative_Renew_001", "creative_Refresh_001 (99)"
+    )
+
+
+def test_only_a_trailing_id_comes_off():
+    # Un parentesis en medio del nombre es parte del nombre.
+    assert not cells_agree("banner (v2) final", "banner final")
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

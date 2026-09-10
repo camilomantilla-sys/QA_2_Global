@@ -125,32 +125,20 @@ def _flight_dates(reconciliation, buffer):
                 ),
             )
 
-        # Las fechas solo se juzgan si se pidio cambiarlas. En una
-        # solicitud de cambio de rotacion, la TS repite las fechas del
-        # creativo sin pintarlas: son contexto, no una peticion. Antes
-        # se comparaban igual y cada creativo adelantado un dia para
-        # poder testearlo salia como fallo.
-        if not requested(check, "dates"):
-            # Callarlo del todo seria perder el dato: si las fechas de
-            # verdad difieren se dice una vez, como INFO. No tumba el
-            # QA porque no es de esta solicitud.
-            if _differs(check.expected_start, check.actual_start) or _differs(
-                check.expected_end, check.actual_end
-            ):
-                buffer.info(
-                    message=(
-                        f"{check.creative_name} flights on other dates, "
-                        "but this request didn't ask to change them"
-                    ),
-                    expected=_span(check.expected_start, check.expected_end),
-                    actual=_span(check.actual_start, check.actual_end),
-                    recommended_action=(
-                        "Nothing to do for this request. Worth raising "
-                        "separately if it looks wrong."
-                    ),
-                    **common,
-                )
-            continue
+        # Las fechas de creativo NUNCA se dan por buenas solas ni se
+        # dejan en INFO: siempre pasan por revision humana.
+        #
+        # Es una decision del equipo, no una deduccion. Han tenido
+        # problemas con las fechas y prefieren mirarlas y firmarlas --
+        # una a una o en bloque -- antes que confiar en la
+        # comparacion, de un placement nuevo o de uno que ya corria.
+        # Por eso REVIEW y no FAIL: un fallo no se puede firmar tan
+        # facil, y aqui firmar es justo lo que se quiere hacer.
+        #
+        # Si ademas nadie pidio tocarlas, se dice: la fila sigue
+        # necesitando revision, pero quien la lea sabe que el cambio
+        # no era de esta solicitud.
+        _asked_for_dates = requested(check, "dates")
 
         # MATCHED: comparar solo lo que ambos lados declaran.
         if check.expected_start is None and check.expected_end is None:
@@ -168,12 +156,18 @@ def _flight_dates(reconciliation, buffer):
         end_off = _differs(check.expected_end, check.actual_end)
 
         if start_off or end_off:
-            buffer.fail(
-                message=f"{check.creative_name} flights on other dates",
+            buffer.review(
+                message=(
+                    f"{check.creative_name} flights on other dates"
+                    if _asked_for_dates
+                    else f"{check.creative_name} flights on other dates, "
+                         "and this request didn't ask to change them"
+                ),
                 expected=_span(check.expected_start, check.expected_end),
                 actual=_span(check.actual_start, check.actual_end),
                 recommended_action=(
-                    "Correct the creative's dates in the decision set."
+                    "Check the dates and sign this off, or correct them "
+                    "in the decision set."
                 ),
                 **common,
             )
