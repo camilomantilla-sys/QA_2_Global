@@ -2610,28 +2610,20 @@ if True:
         )
 
         if review_findings:
-            _approved_now = sum(
-                1 for finding in review_findings
-                if _review_state.get(finding.finding_id, {}).get("approved")
-            )
-            _pending = len(review_findings) - _approved_now
-
             with st.expander(
-                f"📝 QA2 Review ({_pending} left"
-                + (f", {_approved_now} approved" if _approved_now else "")
-                + ")",
+                f"📝 QA2 Review ({len(review_findings)})",
                 expanded=True,
             ):
-                if _approved_now:
-                    st.success(
-                        f"{_approved_now} of {len(review_findings)} "
-                        "approved and counted as PASS. "
-                        + (
-                            f"{_pending} still to review."
-                            if _pending
-                            else "Nothing left to review here."
-                        )
-                    )
+                # El resumen se reserva aqui y se rellena al final,
+                # cuando ya se sabe que quedo aprobado.
+                #
+                # Antes se pintaba primero y se forzaba un st.rerun()
+                # para que cuadrara. Ese rerun vuelve a correr el
+                # script entero -- con Innovid conectado, la mitad de
+                # la app -- asi que pulsar el boton parecia no hacer
+                # nada durante un buen rato. Un hueco reservado da el
+                # mismo numero sin volver a empezar.
+                _summary_slot = st.empty()
 
                 st.caption(
                     "QA2 is mandatory: the second-pass reviewer goes "
@@ -2647,24 +2639,37 @@ if True:
                     "own. The observation is optional, but it is the "
                     "only place the reason survives."
                 )
+
                 _review_nonce = st.session_state.setdefault(
                     "qa2_review_nonce", 0
                 )
+                _approved_before = sum(
+                    1 for finding in review_findings
+                    if _review_state.get(
+                        finding.finding_id, {}
+                    ).get("approved")
+                )
 
-                # Un grupo = misma regla y mismo hallazgo. Los 25
-                # "Placement Name mismatch" de una solicitud son una
-                # sola decision tomada 25 veces; aprobarlos uno por uno
-                # solo gasta el tiempo del revisor.
-                # Aprobar todo, de una. Es lo que se hace el 90% de
-                # las veces: se mira la lista, se decide que el lote
-                # esta bien, y se firma. Tener que elegir grupo antes
-                # convertia esa decision en tres pasos.
-                #
-                # La observacion es opcional. Exigirla bloqueaba el
-                # boton y era el motivo de que esto pareciera roto:
-                # el rastro de que alguien lo firmo a mano queda igual
-                # en el reporte y en el Excel ("MANUALLY Approved
-                # by ..."), con razon o sin ella.
+                def _sign(findings, note: str) -> None:
+                    """
+                    Firma y deja la tabla lista en ESTA misma pasada.
+
+                    Subir el nonce cambia la key del editor, que se
+                    dibuja mas abajo: por eso no hace falta un rerun.
+                    """
+                    for item in findings:
+                        entry = _review_state.setdefault(
+                            item.finding_id, {}
+                        )
+                        entry["approved"] = True
+                        if note or "note" not in entry:
+                            entry["note"] = note
+                    st.session_state["qa2_review_nonce"] = (
+                        _review_nonce + 1
+                    )
+
+                _pending = len(review_findings) - _approved_before
+
                 with st.form("qa2_review_all_form"):
                     _all_note = st.text_input(
                         "Observation (optional) -- applies to "
@@ -2686,30 +2691,15 @@ if True:
                     )
 
                 if _approve_all:
-                    _note_all = str(_all_note or "").strip()
-                    for finding in review_findings:
-                        _review_state.setdefault(
-                            finding.finding_id,
-                            {"approved": True, "note": _note_all},
-                        )
-                        _review_state[finding.finding_id]["approved"] = True
-                        if _note_all:
-                            _review_state[finding.finding_id]["note"] = (
-                                _note_all
-                            )
-                    st.session_state["qa2_review_nonce"] = (
-                        _review_nonce + 1
-                    )
-                    st.rerun()
+                    _sign(review_findings, str(_all_note or "").strip())
 
-                if _approved_now and st.button(
+                if _review_state and st.button(
                     "Clear all approvals", key="qa2_review_clear"
                 ):
                     _review_state.clear()
                     st.session_state["qa2_review_nonce"] = (
                         _review_nonce + 1
                     )
-                    st.rerun()
 
                 # Por grupo, para quien quiera firmar solo una parte
                 # con su propia razon. Va plegado: es la excepcion.
@@ -2738,80 +2728,59 @@ if True:
                             )
 
                         if _bulk_submitted:
-                            _note = str(_note or "").strip()
-                            for _item in _bulk_items:
-                                _review_state[_item.finding_id] = {
-                                    "approved": True,
-                                    "note": _note,
-                                }
-                            st.session_state["qa2_review_nonce"] = (
-                                _review_nonce + 1
-                            )
-                            st.rerun()
+                            _sign(_bulk_items, str(_note or "").strip())
 
                 st.divider()
 
-                _review_base_df = pd.DataFrame(
-                    [
-                        {
-                            "Approve": bool(
-                                _review_state.get(
-                                    finding.finding_id, {}
-                                ).get("approved")
-                            ),
-                            # Firmar un FAIL no es lo mismo que firmar
-                            # un REVIEW: quien revisa tiene que ver
-                            # cual esta firmando.
-                            "Status": finding.status.value,
-                            "Rule": finding.rule_id,
-                            "Placement ID": finding.placement_id,
-                            "Creative ID": finding.creative_id,
-                            "Finding": finding.message,
-                            "Observation": str(
-                                _review_state.get(
-                                    finding.finding_id, {}
-                                ).get("note", "")
-                            ),
-                        }
-                        for finding in review_findings
-                    ]
+                # La key del editor sale de session_state, que
+                # _sign() acaba de subir: asi la tabla se dibuja ya
+                # con lo firmado, sin volver a correr el script.
+                _editor_key = (
+                    f"qa2_review_approval_"
+                    f"{st.session_state['qa2_review_nonce']}"
                 )
 
                 st.data_editor(
-                    _review_base_df,
+                    pd.DataFrame(
+                        [
+                            {
+                                "Approve": bool(
+                                    _review_state.get(
+                                        finding.finding_id, {}
+                                    ).get("approved")
+                                ),
+                                "Status": finding.status.value,
+                                "Rule": finding.rule_id,
+                                "Placement ID": finding.placement_id,
+                                "Creative ID": finding.creative_id,
+                                "Finding": finding.message,
+                                "Observation": str(
+                                    _review_state.get(
+                                        finding.finding_id, {}
+                                    ).get("note", "")
+                                ),
+                            }
+                            for finding in review_findings
+                        ]
+                    ),
                     use_container_width=True,
                     hide_index=True,
                     disabled=[
                         "Status", "Rule", "Placement ID", "Creative ID",
                         "Finding",
                     ],
-                    key=f"qa2_review_approval_{_review_nonce}",
+                    key=_editor_key,
                 )
 
                 # _review_state es la unica verdad. El editor solo
-                # aporta lo que la persona acaba de tocar.
-                #
-                # Antes se leia la tabla ENTERA y se borraba del estado
-                # toda fila que no apareciera marcada. Pero la tabla va
-                # siempre un render por detras del boton de lote: el
-                # lote aprobaba 24, la tabla todavia los mostraba sin
-                # marcar, y este bucle los borraba acto seguido. La
-                # aprobacion se deshacia sola y no habia forma de
-                # firmar nada, ni en bloque ni a mano.
-                #
-                # Streamlit guarda los cambios del editor como deltas
-                # en "edited_rows": {fila: {columna: valor}}. Aplicar
-                # solo eso no puede deshacer lo que no se toco.
-                _editor_state = st.session_state.get(
-                    f"qa2_review_approval_{_review_nonce}"
-                )
+                # aporta lo que la persona acaba de tocar: Streamlit
+                # lo guarda como deltas en "edited_rows". Leer la
+                # tabla entera borraba lo que el boton acababa de
+                # firmar, porque la tabla va un render por detras.
+                _editor_state = st.session_state.get(_editor_key)
                 _edits = {}
                 if isinstance(_editor_state, dict):
                     _edits = _editor_state.get("edited_rows") or {}
-
-                _state_before = {
-                    key: dict(value) for key, value in _review_state.items()
-                }
 
                 for _row_index, _changes in _edits.items():
                     try:
@@ -2821,13 +2790,11 @@ if True:
 
                     entry = dict(_review_state.get(finding.finding_id, {}))
 
-                    if "Approve" in _changes:
-                        if _changes["Approve"]:
-                            entry["approved"] = True
-                        else:
-                            _review_state.pop(finding.finding_id, None)
-                            continue
-
+                    if _changes.get("Approve") is False:
+                        _review_state.pop(finding.finding_id, None)
+                        continue
+                    if _changes.get("Approve") is True:
+                        entry["approved"] = True
                     if "Observation" in _changes:
                         entry["note"] = str(_changes["Observation"] or "")
 
@@ -2835,15 +2802,7 @@ if True:
                         entry.setdefault("note", "")
                         _review_state[finding.finding_id] = entry
 
-                # Marcado es firmado, con razon o sin ella. Exigir la
-                # observacion para firmar un FAIL bloqueaba el boton y
-                # era buena parte de por que esto parecia roto.
-                #
-                # Lo que protege el registro no es obligar a escribir,
-                # es que la firma quede a la vista: el hallazgo sale en
-                # el reporte y en el Excel como "MANUALLY Approved
-                # by ...", asi que nadie puede confundir un PASS
-                # firmado a mano con uno que salio bien solo.
+                # Marcado es firmado, con razon o sin ella.
                 review_overrides = {
                     finding.finding_id: {
                         "approved": True,
@@ -2858,6 +2817,25 @@ if True:
                     )
                 }
 
+                _signed = len(review_overrides)
+                _left = len(review_findings) - _signed
+
+                if _signed:
+                    _summary_slot.success(
+                        f"{_signed} of {len(review_findings)} approved "
+                        "and counted as PASS. "
+                        + (
+                            f"{_left} still to review."
+                            if _left
+                            else "Nothing left to review here."
+                        )
+                    )
+                else:
+                    _summary_slot.info(
+                        f"{len(review_findings)} to review. Nothing "
+                        "approved yet."
+                    )
+
                 _no_reason = [
                     finding for finding in review_findings
                     if finding.status.value == "FAIL"
@@ -2871,14 +2849,6 @@ if True:
                         "report says they were approved by hand -- "
                         "but whoever reads it later won't know why."
                     )
-
-                # La cabecera se dibuja antes que la tabla, asi que una
-                # casilla marcada a mano llega tarde para el recuento.
-                # Una pasada mas y coinciden; como los deltas son
-                # idempotentes, la segunda no cambia nada y esto no se
-                # repite.
-                if _review_state != _state_before:
-                    st.rerun()
 
                 if review_overrides:
                     findings_buffer._items = apply_review_overrides(
