@@ -1701,9 +1701,22 @@ with st.sidebar:
         # lo que pase mas abajo. Sin este testigo, "el boton no hace
         # nada" y "el boton hace algo que se pierde despues" se ven
         # exactamente igual desde el navegador.
+        # Cuantas veces ha corrido el script en esta sesion.
+        #
+        # Es la pregunta que queda y la unica que no se puede mirar
+        # desde fuera: si pulsas un boton y este numero NO sube, el
+        # clic no salio del navegador y no hay nada que arreglar en
+        # Python. Si sube y aun asi no se firma nada, el problema es
+        # mio y esta despues del clic.
+        _runs = int(st.session_state.get("qa2_script_runs", 0)) + 1
+        st.session_state["qa2_script_runs"] = _runs
+
         _beacon = st.session_state.get("qa2_click_beacon")
-        if _beacon:
-            st.caption(f"Last click received: `{_beacon}`")
+        st.caption(
+            f"Script runs: `{_runs}`  \n"
+            "Last click received: "
+            + (f"`{_beacon}`" if _beacon else "`(none yet)`")
+        )
 
 
         # Que el archivo exista no es que la sesion sirva. Antes decia
@@ -1884,6 +1897,33 @@ with st.sidebar:
         index=0,
         key="qa2_profile_select",
     )
+
+    # Firmar sin depender del panel.
+    #
+    # Run QA es el unico boton que en la maquina de Camilo llega
+    # siempre al servidor. Esto engancha la firma a ese clic: se
+    # marca antes de correr, y el QA sale ya firmado -- informe,
+    # PDF y Excel incluidos -- sin tocar nada mas.
+    st.checkbox(
+        "Sign off everything that comes back for review",
+        key="qa2_preapprove",
+        help=(
+            "Applies when you press Run QA. Everything the run sends "
+            "to QA2 Review is approved with the observation below, "
+            "exactly as if you had used the Approve all button. "
+            "Failures still show as failures in the report, marked "
+            "\"MANUALLY Approved by ...\"."
+        ),
+    )
+    if st.session_state.get("qa2_preapprove"):
+        st.text_input(
+            "Observation for that sign-off",
+            key="qa2_preapprove_note",
+            placeholder=(
+                "e.g. \"Creatives start a day early on purpose, to "
+                "test before the placement goes live.\""
+            ),
+        )
 
     analyze_button = st.button(
         "Run QA",
@@ -2683,6 +2723,26 @@ if True:
             "qa2_review_state", {}
         )
 
+        # La casilla de la barra lateral, aplicada en la pasada de
+        # Run QA: el unico clic que se sabe que llega.
+        if analyze_button and st.session_state.get("qa2_preapprove"):
+            _pre_note = str(
+                st.session_state.get("qa2_preapprove_note") or ""
+            ).strip()
+            for finding in review_findings:
+                entry = _review_state.setdefault(finding.finding_id, {})
+                entry["approved"] = True
+                if _pre_note or "note" not in entry:
+                    entry["note"] = _pre_note
+            _stamp = datetime.now().strftime("%H:%M:%S")
+            st.session_state["qa2_review_last_action"] = (
+                f"{len(review_findings)} signed off with Run QA "
+                f"at {_stamp}"
+            )
+            st.session_state["qa2_click_beacon"] = (
+                f"run-qa sign-off {len(review_findings)} at {_stamp}"
+            )
+
         if review_findings:
             with st.expander(
                 f"📝 QA2 Review ({len(review_findings)})",
@@ -3003,6 +3063,10 @@ if True:
                             f"build            {running_version()}",
                             f"folder           {running_checkout()[0]}",
                             f"branch           {running_checkout()[1]}",
+                            "script runs      "
+                            + str(
+                                st.session_state.get("qa2_script_runs", 0)
+                            ),
                             f"findings shown   {len(review_findings)}",
                             f"approvals held   {len(_review_state)}",
                             f"editor key       {_editor_key}",

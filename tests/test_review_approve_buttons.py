@@ -92,6 +92,28 @@ def test_clearing_empties_the_state_it_shares_with_signing():
     assert ".clear()" in body
 
 
+def test_run_qa_can_sign_off_without_the_panel():
+    # El unico clic que en su maquina llega siempre al servidor es
+    # Run QA. Enganchar la firma a ese clic la deja funcionando sea
+    # cual sea el problema del panel.
+    assert 'key="qa2_preapprove"' in SOURCE
+    assert 'analyze_button and st.session_state.get("qa2_preapprove")' in SOURCE
+
+
+def test_the_run_qa_sign_off_leaves_the_same_trace():
+    body = SOURCE[SOURCE.index('if analyze_button and st.session_state.get("qa2_preapprove")'):]
+    body = body[:body.index("if review_findings:")]
+    assert "qa2_review_last_action" in body
+    assert "qa2_click_beacon" in body
+    assert 'entry["approved"] = True' in body
+
+
+def test_the_script_run_counter_is_shown_outside_the_results_try():
+    counter = SOURCE.index('st.session_state["qa2_script_runs"] = _runs')
+    results_try = SOURCE.index("\nif True:\n    try:")
+    assert counter < results_try
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):
