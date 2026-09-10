@@ -15,6 +15,8 @@ sacado del archivo justo lo que hay que mirar.
 """
 from __future__ import annotations
 
+import re
+
 from core.matching import norm_creative
 from core.normalize import norm_compare, normalize_weights
 
@@ -101,9 +103,31 @@ def cells_agree(left: object, right: object) -> bool:
     if left_pct is not None and right_pct is not None:
         return abs(left_pct - right_pct) <= ROUNDING_TOLERANCE_PP
 
-    # Los nombres de creativo se comparan con el criterio del motor,
-    # que ya sabe del sello de subida de Innovid y de los espacios.
-    return norm_creative(a) == norm_creative(b) or norm_compare(a) == norm_compare(b)
+    # Los nombres se comparan sin lo que Innovid les pega al mostrarlos.
+    return _bare(a) == _bare(b) or norm_compare(a) == norm_compare(b)
+
+
+# El id que Innovid añade al final de lo que muestra:
+#   "ACT GM W18+ TTD Display 160X600 UG (34605)"
+#   "..._STA-BASE_011_NA-v01.zip (6112823)"
+#   "GR_DISP_CRDV_..._W18-160X600 UG ACT (10738914)"
+# La Traffic Sheet nunca lo lleva, asi que comparado en crudo el
+# nombre no coincidia NUNCA y esas columnas salian siempre en
+# naranja. 2226 de los valores del export de Dove lo traen.
+_TRAILING_ID = re.compile(r"\s*\(\d+\)\s*$")
+
+
+def _bare(value: str) -> str:
+    """
+    El nombre sin el id final ni la extension.
+
+    Se quita primero el "(12345)" y despues la extension, porque
+    vienen en ese orden: "....zip (6112823)". norm_creative se
+    encarga del resto -- espacios y el sello de subida de Innovid --
+    con el mismo criterio que usa el motor, para no tener dos
+    definiciones de "mismo nombre".
+    """
+    return norm_creative(_TRAILING_ID.sub("", str(value or "").strip()))
 
 
 def _worst_status(statuses) -> str:

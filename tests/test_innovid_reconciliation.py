@@ -124,8 +124,15 @@ def test_matching_dates_pass():
     assert all(f.status.name == "PASS" for f in findings)
 
 
-def test_a_creative_flighting_late_fails():
-    """El caso del Frosty: la TS pide el 14, Innovid lo tiene el 27."""
+def test_a_creative_flighting_late_needs_review():
+    """
+    El caso del Frosty: la TS pide el 14, Innovid lo tiene el 27.
+
+    Sale como REVIEW y no como FAIL por decision del equipo: han
+    tenido problemas con las fechas y prefieren mirarlas y firmarlas
+    antes que confiar en la comparacion. Un FAIL no se firma tan
+    facil, y firmar es justo lo que quieren hacer.
+    """
     ts = _ts("11087616", [
         ExpectedCreative(name=V2, intent=GREEN,
                          start=date(2026, 9, 14), end=date(2026, 10, 31)),
@@ -135,11 +142,11 @@ def test_a_creative_flighting_late_fails():
     ])
 
     findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
-    fails = [f for f in findings if f.status.name == "FAIL"]
+    reviews = [f for f in findings if f.status.name == "REVIEW"]
 
-    assert len(fails) == 1
-    assert "2026-09-14" in fails[0].expected
-    assert "2026-09-27" in fails[0].actual
+    assert len(reviews) == 1
+    assert "2026-09-14" in reviews[0].expected
+    assert "2026-09-27" in reviews[0].actual
 
 
 def test_a_creative_the_ts_asks_for_and_innovid_lacks_fails():
@@ -376,9 +383,10 @@ def test_a_rotation_mismatch_fails_the_whole_qa():
     assert _findings(reconcile(ts, got)).scorecard().verdict == "FAILED"
 
 
-def test_a_creative_date_mismatch_fails_the_whole_qa_too():
-    # Las fechas del creativo si importan, a diferencia de las del
-    # placement: un creativo que arranca tarde no entrego lo pedido.
+def test_a_creative_date_mismatch_holds_the_qa_for_review():
+    # Las fechas del creativo importan, a diferencia de las del
+    # placement, pero se firman a mano: el veredicto queda en revision,
+    # no en fallo.
     ts = _ts("11087616", [
         ExpectedCreative(name=V2, intent=GREEN,
                          start=date(2026, 9, 14), end=date(2026, 10, 31)),
@@ -386,7 +394,7 @@ def test_a_creative_date_mismatch_fails_the_whole_qa_too():
     got = _innovid("11087616", 40316, [
         _node(V2, "2026-09-27", "2026-10-31"),
     ])
-    assert _findings(reconcile(ts, got)).scorecard().verdict == "FAILED"
+    assert _findings(reconcile(ts, got)).scorecard().verdict == "NEEDS_REVIEW"
 
 
 def test_an_ongoing_creative_against_a_dated_ts_is_not_a_failure():
@@ -645,7 +653,7 @@ def test_a_creative_with_neither_name_nor_id_in_innovid_is_still_missing():
 
 # --- la celda pintada manda ---------------------------------------
 
-def test_dates_nobody_asked_to_change_are_not_a_failure():
+def test_dates_nobody_asked_to_change_still_need_review():
     """
     El caso de Camilo: en una solicitud de cambio de rotacion, la TS
     repite las fechas del creativo sin pintarlas. Son contexto. Los
@@ -663,7 +671,7 @@ def test_dates_nobody_asked_to_change_are_not_a_failure():
         _node(V2, "2026-09-13", "2026-10-31", weight=100),
     ])
     findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
-    assert [f.status.name for f in findings] == ["INFO"]
+    assert [f.status.name for f in findings] == ["REVIEW"]
 
 
 def test_the_difference_is_still_reported_just_not_as_a_failure():
@@ -681,9 +689,14 @@ def test_the_difference_is_still_reported_just_not_as_a_failure():
     finding = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0]
     assert "didn't ask to change them" in finding.message
     assert "2026-09-13" in finding.actual
+    assert finding.status.name == "REVIEW"
 
 
-def test_dates_that_agree_say_nothing_at_all():
+def test_dates_that_agree_pass_instead_of_needing_review():
+    """
+    Si coinciden no hay nada que firmar. Sale PASS y no REVIEW: se
+    comparo y esta bien, que es distinto de no haberlo mirado.
+    """
     ts = _ts("11087616", [
         ExpectedCreative(
             name=V2, intent=GREEN, rotation_weight="1",
@@ -694,11 +707,13 @@ def test_dates_that_agree_say_nothing_at_all():
     got = _innovid("11087616", 40316, [
         _node(V2, "2026-09-14", "2026-10-31", weight=100),
     ])
-    assert _by_rule(_findings(reconcile(ts, got)), "INV-001") == []
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
 
 
-def test_dates_the_request_did_paint_still_fail():
-    # Lo pedido se sigue validando igual de duro.
+def test_dates_the_request_did_paint_are_reviewed_without_the_caveat():
+    # Lo pedido se sigue mirando; el mensaje no lleva la coletilla de
+    # "nadie pidio cambiarlas".
     ts = _ts("11087616", [
         ExpectedCreative(
             name=V2, intent=GREEN,
@@ -710,7 +725,8 @@ def test_dates_the_request_did_paint_still_fail():
         _node(V2, "2026-09-27", "2026-10-31"),
     ])
     findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
-    assert [f.status.name for f in findings] == ["FAIL"]
+    assert [f.status.name for f in findings] == ["REVIEW"]
+    assert "didn't ask" not in findings[0].message
 
 
 def test_a_sheet_with_no_colour_still_validates_its_dates():
@@ -724,7 +740,7 @@ def test_a_sheet_with_no_colour_still_validates_its_dates():
         _node(V2, "2026-09-27", "2026-10-31"),
     ])
     findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
-    assert [f.status.name for f in findings] == ["FAIL"]
+    assert [f.status.name for f in findings] == ["REVIEW"]
 
 
 if __name__ == "__main__":
