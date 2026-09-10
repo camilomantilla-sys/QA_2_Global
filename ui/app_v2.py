@@ -2887,6 +2887,39 @@ if True:
                         "approved yet."
                     )
 
+                # Un panel de hechos, no de adivinanzas.
+                #
+                # "El clic no llego", "llego y no cambio nada" y "cambio
+                # algo que otra cosa deshizo" se ven identicos desde
+                # fuera. Esto los separa, y sirve igual el dia que
+                # falle otra cosa parecida.
+                with st.expander("Why isn't approving working?"):
+                    st.caption(
+                        "If the button seems to do nothing, send this. "
+                        "It says whether the click reached the app at "
+                        "all, which is the part that can't be guessed "
+                        "from a screenshot."
+                    )
+                    st.code(
+                        "\n".join([
+                            f"streamlit        {st.__version__}",
+                            f"python           {sys.version.split()[0]}",
+                            f"build            {running_version()}",
+                            f"findings shown   {len(review_findings)}",
+                            f"approvals held   {len(_review_state)}",
+                            f"editor key       {_editor_key}",
+                            f"signed this run  {_signed}",
+                            "last action      "
+                            + str(
+                                st.session_state.get(
+                                    "qa2_review_last_action"
+                                )
+                                or "(never)"
+                            ),
+                        ]),
+                        language="text",
+                    )
+
                 _last = st.session_state.get("qa2_review_last_action")
                 if _last:
                     # Distingue "el clic no llego" de "el clic llego y
