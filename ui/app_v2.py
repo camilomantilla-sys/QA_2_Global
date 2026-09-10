@@ -335,6 +335,27 @@ def running_version() -> str:
     return f"{sha}{' + local edits' if dirty else ''}"
 
 
+@st.cache_data(show_spinner=False)
+def running_checkout() -> tuple[str, str]:
+    """
+    De que carpeta y de que rama sale el codigo que se esta ejecutando.
+
+    Un sha suelto no distingue "no hiciste pull" de "estas corriendo
+    otra copia del proyecto". La carpeta si.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    try:
+        branch = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        branch = ""
+    return str(root), branch or "unknown"
+
+
 INNOVID_CACHE_SECONDS = 900
 
 
@@ -1647,7 +1668,11 @@ with st.sidebar:
             "nothing to type."
         )
 
-        st.caption(f"QA build: `{running_version()}`")
+        _root, _branch = running_checkout()
+        st.caption(
+            f"QA build: `{running_version()}` on `{_branch}`  \n"
+            f"from `{_root}`"
+        )
 
 
         # Que el archivo exista no es que la sesion sirva. Antes decia
@@ -2905,6 +2930,8 @@ if True:
                             f"streamlit        {st.__version__}",
                             f"python           {sys.version.split()[0]}",
                             f"build            {running_version()}",
+                            f"folder           {running_checkout()[0]}",
+                            f"branch           {running_checkout()[1]}",
                             f"findings shown   {len(review_findings)}",
                             f"approvals held   {len(_review_state)}",
                             f"editor key       {_editor_key}",
