@@ -2634,18 +2634,18 @@ if True:
                     )
 
                 st.caption(
-                    "QA2 is mandatory: whoever does the second-pass "
-                    "review goes through each item below, writes why "
-                    "it's fine in Observation (based on the campaign "
-                    "context -- the email/Wrike callouts, etc.), and "
-                    "checks Approve. Only then does the finding become "
-                    "PASS below, with the observation kept in the "
-                    "record.\n\n"
-                    "Failures are here too. Signing one off does not "
-                    "hide it: it stays in the report and in the Excel "
-                    "as \"MANUALLY Approved by ...\" with your "
-                    "reason, which is why a FAIL needs an observation "
-                    "and a REVIEW doesn't."
+                    "QA2 is mandatory: the second-pass reviewer goes "
+                    "through what's below and signs off what is "
+                    "acceptable -- everything at once with the button, "
+                    "one group at a time, or row by row. Whatever you "
+                    "approve counts as PASS from here down: the "
+                    "verdict, the tabs, the PDF and the Excel.\n\n"
+                    "Failures are in this list too, and signing one "
+                    "off does not hide it: the report and the Excel "
+                    "say \"MANUALLY Approved by ...\" so nobody "
+                    "later mistakes it for a check that passed on its "
+                    "own. The observation is optional, but it is the "
+                    "only place the reason survives."
                 )
                 _review_nonce = st.session_state.setdefault(
                     "qa2_review_nonce", 0
@@ -2655,60 +2655,90 @@ if True:
                 # "Placement Name mismatch" de una solicitud son una
                 # sola decision tomada 25 veces; aprobarlos uno por uno
                 # solo gasta el tiempo del revisor.
+                # Aprobar todo, de una. Es lo que se hace el 90% de
+                # las veces: se mira la lista, se decide que el lote
+                # esta bien, y se firma. Tener que elegir grupo antes
+                # convertia esa decision en tres pasos.
+                #
+                # La observacion es opcional. Exigirla bloqueaba el
+                # boton y era el motivo de que esto pareciera roto:
+                # el rastro de que alguien lo firmo a mano queda igual
+                # en el reporte y en el Excel ("MANUALLY Approved
+                # by ..."), con razon o sin ella.
+                with st.form("qa2_review_all_form"):
+                    _all_note = st.text_input(
+                        "Observation (optional) -- applies to "
+                        "everything you approve here",
+                        key="qa2_review_all_note",
+                        placeholder=(
+                            "e.g. \"Creatives start a day early on "
+                            "purpose, to test before the placement "
+                            "goes live.\""
+                        ),
+                    )
+                    _approve_all = st.form_submit_button(
+                        f"Approve all {_pending} remaining"
+                        if _pending
+                        else "Nothing left to approve",
+                        use_container_width=True,
+                        type="primary",
+                        disabled=not _pending,
+                    )
+
+                if _approve_all:
+                    _note_all = str(_all_note or "").strip()
+                    for finding in review_findings:
+                        _review_state.setdefault(
+                            finding.finding_id,
+                            {"approved": True, "note": _note_all},
+                        )
+                        _review_state[finding.finding_id]["approved"] = True
+                        if _note_all:
+                            _review_state[finding.finding_id]["note"] = (
+                                _note_all
+                            )
+                    st.session_state["qa2_review_nonce"] = (
+                        _review_nonce + 1
+                    )
+                    st.rerun()
+
+                if _approved_now and st.button(
+                    "Clear all approvals", key="qa2_review_clear"
+                ):
+                    _review_state.clear()
+                    st.session_state["qa2_review_nonce"] = (
+                        _review_nonce + 1
+                    )
+                    st.rerun()
+
+                # Por grupo, para quien quiera firmar solo una parte
+                # con su propia razon. Va plegado: es la excepcion.
                 _bulk_groups = bulk_groups(review_findings)
 
                 if _bulk_groups:
-                    st.markdown("**Approve a whole group at once**")
-
-                    # El selector va FUERA del formulario para que el
-                    # boton diga cuantos va a aprobar en cuanto se
-                    # cambia de grupo.
-                    _bulk_choice = st.selectbox(
-                        "Group",
-                        options=list(_bulk_groups),
-                        key="qa2_review_bulk_group",
-                        label_visibility="collapsed",
-                    )
-                    _bulk_items = _bulk_groups[_bulk_choice]
-
-                    # La observacion y el boton van DENTRO de un
-                    # formulario. Fuera de el, Streamlit manda el
-                    # texto cuando el campo pierde el foco y el clic
-                    # por su cuenta: quien escribe y pulsa el boton
-                    # directamente perdia la carrera, el clic llegaba
-                    # con el texto todavia vacio, y la app le pedia
-                    # una observacion que acababa de escribir. Un
-                    # formulario manda las dos cosas juntas.
-                    with st.form("qa2_review_bulk_form"):
-                        _note = st.text_input(
-                            "Observation applied to the whole group",
-                            key="qa2_review_bulk_note",
-                            placeholder=(
-                                "Why the whole group is fine -- e.g. "
-                                "\"Innovid pads the numeric segment "
-                                "and truncates the name; trafficking "
-                                "is unaffected.\""
-                            ),
+                    with st.expander(
+                        "Approve just one group instead", expanded=False
+                    ):
+                        _bulk_choice = st.selectbox(
+                            "Group",
+                            options=list(_bulk_groups),
+                            key="qa2_review_bulk_group",
+                            label_visibility="collapsed",
                         )
-                        _bulk_submitted = st.form_submit_button(
-                            f"Approve all {len(_bulk_items)}",
-                            use_container_width=True,
-                        )
+                        _bulk_items = _bulk_groups[_bulk_choice]
 
-                    if _bulk_submitted:
-                        _note = str(_note or "").strip()
-
-                        if not _note:
-                            # La observacion es el registro de POR QUE
-                            # se dio por bueno, y en bloque pesa mas:
-                            # una frase responde por decenas.
-                            st.warning(
-                                "Write an observation first -- one "
-                                "line is enough, and it becomes the "
-                                f"record for all {len(_bulk_items)} "
-                                "of them."
+                        with st.form("qa2_review_bulk_form"):
+                            _note = st.text_input(
+                                "Observation for this group",
+                                key="qa2_review_bulk_note",
                             )
-                        else:
+                            _bulk_submitted = st.form_submit_button(
+                                f"Approve these {len(_bulk_items)}",
+                                use_container_width=True,
+                            )
+
+                        if _bulk_submitted:
+                            _note = str(_note or "").strip()
                             for _item in _bulk_items:
                                 _review_state[_item.finding_id] = {
                                     "approved": True,
@@ -2719,19 +2749,7 @@ if True:
                             )
                             st.rerun()
 
-                    _bulk_cols = st.columns([3, 2])
-
-                    if _review_state and _bulk_cols[1].button(
-                        "Clear all approvals",
-                        use_container_width=True,
-                    ):
-                        _review_state.clear()
-                        st.session_state["qa2_review_nonce"] = (
-                            _review_nonce + 1
-                        )
-                        st.rerun()
-
-                    st.divider()
+                st.divider()
 
                 _review_base_df = pd.DataFrame(
                     [
@@ -2817,34 +2835,41 @@ if True:
                         entry.setdefault("note", "")
                         _review_state[finding.finding_id] = entry
 
-                # Un FAIL sin observacion se queda sin firmar. Es una
-                # desviacion real: darla por buena en silencio es justo
-                # lo que el QA existe para evitar. Un REVIEW si puede
-                # ir sin nota.
-                review_overrides: dict[str, dict] = {}
-                _unsigned: list = []
-
-                for finding in review_findings:
-                    entry = _review_state.get(finding.finding_id)
-                    if not entry or not entry.get("approved"):
-                        continue
-                    note = str(entry.get("note") or "").strip()
-                    if finding.status.value == "FAIL" and not note:
-                        _unsigned.append(finding)
-                        continue
-                    review_overrides[finding.finding_id] = {
+                # Marcado es firmado, con razon o sin ella. Exigir la
+                # observacion para firmar un FAIL bloqueaba el boton y
+                # era buena parte de por que esto parecia roto.
+                #
+                # Lo que protege el registro no es obligar a escribir,
+                # es que la firma quede a la vista: el hallazgo sale en
+                # el reporte y en el Excel como "MANUALLY Approved
+                # by ...", asi que nadie puede confundir un PASS
+                # firmado a mano con uno que salio bien solo.
+                review_overrides = {
+                    finding.finding_id: {
                         "approved": True,
-                        "note": note,
+                        "note": str(
+                            _review_state[finding.finding_id].get("note")
+                            or ""
+                        ).strip(),
                     }
+                    for finding in review_findings
+                    if _review_state.get(finding.finding_id, {}).get(
+                        "approved"
+                    )
+                }
 
-                if _unsigned:
-                    st.warning(
-                        f"{len(_unsigned)} failure(s) are ticked but "
-                        "have no observation, so they are not signed "
-                        "off. A FAIL is a real deviation -- say why "
-                        "it is acceptable and it becomes a PASS with "
-                        "that reason on the record. Use the group "
-                        "box above to write one line for all of them."
+                _no_reason = [
+                    finding for finding in review_findings
+                    if finding.status.value == "FAIL"
+                    and finding.finding_id in review_overrides
+                    and not review_overrides[finding.finding_id]["note"]
+                ]
+                if _no_reason:
+                    st.caption(
+                        f"{len(_no_reason)} failure(s) signed off with "
+                        "no observation. They count as PASS and the "
+                        "report says they were approved by hand -- "
+                        "but whoever reads it later won't know why."
                     )
 
                 # La cabecera se dibuja antes que la tabla, asi que una
