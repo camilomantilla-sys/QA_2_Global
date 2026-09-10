@@ -1898,38 +1898,22 @@ with st.sidebar:
         key="qa2_profile_select",
     )
 
-    # Firmar sin depender del panel.
-    #
-    # Run QA es el unico boton que en la maquina de Camilo llega
-    # siempre al servidor. Esto engancha la firma a ese clic: se
-    # marca antes de correr, y el QA sale ya firmado -- informe,
-    # PDF y Excel incluidos -- sin tocar nada mas.
-    st.checkbox(
-        "Sign off everything that comes back for review",
-        key="qa2_preapprove",
-        help=(
-            "Applies when you press Run QA. Everything the run sends "
-            "to QA2 Review is approved with the observation below, "
-            "exactly as if you had used the Approve all button. "
-            "Failures still show as failures in the report, marked "
-            "\"MANUALLY Approved by ...\"."
-        ),
-    )
-    if st.session_state.get("qa2_preapprove"):
-        st.text_input(
-            "Observation for that sign-off",
-            key="qa2_preapprove_note",
-            placeholder=(
-                "e.g. \"Creatives start a day early on purpose, to "
-                "test before the placement goes live.\""
-            ),
-        )
-
     analyze_button = st.button(
         "Run QA",
         type="primary",
         use_container_width=True,
     )
+
+    # Se reserva aqui y se rellena cuando ya hay hallazgos, mas de
+    # mil lineas mas abajo.
+    #
+    # Firmar es lo ultimo que se hace: primero se corre, se miran las
+    # fechas y se decide. Pero en la barra lateral, no en el panel:
+    # todo lo que le responde a Camilo esta aqui -- Run QA, los
+    # archivos, la casilla de Innovid -- y todo lo que no le
+    # responde esta en el panel del centro. Mismo boton, sitio que
+    # funciona.
+    _sidebar_review_slot = st.container()
 
     # st.button() only returns True on the single rerun triggered by
     # the click itself -- on every later rerun (e.g. changing a filter
@@ -2723,26 +2707,6 @@ if True:
             "qa2_review_state", {}
         )
 
-        # La casilla de la barra lateral, aplicada en la pasada de
-        # Run QA: el unico clic que se sabe que llega.
-        if analyze_button and st.session_state.get("qa2_preapprove"):
-            _pre_note = str(
-                st.session_state.get("qa2_preapprove_note") or ""
-            ).strip()
-            for finding in review_findings:
-                entry = _review_state.setdefault(finding.finding_id, {})
-                entry["approved"] = True
-                if _pre_note or "note" not in entry:
-                    entry["note"] = _pre_note
-            _stamp = datetime.now().strftime("%H:%M:%S")
-            st.session_state["qa2_review_last_action"] = (
-                f"{len(review_findings)} signed off with Run QA "
-                f"at {_stamp}"
-            )
-            st.session_state["qa2_click_beacon"] = (
-                f"run-qa sign-off {len(review_findings)} at {_stamp}"
-            )
-
         if review_findings:
             with st.expander(
                 f"📝 QA2 Review ({len(review_findings)})",
@@ -2870,6 +2834,46 @@ if True:
                         "qa2_review_all_note",
                     ),
                 )
+
+                # El mismo boton, en la barra lateral.
+                #
+                # Se dibuja desde aqui porque aqui es donde existen
+                # _sign y la lista de hallazgos; `with` solo cambia
+                # el sitio donde aparece. Mira la tabla, decide, y
+                # firma desde la izquierda -- que es la parte de la
+                # pagina que en su maquina responde.
+                with _sidebar_review_slot:
+                    st.divider()
+                    st.caption(
+                        f"**QA2 Review** -- {len(review_findings)} to "
+                        "sign off"
+                    )
+                    st.text_input(
+                        "Observation (optional)",
+                        key="qa2_sidebar_note",
+                        placeholder="Why this is acceptable",
+                    )
+                    st.button(
+                        f"Sign off all {len(review_findings)}",
+                        key="qa2_sidebar_sign_all",
+                        use_container_width=True,
+                        type="primary",
+                        on_click=_sign,
+                        args=(
+                            [f.finding_id for f in review_findings],
+                            "qa2_sidebar_note",
+                        ),
+                    )
+                    if _review_state:
+                        st.button(
+                            "Clear all",
+                            key="qa2_sidebar_clear",
+                            use_container_width=True,
+                            on_click=_clear_all,
+                        )
+                        st.caption(
+                            f"{len(_review_state)} signed off so far."
+                        )
 
                 if _review_state:
                     st.button(

@@ -29,6 +29,8 @@ BUTTON_KEYS = (
     "qa2_review_approve_all",
     "qa2_review_approve_group",
     "qa2_review_clear",
+    "qa2_sidebar_sign_all",
+    "qa2_sidebar_clear",
 )
 
 
@@ -92,20 +94,34 @@ def test_clearing_empties_the_state_it_shares_with_signing():
     assert ".clear()" in body
 
 
-def test_run_qa_can_sign_off_without_the_panel():
-    # El unico clic que en su maquina llega siempre al servidor es
-    # Run QA. Enganchar la firma a ese clic la deja funcionando sea
-    # cual sea el problema del panel.
-    assert 'key="qa2_preapprove"' in SOURCE
-    assert 'analyze_button and st.session_state.get("qa2_preapprove")' in SOURCE
+def test_the_sidebar_can_sign_off_too():
+    # Todo lo que le responde en su maquina esta en la barra
+    # lateral; todo lo que no, en el panel del centro. El mismo
+    # boton, en el sitio que funciona.
+    assert 'key="qa2_sidebar_sign_all"' in SOURCE
+    assert "with _sidebar_review_slot:" in SOURCE
+    assert "on_click=" in _call_around("qa2_sidebar_sign_all")
 
 
-def test_the_run_qa_sign_off_leaves_the_same_trace():
-    body = SOURCE[SOURCE.index('if analyze_button and st.session_state.get("qa2_preapprove")'):]
-    body = body[:body.index("if review_findings:")]
-    assert "qa2_review_last_action" in body
-    assert "qa2_click_beacon" in body
-    assert 'entry["approved"] = True' in body
+def test_the_sidebar_slot_is_reserved_next_to_run_qa():
+    slot = SOURCE.index("_sidebar_review_slot = st.container()")
+    run_qa = SOURCE.index('"Run QA",')
+    results_try = SOURCE.index("\nif True:\n    try:")
+    assert run_qa < slot < results_try
+
+
+def test_the_sidebar_reads_its_own_observation():
+    # Si el area central no llega al servidor, tampoco llega lo que
+    # se escriba alli: la barra lateral necesita su propia caja.
+    call = _call_around("qa2_sidebar_sign_all")
+    assert '"qa2_sidebar_note"' in call
+    assert 'key="qa2_sidebar_note"' in SOURCE
+
+
+def test_nothing_is_signed_off_before_the_run():
+    # Firmar antes de ver los hallazgos no es un QA2. Se corre, se
+    # miran las fechas, y despues se firma.
+    assert "qa2_preapprove" not in SOURCE
 
 
 def test_the_script_run_counter_is_shown_outside_the_results_try():
