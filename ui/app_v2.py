@@ -2667,6 +2667,7 @@ if True:
                 )
 
                 def _sign(findings, note: str) -> None:
+                    """Firma y deja constancia de que se firmo."""
                     """
                     Firma y deja la tabla lista en ESTA misma pasada.
 
@@ -2683,33 +2684,38 @@ if True:
                     st.session_state["qa2_review_nonce"] = (
                         _review_nonce + 1
                     )
+                    st.session_state["qa2_review_last_action"] = (
+                        f"{len(findings)} signed off at "
+                        f"{datetime.now().strftime('%H:%M:%S')}"
+                    )
 
                 _pending = len(review_findings) - _approved_before
 
-                with st.form("qa2_review_all_form"):
-                    _all_note = st.text_input(
-                        "Observation (optional) -- applies to "
-                        "everything you approve here",
-                        key="qa2_review_all_note",
-                        placeholder=(
-                            "e.g. \"Creatives start a day early on "
-                            "purpose, to test before the placement "
-                            "goes live.\""
-                        ),
-                    )
-                    # No se deshabilita nunca. _pending se calcula al
-                    # principio de la pasada, asi que tras un "Clear
-                    # all" el boton se quedaba gris diciendo "nothing
-                    # left to approve" hasta la siguiente interaccion,
-                    # que es justo cuando parece roto. Firmar lo ya
-                    # firmado no hace dano.
-                    _approve_all = st.form_submit_button(
-                        f"Approve all {len(review_findings)}",
-                        use_container_width=True,
-                        type="primary",
-                    )
+                # Sin formulario. El formulario estaba para que el
+                # texto llegara junto al clic, pero la observacion es
+                # opcional: si llega un instante tarde, lo peor que
+                # pasa es que quede vacia, que esta permitido. Un
+                # boton normal tiene menos piezas que puedan fallar.
+                _all_note = st.text_input(
+                    "Observation (optional) -- applies to everything "
+                    "you approve here",
+                    key="qa2_review_all_note",
+                    placeholder=(
+                        "e.g. \"Creatives start a day early on "
+                        "purpose, to test before the placement "
+                        "goes live.\""
+                    ),
+                )
 
-                if _approve_all:
+                # No se deshabilita nunca: firmar lo ya firmado no
+                # hace dano, y el contador de pendientes va siempre un
+                # turno por detras.
+                if st.button(
+                    f"Approve all {len(review_findings)}",
+                    key="qa2_review_approve_all",
+                    use_container_width=True,
+                    type="primary",
+                ):
                     _sign(review_findings, str(_all_note or "").strip())
 
                 if _review_state and st.button(
@@ -2743,17 +2749,15 @@ if True:
                     )
                     _bulk_items = _bulk_groups[_bulk_choice]
 
-                    with st.form("qa2_review_bulk_form"):
-                        _note = st.text_input(
-                            "Observation for this group",
-                            key="qa2_review_bulk_note",
-                        )
-                        _bulk_submitted = st.form_submit_button(
-                            f"Approve these {len(_bulk_items)}",
-                            use_container_width=True,
-                        )
-
-                    if _bulk_submitted:
+                    _note = st.text_input(
+                        "Observation for this group",
+                        key="qa2_review_bulk_note",
+                    )
+                    if st.button(
+                        f"Approve these {len(_bulk_items)}",
+                        key="qa2_review_approve_group",
+                        use_container_width=True,
+                    ):
                         _sign(_bulk_items, str(_note or "").strip())
 
                 st.divider()
@@ -2882,6 +2886,13 @@ if True:
                         f"{len(review_findings)} to review. Nothing "
                         "approved yet."
                     )
+
+                _last = st.session_state.get("qa2_review_last_action")
+                if _last:
+                    # Distingue "el clic no llego" de "el clic llego y
+                    # no cambio nada". Sin esto, los dos se ven igual
+                    # -- que es donde llevamos varias rondas.
+                    st.caption(f"Last approve action: {_last}")
 
                 _no_reason = [
                     finding for finding in review_findings
