@@ -2681,13 +2681,16 @@ if True:
                             "goes live.\""
                         ),
                     )
+                    # No se deshabilita nunca. _pending se calcula al
+                    # principio de la pasada, asi que tras un "Clear
+                    # all" el boton se quedaba gris diciendo "nothing
+                    # left to approve" hasta la siguiente interaccion,
+                    # que es justo cuando parece roto. Firmar lo ya
+                    # firmado no hace dano.
                     _approve_all = st.form_submit_button(
-                        f"Approve all {_pending} remaining"
-                        if _pending
-                        else "Nothing left to approve",
+                        f"Approve all {len(review_findings)}",
                         use_container_width=True,
                         type="primary",
-                        disabled=not _pending,
                     )
 
                 if _approve_all:
@@ -2705,30 +2708,35 @@ if True:
                 # con su propia razon. Va plegado: es la excepcion.
                 _bulk_groups = bulk_groups(review_findings)
 
-                if _bulk_groups:
-                    with st.expander(
-                        "Approve just one group instead", expanded=False
-                    ):
-                        _bulk_choice = st.selectbox(
-                            "Group",
-                            options=list(_bulk_groups),
-                            key="qa2_review_bulk_group",
-                            label_visibility="collapsed",
+                # Un checkbox, no un expander: este bloque ya vive
+                # dentro del expander del panel, y Streamlit no
+                # soporta uno dentro de otro. El formulario anidado
+                # nunca llegaba a responder al clic -- por eso
+                # "Approve all" funcionaba y este no.
+                if _bulk_groups and st.checkbox(
+                    "Approve just one group instead",
+                    key="qa2_review_show_groups",
+                ):
+                    _bulk_choice = st.selectbox(
+                        "Group",
+                        options=list(_bulk_groups),
+                        key="qa2_review_bulk_group",
+                        label_visibility="collapsed",
+                    )
+                    _bulk_items = _bulk_groups[_bulk_choice]
+
+                    with st.form("qa2_review_bulk_form"):
+                        _note = st.text_input(
+                            "Observation for this group",
+                            key="qa2_review_bulk_note",
                         )
-                        _bulk_items = _bulk_groups[_bulk_choice]
+                        _bulk_submitted = st.form_submit_button(
+                            f"Approve these {len(_bulk_items)}",
+                            use_container_width=True,
+                        )
 
-                        with st.form("qa2_review_bulk_form"):
-                            _note = st.text_input(
-                                "Observation for this group",
-                                key="qa2_review_bulk_note",
-                            )
-                            _bulk_submitted = st.form_submit_button(
-                                f"Approve these {len(_bulk_items)}",
-                                use_container_width=True,
-                            )
-
-                        if _bulk_submitted:
-                            _sign(_bulk_items, str(_note or "").strip())
+                    if _bulk_submitted:
+                        _sign(_bulk_items, str(_note or "").strip())
 
                 st.divider()
 

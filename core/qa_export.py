@@ -263,19 +263,25 @@ def _findings_index(findings) -> dict:
         name = norm_creative(getattr(finding, "creative_name", "") or "")
         key = (pid, name)
         index.setdefault(key, set()).add(finding.status.value)
-        note = f"[{finding.status.value}] {finding.rule_id}: {finding.message}"
-
-        # Una aprobacion manual deja su rastro en el reason del
-        # hallazgo ("Approved by X: porque..."). Ese es el registro de
-        # POR QUE alguien lo dio por bueno, y sin el, el entregable
-        # muestra un PASS que no se distingue de uno que salio bien
-        # solo. Quien reciba el archivo tiene que poder ver cual fue.
+        # En Notes solo va lo que el color no puede decir: que alguien
+        # firmo esto a mano. El resto -- que coincide y que no -- ya
+        # esta en el verde y el naranja de las columnas, y volcarlo
+        # aqui convertia la celda en un parrafo ilegible.
         reason = str(getattr(finding, "reason", "") or "")
         if "Approved" in reason:
             approval = reason.split("|")[-1].strip() if "|" in reason else reason
-            note += f" -- MANUALLY {approval}"
+            index.setdefault(("notes",) + key, set()).add(
+                f"MANUALLY {approval}"
+            )
+            continue
 
-        index.setdefault(("notes",) + key, set()).add(note)
+        # Un hallazgo que sigue abierto si se nombra: un FAIL o un
+        # REVIEW no tiene color propio en la fila, y sin esto no
+        # habria forma de saber por que la fila esta marcada.
+        if finding.status.value in ("FAIL", "REVIEW", "NOT_VERIFIED"):
+            index.setdefault(("notes",) + key, set()).add(
+                f"{finding.rule_id}: {finding.message}"
+            )
     return index
 
 
