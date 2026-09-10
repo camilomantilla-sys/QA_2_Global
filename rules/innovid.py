@@ -18,6 +18,7 @@ from core.innovid_reconciliation import (
     MATCHED,
     MISSING_IN_INNOVID,
 )
+from core.intent import requested
 from core.normalize import norm_compare
 
 WHITE = "WHITE"
@@ -123,6 +124,33 @@ def _flight_dates(reconciliation, buffer):
                     "name in Innovid with the Traffic Sheet."
                 ),
             )
+
+        # Las fechas solo se juzgan si se pidio cambiarlas. En una
+        # solicitud de cambio de rotacion, la TS repite las fechas del
+        # creativo sin pintarlas: son contexto, no una peticion. Antes
+        # se comparaban igual y cada creativo adelantado un dia para
+        # poder testearlo salia como fallo.
+        if not requested(check, "dates"):
+            # Callarlo del todo seria perder el dato: si las fechas de
+            # verdad difieren se dice una vez, como INFO. No tumba el
+            # QA porque no es de esta solicitud.
+            if _differs(check.expected_start, check.actual_start) or _differs(
+                check.expected_end, check.actual_end
+            ):
+                buffer.info(
+                    message=(
+                        f"{check.creative_name} flights on other dates, "
+                        "but this request didn't ask to change them"
+                    ),
+                    expected=_span(check.expected_start, check.expected_end),
+                    actual=_span(check.actual_start, check.actual_end),
+                    recommended_action=(
+                        "Nothing to do for this request. Worth raising "
+                        "separately if it looks wrong."
+                    ),
+                    **common,
+                )
+            continue
 
         # MATCHED: comparar solo lo que ambos lados declaran.
         if check.expected_start is None and check.expected_end is None:
