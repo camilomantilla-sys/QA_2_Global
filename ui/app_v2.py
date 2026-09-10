@@ -2764,13 +2764,16 @@ if True:
                     else:
                         _review_state.pop(finding.finding_id, None)
 
-                if review_overrides:
-                    st.info(
-                        f"{len(review_overrides)} of "
-                        f"{len(review_findings)} REVIEW item(s) "
-                        "approved -- counted as PASS below."
-                    )
+                # La cabecera del panel se dibuja ANTES de esta tabla,
+                # asi que cuando alguien marca una casilla a mano el
+                # recuento de arriba se queda un paso atras: la fila
+                # queda aprobada y el titulo sigue diciendo lo mismo.
+                # Una sola pasada mas y coinciden -- en la siguiente ya
+                # no hay diferencia, asi que esto no se repite.
+                if len(review_overrides) != _approved_now:
+                    st.rerun()
 
+                if review_overrides:
                     findings_buffer._items = apply_review_overrides(
                         findings_buffer.findings,
                         review_overrides,
