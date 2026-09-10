@@ -38,6 +38,47 @@ def _worth_caching(result) -> bool:
     return bool(result.placements)
 
 
+INNOVID_CACHE_SECONDS = 3600
+
+
+def _should_fetch(hit, refresh: bool, age_seconds: float = 0.0) -> bool:
+    """
+    Cuando se le vuelve a preguntar a Innovid.
+
+    Misma copia deliberada que _worth_caching: una linea, escrita
+    igual en la app. Run QA pregunta; nada mas lo hace.
+    """
+    return not (
+        hit is not None
+        and not refresh
+        and age_seconds < INNOVID_CACHE_SECONDS
+    )
+
+
+def test_run_qa_always_asks_innovid_again():
+    # Es el unico boton que significa "vuelve a mirar".
+    assert _should_fetch(hit="cached", refresh=True)
+
+
+def test_approving_reuses_what_run_qa_downloaded():
+    # El caso que rompia: aprobar relanzaba Playwright, la pagina se
+    # quedaba con el render anterior atenuado y el boton parecia
+    # muerto durante minutos.
+    assert not _should_fetch(hit="cached", refresh=False)
+
+
+def test_a_cold_cache_fetches_even_without_run_qa():
+    assert _should_fetch(hit=None, refresh=False)
+
+
+def test_an_answer_older_than_an_hour_is_not_reused():
+    assert _should_fetch(hit="cached", refresh=False, age_seconds=3601)
+
+
+def test_an_answer_from_this_session_is_reused():
+    assert not _should_fetch(hit="cached", refresh=False, age_seconds=3599)
+
+
 DSET_400 = (
     "3 of 88 decision set(s) could not be read. "
     "placementDecisionSetId returned HTTP 400"
@@ -78,6 +119,10 @@ def test_the_app_still_uses_this_rule():
     assert "if result.placements:" in source, (
         "la regla del cache cambio en la app y este test ya no la representa"
     )
+    assert "refresh=bool(analyze_button)" in source, (
+        "solo Run QA debe volver a preguntarle a Innovid"
+    )
+    assert "INNOVID_CACHE_SECONDS = 3600" in source
 
 
 if __name__ == "__main__":

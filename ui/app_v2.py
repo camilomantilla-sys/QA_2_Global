@@ -356,16 +356,34 @@ def running_checkout() -> tuple[str, str]:
     return str(root), branch or "unknown"
 
 
-INNOVID_CACHE_SECONDS = 900
+# Una hora: el tope de lo que puede durar una respuesta guardada
+# aunque nadie vuelva a pulsar Run QA. No es el mecanismo principal
+# -- ese es `refresh` -- sino el freno para una pestana que lleva
+# toda la tarde abierta.
+INNOVID_CACHE_SECONDS = 3600
 
 
-def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
+def cached_fetch_innovid(
+    campaign_id: str,
+    placement_ids: tuple[str, ...],
+    refresh: bool = False,
+):
     """
     Reads the campaign from Innovid, reusing a good answer.
 
     Cached because every widget interaction reruns the whole script,
     and without it a checkbox tick would launch a browser and hit
     Innovid again.
+
+    `refresh` es lo que pasa al pulsar Run QA, y es la unica cosa que
+    vuelve a preguntarle a Innovid. Cualquier otra interaccion --
+    aprobar, un filtro, una casilla -- reutiliza lo ya descargado.
+
+    Sin eso, el caduco del cache caia en mitad de una sesion y el
+    siguiente clic relanzaba Playwright y releia 88 decision sets.
+    Streamlit deja la pagina anterior en pantalla, atenuada, mientras
+    el rerun corre: desde fuera el boton parece muerto durante
+    minutos. Ese era el "el boton de approve no hace nada".
 
     An answer that carried placements is kept even if part of it
     failed. A total failure is not: that is usually an expired
@@ -382,7 +400,11 @@ def cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...]):
     store = st.session_state.setdefault("qa2_innovid_cache", {})
 
     hit = store.get(key)
-    if hit and (_time.monotonic() - hit[0]) < INNOVID_CACHE_SECONDS:
+    if (
+        hit
+        and not refresh
+        and (_time.monotonic() - hit[0]) < INNOVID_CACHE_SECONDS
+    ):
         return hit[1]
 
     result = fetch_campaign(
@@ -2367,7 +2389,9 @@ if True:
                         f"Reading campaign {_campaign_id} from Innovid…"
                     ):
                         innovid_result = cached_fetch_innovid(
-                            _campaign_id, _worked_ids
+                            _campaign_id,
+                            _worked_ids,
+                            refresh=bool(analyze_button),
                         )
                     innovid_reconciliation = reconcile_innovid(
                         match_result, innovid_result
