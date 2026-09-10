@@ -627,7 +627,10 @@ def test_the_renamed_node_is_not_also_reported_as_extra():
     assert MISSING_IN_INNOVID not in statuses
 
 
-def test_a_name_match_is_not_reported_as_a_rename():
+def test_the_same_name_is_never_reported_as_a_rename():
+    # Emparejar por id es el camino normal, no la excepcion, asi que
+    # INV-004 tiene que mirar si el nombre difiere de verdad. Sin eso
+    # saltaria en todos los creativos.
     ts = _ts("11087616", [
         ExpectedCreative(name=V2, creative_id="6389150", intent=GREEN),
     ])
@@ -635,8 +638,32 @@ def test_a_name_match_is_not_reported_as_a_rename():
         _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
     ])
     rec = reconcile(ts, got)
-    assert rec.flights[0].matched_by == "name"
+    assert rec.flights[0].matched_by == "creative_id"
     assert _by_rule(_findings(rec), "INV-004") == []
+
+
+def test_innovids_upload_stamp_is_not_a_rename_either():
+    # El nombre del decision set arrastra "__<uuid>__<id>.zip". Eso no
+    # es un renombrado.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=DOVE_TS, creative_id="6115782", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(DOVE_INNOVID, "2026-09-14", "2026-10-31", creative_id=6115782),
+    ])
+    assert _by_rule(_findings(reconcile(ts, got)), "INV-004") == []
+
+
+def test_a_creative_with_no_id_is_still_found_by_its_name():
+    # Hay TS que no declaran creative id y tienen que seguir
+    # funcionando.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    rec = reconcile(ts, got)
+    assert rec.flights[0].matched_by == "name"
+    assert rec.flights[0].status == MATCHED
 
 
 def test_a_creative_with_neither_name_nor_id_in_innovid_is_still_missing():

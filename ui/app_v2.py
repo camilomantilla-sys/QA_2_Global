@@ -2602,7 +2602,7 @@ if True:
         #
         # Firmar un FAIL no lo tapa: la desviacion queda escrita en el
         # reporte y en el Excel como "MANUALLY Approved by ...".
-        REVIEWABLE = ("REVIEW", "FAIL")
+        REVIEWABLE = ("REVIEW", "FAIL", "PASS")  # EXPERIMENTO
         review_findings = [
             finding for finding in findings_buffer.findings
             if finding.status.value in REVIEWABLE
@@ -2727,7 +2727,9 @@ if True:
                 # nunca llegaba a responder al clic -- por eso
                 # "Approve all" funcionaba y este no.
                 if _bulk_groups and st.checkbox(
-                    "Approve just one group instead",
+                    f"Approve just one group instead "
+                    f"({len(_bulk_groups)} group"
+                    f"{'s' if len(_bulk_groups) != 1 else ''})",
                     key="qa2_review_show_groups",
                 ):
                     _bulk_choice = st.selectbox(
@@ -2837,6 +2839,27 @@ if True:
                         "approved"
                     )
                 }
+
+                # Aprobaciones que ya no encuentran su hallazgo.
+                #
+                # finding_id es un hash de la regla, el placement, el
+                # creativo y los valores comparados. Si el QA se
+                # vuelve a correr con datos distintos -- Innovid
+                # respondio otra cosa, o cambiaron las reglas -- los
+                # ids cambian y lo firmado antes deja de casar con
+                # nada. Callarlo se ve exactamente como que el boton
+                # no funciona.
+                _live = {finding.finding_id for finding in review_findings}
+                _orphans = [key for key in _review_state if key not in _live]
+                if _orphans:
+                    for key in _orphans:
+                        _review_state.pop(key, None)
+                    st.warning(
+                        f"{len(_orphans)} approval(s) from an earlier "
+                        "run no longer match anything in this one -- "
+                        "the QA was re-run over different data, so "
+                        "they were dropped. Sign off again below."
+                    )
 
                 _signed = len(review_overrides)
                 _left = len(review_findings) - _signed
