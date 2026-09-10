@@ -2759,7 +2759,7 @@ if True:
                     ]
                 )
 
-                _edited_review_df = st.data_editor(
+                st.data_editor(
                     _review_base_df,
                     use_container_width=True,
                     hide_index=True,
@@ -2770,40 +2770,72 @@ if True:
                     key=f"qa2_review_approval_{_review_nonce}",
                 )
 
+                # _review_state es la unica verdad. El editor solo
+                # aporta lo que la persona acaba de tocar.
+                #
+                # Antes se leia la tabla ENTERA y se borraba del estado
+                # toda fila que no apareciera marcada. Pero la tabla va
+                # siempre un render por detras del boton de lote: el
+                # lote aprobaba 24, la tabla todavia los mostraba sin
+                # marcar, y este bucle los borraba acto seguido. La
+                # aprobacion se deshacia sola y no habia forma de
+                # firmar nada, ni en bloque ni a mano.
+                #
+                # Streamlit guarda los cambios del editor como deltas
+                # en "edited_rows": {fila: {columna: valor}}. Aplicar
+                # solo eso no puede deshacer lo que no se toco.
+                _editor_state = st.session_state.get(
+                    f"qa2_review_approval_{_review_nonce}"
+                )
+                _edits = {}
+                if isinstance(_editor_state, dict):
+                    _edits = _editor_state.get("edited_rows") or {}
+
+                _state_before = {
+                    key: dict(value) for key, value in _review_state.items()
+                }
+
+                for _row_index, _changes in _edits.items():
+                    try:
+                        finding = review_findings[int(_row_index)]
+                    except (ValueError, IndexError):
+                        continue
+
+                    entry = dict(_review_state.get(finding.finding_id, {}))
+
+                    if "Approve" in _changes:
+                        if _changes["Approve"]:
+                            entry["approved"] = True
+                        else:
+                            _review_state.pop(finding.finding_id, None)
+                            continue
+
+                    if "Observation" in _changes:
+                        entry["note"] = str(_changes["Observation"] or "")
+
+                    if entry.get("approved"):
+                        entry.setdefault("note", "")
+                        _review_state[finding.finding_id] = entry
+
+                # Un FAIL sin observacion se queda sin firmar. Es una
+                # desviacion real: darla por buena en silencio es justo
+                # lo que el QA existe para evitar. Un REVIEW si puede
+                # ir sin nota.
                 review_overrides: dict[str, dict] = {}
                 _unsigned: list = []
 
-                # Lo que quede marcado en la tabla es la verdad final:
-                # el revisor puede desmarcar a mano cualquier fila que
-                # el lote haya aprobado de mas.
-                for finding, (_, _row) in zip(
-                    review_findings, _edited_review_df.iterrows()
-                ):
-                    _note = str(_row.get("Observation") or "").strip()
-
-                    # Un FAIL sin observacion se queda sin firmar. Es
-                    # una desviacion real: darla por buena en silencio
-                    # es justo lo que el QA existe para evitar. Un
-                    # REVIEW si puede ir sin nota.
-                    if (
-                        bool(_row.get("Approve"))
-                        and finding.status.value == "FAIL"
-                        and not _note
-                    ):
+                for finding in review_findings:
+                    entry = _review_state.get(finding.finding_id)
+                    if not entry or not entry.get("approved"):
+                        continue
+                    note = str(entry.get("note") or "").strip()
+                    if finding.status.value == "FAIL" and not note:
                         _unsigned.append(finding)
                         continue
-
-                    if bool(_row.get("Approve")):
-                        review_overrides[finding.finding_id] = {
-                            "approved": True,
-                            "note": _note,
-                        }
-                        _review_state[finding.finding_id] = {
-                            "approved": True,
-                            "note": _note,
-                        }
-                    else:
-                        _review_state.pop(finding.finding_id, None)
+                    review_overrides[finding.finding_id] = {
+                        "approved": True,
+                        "note": note,
+                    }
 
                 if _unsigned:
                     st.warning(
@@ -2815,13 +2847,12 @@ if True:
                         "box above to write one line for all of them."
                     )
 
-                # La cabecera del panel se dibuja ANTES de esta tabla,
-                # asi que cuando alguien marca una casilla a mano el
-                # recuento de arriba se queda un paso atras: la fila
-                # queda aprobada y el titulo sigue diciendo lo mismo.
-                # Una sola pasada mas y coinciden -- en la siguiente ya
-                # no hay diferencia, asi que esto no se repite.
-                if len(review_overrides) != _approved_now:
+                # La cabecera se dibuja antes que la tabla, asi que una
+                # casilla marcada a mano llega tarde para el recuento.
+                # Una pasada mas y coinciden; como los deltas son
+                # idempotentes, la segunda no cambia nada y esto no se
+                # repite.
+                if _review_state != _state_before:
                     st.rerun()
 
                 if review_overrides:

@@ -41,6 +41,11 @@ def _flight_dates(reconciliation, buffer):
             domain=Domain.DATES,
             entity_type=EntityType.CREATIVE,
             placement_id=check.placement_id,
+            # El nombre va en su propio campo, no solo dentro del
+            # mensaje: es lo que permite agrupar los hallazgos por
+            # motivo y firmarlos en bloque. Sin esto, cada creativo
+            # era su propio grupo de uno.
+            creative_name=check.creative_name,
             reason=f"Innovid decision set · {check.creative_name}",
         )
 
@@ -105,7 +110,8 @@ def _flight_dates(reconciliation, buffer):
                 domain=Domain.IDENTITY,
                 entity_type=EntityType.CREATIVE,
                 placement_id=check.placement_id,
-                reason=f"Innovid decision set · creative id matched",
+                creative_name=check.creative_name,
+                reason="Innovid decision set · creative id matched",
                 message=(
                     f"{check.creative_name} is in Innovid under another "
                     "name, with the same creative id"
