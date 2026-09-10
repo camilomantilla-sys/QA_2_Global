@@ -13,11 +13,14 @@ from pathlib import Path
 import pandas as pd  # type: ignore
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import CellIsRule
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
 from core.pdf_report import ReportMeta
+from core.qa_export import COLUMNS as QA_COLUMNS, PAIRS, cells_agree
 
 # WPP Media Brand Guidelines 2025 v1.0 (openpyxl wants RRGGBB, no #).
 WPP_NAVY = "000050"
@@ -30,6 +33,11 @@ WPP_INDIGO_DARK = WPP_NAVY
 WPP_INK = WPP_NAVY
 WPP_MUTED = "6B7194"
 WPP_BG = "F6F8FC"
+
+# Verde de acuerdo: la TS y lo que Innovid tiene dicen lo mismo.
+# Deliberadamente suave -- son cientos de celdas, y un verde fuerte
+# taparia las pocas que no coinciden, que son las que hay que ver.
+AGREE_FILL = PatternFill("solid", start_color="E8F8E4", end_color="E8F8E4")
 
 STATUS_FILLS = {
     "PASS": "D9F7EC",
@@ -163,10 +171,44 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         ),
         bold=True, size=12,
     )
+    # El desplegable de aprobacion, al lado del veredicto. Excel de
+    # verdad usa un control de formulario para esto, que openpyxl no
+    # sabe escribir; una celda con lista desplegable se marca igual de
+    # rapido, viaja dentro del propio .xlsx y no necesita macros.
+    approval_cell = ws.cell(row=row, column=2, value="PENDING")
+    approval_cell.font = Font(color=WPP_INK, bold=True, size=12)
+    approval_cell.alignment = Alignment(horizontal="center")
+    approval_cell.border = Border(*(Side(style="thin", color=WPP_MUTED),) * 4)
+
+    approval = DataValidation(
+        type="list",
+        formula1='"APPROVED,NOT APPROVED,PENDING"',
+        allow_blank=False,
+        showDropDown=False,   # False = SI muestra la flecha (Excel lo
+                              # nombra al reves: es "ocultar" invertido)
+    )
+    approval.error = "Pick APPROVED, NOT APPROVED or PENDING."
+    approval.prompt = "QA2 sign-off for this campaign."
+    ws.add_data_validation(approval)
+    approval.add(approval_cell)
+
+    # Se pinta sola al elegir: el color tiene que seguir a lo que
+    # quede escrito en el archivo, no a lo que hubiera cuando QA2 lo
+    # genero.
+    target = f"{approval_cell.coordinate}:{approval_cell.coordinate}"
+    for value, key in (("APPROVED", "PASS"), ("NOT APPROVED", "FAIL")):
+        ws.conditional_formatting.add(target, CellIsRule(
+            operator="equal",
+            formula=[f'"{value}"'],
+            fill=PatternFill("solid", start_color=STATUS_FILLS[key],
+                             end_color=STATUS_FILLS[key]),
+            font=Font(color=STATUS_FONT_COLORS[key], bold=True, size=12),
+        ))
+
     row += 1
 
-    # QA2 approval lives here, on the delivered file: QA2 edits this
-    # cell in SharePoint/Excel Web and that edit is the record.
+    # El nombre y la fecha de quien firmo. El desplegable dice SI se
+    # aprobo; esta linea dice QUIEN y CUANDO.
     signoff_cell = ws.cell(
         row=row, column=1,
         value=(
@@ -273,6 +315,34 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
     ws.column_dimensions["B"].width = 60
 
 
+
+def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
+    """
+    El entregable en horizontal: una fila por creativo, los dos lados
+    en columnas pareadas.
+    """
+    ws = wb.create_sheet("QA")
+
+    if not qa_rows:
+        _write_table(ws, pd.DataFrame(columns=QA_COLUMNS), status_col="Status")
+        return
+
+    df = pd.DataFrame(qa_rows, columns=QA_COLUMNS)
+    _write_table(ws, df, status_col="Status")
+
+    index = {name: pos for pos, name in enumerate(QA_COLUMNS, start=1)}
+
+    # Verde donde los dos lados coinciden. Se pintan LAS DOS celdas del
+    # par: pintar solo la de Innovid haria pensar que el verde es un
+    # veredicto sobre Innovid y no sobre el acuerdo entre ambos.
+    for offset, row in enumerate(qa_rows, start=2):
+        for left, right in PAIRS:
+            if not cells_agree(row.get(left), row.get(right)):
+                continue
+            for column in (left, right):
+                ws.cell(row=offset, column=index[column]).fill = AGREE_FILL
+
+
 def build_excel_report(
     meta: ReportMeta,
     findings_df: pd.DataFrame,
@@ -281,11 +351,16 @@ def build_excel_report(
     placements_df: pd.DataFrame | None = None,
     tag_coverage_df: pd.DataFrame | None = None,
     logo_path: Path | None = None,
+    qa_rows: list[dict] | None = None,
 ) -> bytes:
     """Render the full branded QA2 workbook and return it as XLSX bytes."""
     wb = Workbook()
 
     _summary_sheet(wb, meta, logo_path)
+
+    # Primero la hoja QA: es la que se revisa. Las demas son el
+    # detalle al que se baja cuando una fila no cuadra.
+    _qa_sheet(wb, qa_rows or [])
 
     ws = wb.create_sheet("Worked Placements")
     _write_table(
