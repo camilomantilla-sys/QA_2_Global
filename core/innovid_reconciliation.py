@@ -70,6 +70,11 @@ class CreativeFlightCheck:
     matched_by: str = "name"
     actual_name: str = ""
 
+    # Las celdas que la TS pinto en este creativo. La hoja marca el
+    # CAMPO que cambia, no la fila: sin esto la regla no puede saber
+    # si las fechas eran parte de la solicitud o solo contexto.
+    intent_fields: frozenset = frozenset()
+
     # Cuando un mismo nombre aparece en mas de un nodo del mismo
     # decision set no se elige uno: elegir mal es peor que no elegir.
     candidates: int = 1
@@ -276,6 +281,9 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
                 creative_name=creative.name,
                 status=MISSING_IN_INNOVID,
                 intent=creative.intent,
+                intent_fields=frozenset(
+                    getattr(creative, 'intent_fields', None) or ()
+                ),
                 expected_start=creative.start,
                 expected_end=creative.end,
                 expected_weight=creative.rotation_weight,
@@ -291,6 +299,9 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
                 creative_name=creative.name,
                 status=AMBIGUOUS,
                 intent=creative.intent,
+                intent_fields=frozenset(
+                    getattr(creative, 'intent_fields', None) or ()
+                ),
                 expected_start=creative.start,
                 expected_end=creative.end,
                 expected_weight=creative.rotation_weight,
@@ -307,6 +318,9 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
             creative_name=creative.name,
             status=MATCHED,
             intent=creative.intent,
+            intent_fields=frozenset(
+                getattr(creative, 'intent_fields', None) or ()
+            ),
             expected_start=creative.start,
             expected_end=creative.end,
             actual_start=_node_date(node.start_timestamp),

@@ -643,6 +643,90 @@ def test_a_creative_with_neither_name_nor_id_in_innovid_is_still_missing():
     statuses = {c.creative_name: c.status for c in reconcile(ts, got).flights}
     assert statuses[V1] == MISSING_IN_INNOVID
 
+# --- la celda pintada manda ---------------------------------------
+
+def test_dates_nobody_asked_to_change_are_not_a_failure():
+    """
+    El caso de Camilo: en una solicitud de cambio de rotacion, la TS
+    repite las fechas del creativo sin pintarlas. Son contexto. Los
+    creativos que arrancan un dia antes para poder testearlos salian
+    como fallo de una solicitud que solo cambiaba pesos.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-13", "2026-10-31", weight=100),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["INFO"]
+
+
+def test_the_difference_is_still_reported_just_not_as_a_failure():
+    # Callarlo del todo seria perder el dato.
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-13", "2026-10-31", weight=100),
+    ])
+    finding = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0]
+    assert "didn't ask to change them" in finding.message
+    assert "2026-09-13" in finding.actual
+
+
+def test_dates_that_agree_say_nothing_at_all():
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=100),
+    ])
+    assert _by_rule(_findings(reconcile(ts, got)), "INV-001") == []
+
+
+def test_dates_the_request_did_paint_still_fail():
+    # Lo pedido se sigue validando igual de duro.
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN,
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"start_date", "end_date"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["FAIL"]
+
+
+def test_a_sheet_with_no_colour_still_validates_its_dates():
+    # Las TS viejas no traen esta informacion y no pueden quedarse
+    # sin validar por eso.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["FAIL"]
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

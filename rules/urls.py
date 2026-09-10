@@ -1,5 +1,6 @@
 from core.colors import GREEN
 from core.findings import Domain
+from core.intent import requested
 from core.urls import (
     URL_BASE_DIFF,
     URL_BOTH_MISSING,
@@ -148,6 +149,34 @@ def evaluate(match_result, buffer):
             # no lo que se pidio cambiar. Se les calcula la URL para
             # poder mostrarla, pero no generan hallazgos.
             if cl.expected.intent != GREEN:
+                continue
+
+            # Verde tampoco basta: la fila puede estar verde por la
+            # rotacion y repetir la landing page sin pintarla. Esa URL
+            # es contexto, y juzgarla convertia en fallo algo que nadie
+            # pidio cambiar.
+            #
+            # Pero callarla del todo tampoco: si de verdad difiere, se
+            # dice una vez como INFO. No tumba el QA -- no es de esta
+            # solicitud -- y no se pierde.
+            if not requested(cl.expected, "url"):
+                if cl.url.result not in (URL_MATCH, URL_BOTH_MISSING):
+                    buffer.info(
+                        rule_id="URL-001",
+                        domain=Domain.URL,
+                        placement_id=pm.placement_id,
+                        creative_name=cl.expected.name,
+                        message=(
+                            "The landing page differs from Innovid, but "
+                            "this request didn't ask to change it"
+                        ),
+                        expected=cl.expected.url,
+                        actual=" | ".join(_actual_urls(pm.actual)[:1]),
+                        recommended_action=(
+                            "Nothing to do for this request. Worth "
+                            "raising separately if it looks wrong."
+                        ),
+                    )
                 continue
 
             result = cl.url.result
