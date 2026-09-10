@@ -2594,6 +2594,10 @@ if True:
 
                 if _bulk_groups:
                     st.markdown("**Approve a whole group at once**")
+
+                    # El selector va FUERA del formulario para que el
+                    # boton diga cuantos va a aprobar en cuanto se
+                    # cambia de grupo.
                     _bulk_choice = st.selectbox(
                         "Group",
                         options=list(_bulk_groups),
@@ -2601,46 +2605,43 @@ if True:
                         label_visibility="collapsed",
                     )
                     _bulk_items = _bulk_groups[_bulk_choice]
-                    st.text_input(
-                        "Observation applied to the whole group",
-                        key="qa2_review_bulk_note",
-                        placeholder=(
-                            "Why the whole group is fine -- e.g. "
-                            "\"Innovid pads the numeric segment and "
-                            "truncates the name; trafficking is "
-                            "unaffected.\""
-                        ),
-                    )
-                    _bulk_cols = st.columns([3, 2])
 
-                    # El boton NO se deshabilita por falta de
-                    # observacion. Streamlit solo reevalua un
-                    # text_input cuando pierde el foco o se pulsa
-                    # Enter: quien escribe y va directo al boton lo
-                    # encuentra dibujado como cuando el campo estaba
-                    # vacio, y un boton deshabilitado se traga el clic
-                    # sin decir por que. Se valida AL pulsar, que es
-                    # cuando el valor escrito ya llego.
-                    if _bulk_cols[0].button(
-                        f"Approve all {len(_bulk_items)}",
-                        use_container_width=True,
-                        help=(
-                            "Writes the observation into every item in "
-                            "the group and marks them approved."
-                        ),
-                    ):
-                        _note = str(
-                            st.session_state.get("qa2_review_bulk_note", "")
-                        ).strip()
+                    # La observacion y el boton van DENTRO de un
+                    # formulario. Fuera de el, Streamlit manda el
+                    # texto cuando el campo pierde el foco y el clic
+                    # por su cuenta: quien escribe y pulsa el boton
+                    # directamente perdia la carrera, el clic llegaba
+                    # con el texto todavia vacio, y la app le pedia
+                    # una observacion que acababa de escribir. Un
+                    # formulario manda las dos cosas juntas.
+                    with st.form("qa2_review_bulk_form"):
+                        _note = st.text_input(
+                            "Observation applied to the whole group",
+                            key="qa2_review_bulk_note",
+                            placeholder=(
+                                "Why the whole group is fine -- e.g. "
+                                "\"Innovid pads the numeric segment "
+                                "and truncates the name; trafficking "
+                                "is unaffected.\""
+                            ),
+                        )
+                        _bulk_submitted = st.form_submit_button(
+                            f"Approve all {len(_bulk_items)}",
+                            use_container_width=True,
+                        )
+
+                    if _bulk_submitted:
+                        _note = str(_note or "").strip()
 
                         if not _note:
                             # La observacion es el registro de POR QUE
                             # se dio por bueno, y en bloque pesa mas:
                             # una frase responde por decenas.
                             st.warning(
-                                "Write the observation first -- it's "
-                                "the record of why these "
-                                f"{len(_bulk_items)} were approved."
+                                "Write an observation first -- one "
+                                "line is enough, and it becomes the "
+                                f"record for all {len(_bulk_items)} "
+                                "of them."
                             )
                         else:
                             for _item in _bulk_items:
@@ -2652,6 +2653,8 @@ if True:
                                 _review_nonce + 1
                             )
                             st.rerun()
+
+                    _bulk_cols = st.columns([3, 2])
 
                     if _review_state and _bulk_cols[1].button(
                         "Clear all approvals",
