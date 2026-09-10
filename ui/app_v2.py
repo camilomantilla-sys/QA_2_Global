@@ -2602,7 +2602,10 @@ if True:
         #
         # Firmar un FAIL no lo tapa: la desviacion queda escrita en el
         # reporte y en el Excel como "MANUALLY Approved by ...".
-        REVIEWABLE = ("REVIEW", "FAIL", "PASS")  # EXPERIMENTO
+        # Solo lo que necesita una decision. Un PASS no se firma: ya
+        # esta bien, y meterlo aqui convertia el panel en la lista
+        # entera del QA -- 778 filas donde habia 114 que revisar.
+        REVIEWABLE = ("REVIEW", "FAIL")
         review_findings = [
             finding for finding in findings_buffer.findings
             if finding.status.value in REVIEWABLE
