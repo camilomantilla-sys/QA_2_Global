@@ -31,9 +31,12 @@ COLUMNS = [
     "TS Creative Name", "Innovid Creative Name",
     "TS Creative Dates", "Innovid Creative Dates",
     "TS Rotation", "Innovid Rotation",
-    "CGEN TS (Adobe)", "CGEN Innovid (Adobe)",
     "TS URL", "Innovid URL",
     "Verification Partner",
+    # El CGEN va al final: solo Adobe lo maneja, y en las demas
+    # cuentas son dos columnas vacias que estorban en medio de lo que
+    # si se revisa siempre.
+    "CGEN TS (Adobe)", "CGEN Innovid (Adobe)",
     "Notes",
 ]
 
