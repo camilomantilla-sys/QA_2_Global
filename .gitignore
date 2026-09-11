@@ -78,3 +78,9 @@ config/innovid_credentials.env
 # Saved Innovid sign-in -- session cookies, as sensitive as the password
 config/innovid_session.json
 logs/
+
+# Traffic Sheets de prueba: llevan datos de cliente.
+# Los resumenes .expected.json si se suben (solo estructura).
+tests/fixtures/ts/*.xlsx
+tests/fixtures/ts/*.xlsm
+tests/fixtures/ts/*.xls

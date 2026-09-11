@@ -18,6 +18,16 @@ from parsers.ts_parser import parse_ts
 
 CASE_DIR = Path("tests/test_adobe_1x1_3pd_direct")
 
+# Este diagnostico necesita una carpeta de casos que no vive en el
+# repo (lleva archivos de cliente). Sin ella no hay nada que mirar, y
+# decirlo vale mas que un FileNotFoundError a mitad de camino.
+if not CASE_DIR.exists():
+    import sys as _sys
+    print(f"Falta la carpeta de casos: {CASE_DIR}")
+    print("Ponla ahi y vuelve a correr:  python -m scripts.diagnose_adobe_clicktag_requirements")
+    raise SystemExit(0)
+
+
 TS_PATH = CASE_DIR / (
     "TS_FY26_Q4_AMER_Creative_STEDiscover_"
     "Awareness_Discover_ASY_C.xlsx"
