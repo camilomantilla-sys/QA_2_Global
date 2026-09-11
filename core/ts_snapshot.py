@@ -33,6 +33,28 @@ def _plain(value):
     return value
 
 
+def _ours(cmap) -> list:
+    """Columnas sin mapear que si nos tocaban."""
+    from core.ts_schema import not_for_innovid
+
+    if cmap is None:
+        return []
+    return sorted(c for c in cmap.unmapped if not not_for_innovid(c[1]))
+
+
+def _theirs(cmap) -> list:
+    """Columnas de la TS estandar dirigidas a otra herramienta."""
+    from core.ts_schema import not_for_innovid
+
+    if cmap is None:
+        return []
+    return sorted(
+        [c[0], c[1], not_for_innovid(c[1])]
+        for c in cmap.unmapped
+        if not_for_innovid(c[1])
+    )
+
+
 def _sheet(sheet) -> dict[str, Any] | None:
     """Como leyo la app una hoja. Nombres de columna, no contenidos."""
     if sheet is None:
@@ -46,7 +68,11 @@ def _sheet(sheet) -> dict[str, Any] | None:
         "merged_applied": sheet.merged_applied,
         "mapped_columns": sorted(cmap.single) if cmap else [],
         "multi_columns": sorted(cmap.multi) if cmap else [],
-        "unmapped_columns": _plain(sorted(cmap.unmapped)) if cmap else [],
+        # Lo que nadie mapeo se parte en dos: lo que es de otra
+        # herramienta y lo que de verdad no se reconocio. Mezclarlos
+        # hacia que cada TS pareciera tener huecos que no tiene.
+        "unmapped_columns": _plain(_ours(cmap)),
+        "not_for_innovid": _plain(_theirs(cmap)),
         "missing_required": sorted(cmap.missing_required) if cmap else [],
         "missing_optional": sorted(cmap.missing_optional) if cmap else [],
         "row_class_counts": dict(sorted(sheet.row_class_counts.items())),

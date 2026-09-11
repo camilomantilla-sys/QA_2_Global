@@ -44,6 +44,7 @@
         "Additional Requirements (Transcodes, Macros, Attribution Settings, etc.)"
       ]
     ],
+    "not_for_innovid": [],
     "missing_required": [],
     "missing_optional": [
       "cgen",
@@ -109,6 +110,7 @@
     ],
     "multi_columns": [],
     "unmapped_columns": [],
+    "not_for_innovid": [],
     "missing_required": [
       "creative_name"
     ],
@@ -142,6 +144,7 @@
     ],
     "multi_columns": [],
     "unmapped_columns": [],
+    "not_for_innovid": [],
     "missing_required": [],
     "missing_optional": [
       "as_content",

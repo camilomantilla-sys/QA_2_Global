@@ -41,20 +41,25 @@
     "multi_columns": [],
     "unmapped_columns": [
       [
+        12,
+        "Additional Requirements (Transcodes, Macros, Attribution Settings, etc.)"
+      ]
+    ],
+    "not_for_innovid": [
+      [
         7,
-        "Length"
+        "Length",
+        "Campaign Manager 360"
       ],
       [
         11,
-        "AI Labeling"
-      ],
-      [
-        12,
-        "Additional Requirements (Transcodes, Macros, Attribution Settings, etc.)"
+        "AI Labeling",
+        "Campaign Manager 360"
       ],
       [
         13,
-        "Google Ads"
+        "Google Ads",
+        "Campaign Manager 360"
       ]
     ],
     "missing_required": [],
@@ -123,10 +128,12 @@
       "universal_ad_id"
     ],
     "multi_columns": [],
-    "unmapped_columns": [
+    "unmapped_columns": [],
+    "not_for_innovid": [
       [
         4,
-        "AI Labeling"
+        "AI Labeling",
+        "Campaign Manager 360"
       ]
     ],
     "missing_required": [],
@@ -192,6 +199,7 @@
     ],
     "multi_columns": [],
     "unmapped_columns": [],
+    "not_for_innovid": [],
     "missing_required": [],
     "missing_optional": [
       "as_content",

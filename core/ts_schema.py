@@ -18,6 +18,24 @@ from core.extraction import FieldSpec, SheetSpec
 # Hojas que nunca entran al scope de QA2, en ninguna cuenta
 NEVER_IN_SCOPE = ["Training Guide", "QA Results", "Prisma Output"]
 
+# Columnas de la TS estandar que no son de Innovid.
+#
+# Van dirigidas a quien traffica en Campaign Manager 360. La TS es la
+# misma para todos, asi que llegan igual, y sin esta lista aparecen
+# como "sin mapear" -- que se lee como un hueco del parser y no lo es.
+NOT_FOR_INNOVID = {
+    "ailabeling": "Campaign Manager 360",
+    "length": "Campaign Manager 360",
+    "googleads": "Campaign Manager 360",
+}
+
+
+def not_for_innovid(header: str) -> str:
+    """Para quien es esa columna, si no es para nosotros."""
+    from core.normalize import norm_key
+
+    return NOT_FOR_INNOVID.get(norm_key(header), "")
+
 # Tipos de implementacion
 IMPL_SITE_SERVED_1X1 = "SITE_SERVED_1X1"
 IMPL_THIRD_PARTY = "THIRD_PARTY"

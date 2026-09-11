@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.colors import GREEN, GREY, RED, UNKNOWN, WHITE, YELLOW
+from core.ts_schema import not_for_innovid
 from parsers.ts_parser import REQ_NOT_WORKED, detect_profile, parse_ts
 
 app = typer.Typer(add_completion=False)
@@ -66,9 +67,19 @@ def _sheet_panels(name: str, sr, show_rows: int) -> None:
         if sr.cmap.missing_required:
             h.add_row("[red]Requeridas ausentes[/]",
                       ", ".join(sr.cmap.missing_required))
-        if sr.cmap.unmapped:
+        # Las columnas de otra herramienta aparte: leerlas como un
+        # hueco del parser hace dudar de una TS que esta bien.
+        ours = [x for x in sr.cmap.unmapped if not not_for_innovid(x[1])]
+        theirs = [x for x in sr.cmap.unmapped if not_for_innovid(x[1])]
+        if ours:
             h.add_row("[dim]Sin mapear[/]",
-                      ", ".join(x[1] for x in sr.cmap.unmapped[:6]))
+                      ", ".join(x[1] for x in ours[:6]))
+        if theirs:
+            h.add_row("[dim]No es de Innovid[/]",
+                      ", ".join(
+                          f"{x[1]} ({not_for_innovid(x[1])})"
+                          for x in theirs[:6]
+                      ))
     console.print(Panel(h, title=name, border_style="cyan"))
 
     if not sr.header_row:
