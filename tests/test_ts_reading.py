@@ -151,14 +151,35 @@ def adopt(source: Path) -> Path:
 
 
 if __name__ == "__main__":
-    # Con una ruta, la adopta primero:
+    # Acepta archivos y carpetas:
+    #     python tests/test_ts_reading.py ~/Downloads
     #     python tests/test_ts_reading.py "/c/Users/.../TS Dove.xlsx"
+    #
+    # Una carpeta entera porque acertar con el nombre exacto de un
+    # archivo en Git Bash es justo donde esto se atasca. Se recogen
+    # las que parecen Traffic Sheets y se dice cuales.
     for argument in sys.argv[1:]:
         given = Path(argument).expanduser()
         if not given.exists():
             print(f"No existe: {given}")
             sys.exit(1)
-        print(f"copiada  {adopt(given).name}")
+
+        if given.is_dir():
+            found = [
+                path for pattern in SPREADSHEETS
+                for path in sorted(given.glob(pattern))
+                if not path.name.startswith("~$")
+                and "ts" in path.name.lower()
+            ]
+            if not found:
+                print(f"Ninguna Traffic Sheet en {given}")
+                print("(se buscan .xlsx/.xlsm/.xls con 'TS' en el nombre)")
+                sys.exit(1)
+            for path in found:
+                print(f"copiada  {adopt(path).name}")
+        else:
+            print(f"copiada  {adopt(given).name}")
+
     if sys.argv[1:]:
         print()
 
@@ -168,9 +189,8 @@ if __name__ == "__main__":
     if not sheets:
         print(f"No hay Traffic Sheets en {FIXTURES}")
         print()
-        print("Puedes pasarle la ruta de una y la trae ella misma:")
-        print('    python tests/test_ts_reading.py "/c/Users/tu.usuario/'
-              'Downloads/TU_TS.xlsx"')
+        print("Pasale una carpeta y recoge las que encuentre:")
+        print("    python tests/test_ts_reading.py ~/Downloads")
         if orphans:
             print()
             print("Hay resumenes guardados cuya hoja no esta aqui. Las "
