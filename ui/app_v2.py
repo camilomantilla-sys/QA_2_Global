@@ -360,6 +360,31 @@ def running_checkout() -> tuple[str, str]:
 # aunque nadie vuelva a pulsar Run QA. No es el mecanismo principal
 # -- ese es `refresh` -- sino el freno para una pestana que lleva
 # toda la tarde abierta.
+def trace(stage: str) -> None:
+    """
+    Una linea por etapa, en disco.
+
+    Cuando una pasada no termina, la pagina se queda con el render
+    anterior y la app no puede contar nada de si misma: lo que se
+    dibuja solo llega cuando el script acaba. Un archivo si.
+    logs/qa_run.log dice hasta donde llego antes de quedarse, que es
+    justo lo que no se puede adivinar desde un screenshot.
+
+    No falla nunca: un diagnostico que rompe la app no sirve.
+    """
+    try:
+        path = Path(__file__).resolve().parents[1] / "logs" / "qa_run.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Que no crezca sin fin: lo que importa son las ultimas
+        # pasadas, no las de la semana pasada.
+        if path.exists() and path.stat().st_size > 1_000_000:
+            path.unlink()
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{datetime.now():%H:%M:%S.%f}  {stage}\n")
+    except Exception:
+        pass
+
+
 def sign_findings(findings, note: str) -> int:
     """
     Marca como firmado todo lo que se le pase.
@@ -1748,6 +1773,8 @@ with st.sidebar:
         # clic no salio del navegador y no hay nada que arreglar en
         # Python. Si sube y aun asi no se firma nada, el problema es
         # mio y esta despues del clic.
+        trace("-" * 40)
+        trace("SCRIPT RUN starts")
         _runs = int(st.session_state.get("qa2_script_runs", 0)) + 1
         st.session_state["qa2_script_runs"] = _runs
 
@@ -1941,6 +1968,7 @@ with st.sidebar:
         key="qa2_profile_select",
     )
 
+    trace("sidebar drawn")
     analyze_button = st.button(
         "Run QA",
         type="primary",
@@ -2205,6 +2233,7 @@ if True:
             else selected_profile
         )
 
+        trace("parsing traffic sheet")
         with st.spinner(
             "Reading and parsing the Traffic Sheet..."
         ):
@@ -2223,6 +2252,7 @@ if True:
         with st.spinner(
             "Reading Innovid Placement-Creative View..."
         ):
+            trace("parsing placement-creative view")
             pc_result = cached_parse_innovid_export(
                 uploaded_pc.getvalue(), uploaded_pc.name
             )
@@ -2490,6 +2520,7 @@ if True:
         with st.spinner(
             "Running QA matching and validations..."
         ):
+            trace("matching")
             match_result = match(
                 ts_result,
                 pc_result,
@@ -2519,15 +2550,18 @@ if True:
                     with st.spinner(
                         f"Reading campaign {_campaign_id} from Innovid…"
                     ):
+                        trace(f"reading Innovid campaign {_campaign_id}")
                         innovid_result = cached_fetch_innovid(
                             _campaign_id,
                             _worked_ids,
                             refresh=bool(analyze_button),
                         )
+                        trace("Innovid answered")
                     innovid_reconciliation = reconcile_innovid(
                         match_result, innovid_result
                     )
 
+            trace("running rules")
             findings_buffer = run_rules(
                 match_result,
                 account=selected_account,
@@ -2794,6 +2828,7 @@ if True:
         # Solo lo que necesita una decision. Un PASS no se firma: ya
         # esta bien, y meterlo aqui convertia el panel en la lista
         # entera del QA -- 778 filas donde habia 114 que revisar.
+        trace("building the review panel")
         REVIEWABLE = ("REVIEW", "FAIL")
         review_findings = [
             finding for finding in findings_buffer.findings
@@ -3046,6 +3081,14 @@ if True:
                         "It says whether the click reached the app at "
                         "all, which is the part that can't be guessed "
                         "from a screenshot."
+                    )
+                    st.caption(
+                        "If the run never finishes -- the little "
+                        "figure next to Stop keeps moving -- nothing "
+                        "on this page updates, including everything "
+                        "above. Then open `logs/qa_run.log` in the "
+                        "project folder: its last line is where the "
+                        "run got stuck."
                     )
                     st.code(
                         "\n".join([
@@ -3574,6 +3617,7 @@ if True:
                 (uploaded_image.name, uploaded_image.getvalue())
             )
 
+        trace("building the PDF")
         pdf_report_bytes = build_pdf_report(
             ReportMeta(
                 verdict=scorecard.verdict,
@@ -3648,6 +3692,7 @@ if True:
             for file_name, tags_result, tag_match_result in tag_matches
         ]
 
+        trace("building the Excel")
         excel_report_bytes = build_excel_report(
             ReportMeta(
                 verdict=scorecard.verdict,
@@ -4914,7 +4959,10 @@ if True:
                         "belong to the worked scope."
                     )
 
+        trace("SCRIPT RUN finished")
+
     except Exception as error:
+        trace(f"SCRIPT RUN failed: {type(error).__name__}: {error}")
         st.error(
             "QA could not complete processing."
         )

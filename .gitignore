@@ -77,3 +77,4 @@ config/innovid_credentials.env
 
 # Saved Innovid sign-in -- session cookies, as sensitive as the password
 config/innovid_session.json
+logs/
