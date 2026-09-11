@@ -2,6 +2,10 @@
 
 Deja aquí las TS que quieras fijar: viejas, nuevas, de cada cuenta.
 
+La forma corta es pasarle la ruta y que la copie sola:
+
+    python tests/test_ts_reading.py "/c/Users/tu.usuario/Downloads/TU_TS.xlsx"
+
 Las hojas de cálculo **no se suben a git** — llevan nombres de campaña,
 de placement y de sitio, que son datos de cliente. Lo que sí se sube es
 el `<nombre>.expected.json` de cada una: solo estructura y conteos,

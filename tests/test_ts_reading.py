@@ -8,10 +8,15 @@ rompa en silencio uno que ya funcionaba.
 
 COMO SE USA
 -----------
-1. Deja la TS en `tests/fixtures/ts/`. Las hojas de calculo NO se
-   suben a git (llevan datos de cliente): la carpeta esta ignorada.
-2. Corre este archivo. La primera vez escribe el resumen de esa TS
-   en `<nombre>.expected.json` y no falla.
+1. Pasale la ruta de la TS y la copia sola:
+
+       python tests/test_ts_reading.py "/c/Users/tu.usuario/Downloads/TS.xlsx"
+
+   (o dejala a mano en `tests/fixtures/ts/`). Las hojas de calculo NO
+   se suben a git -- llevan datos de cliente -- y la carpeta esta
+   ignorada.
+2. La primera vez escribe el resumen de esa TS en
+   `<nombre>.expected.json` y no falla.
 3. Mira ese JSON: es lo que QA entendio. Si algo esta mal -- una
    columna sin mapear que deberia estarlo, filas de menos, fechas sin
    parsear -- ahi se ve, y es lo que hay que arreglar en el parser.
@@ -129,12 +134,43 @@ def test_a_missing_fixtures_folder_is_not_a_failure():
     assert isinstance(traffic_sheets(), list)
 
 
+def adopt(source: Path) -> Path:
+    """
+    Trae una TS de donde este a la carpeta de fixtures.
+
+    Para no tener que acertar con un `cp` y una ruta de Windows en
+    Git Bash, que es justo donde se atasca esto.
+    """
+    import shutil
+
+    FIXTURES.mkdir(parents=True, exist_ok=True)
+    target = FIXTURES / source.name
+    if target.resolve() != source.resolve():
+        shutil.copy2(source, target)
+    return target
+
+
 if __name__ == "__main__":
+    # Con una ruta, la adopta primero:
+    #     python tests/test_ts_reading.py "/c/Users/.../TS Dove.xlsx"
+    for argument in sys.argv[1:]:
+        given = Path(argument).expanduser()
+        if not given.exists():
+            print(f"No existe: {given}")
+            sys.exit(1)
+        print(f"copiada  {adopt(given).name}")
+    if sys.argv[1:]:
+        print()
+
     orphans = snapshots_without_a_sheet()
     sheets = traffic_sheets()
 
     if not sheets:
         print(f"No hay Traffic Sheets en {FIXTURES}")
+        print()
+        print("Puedes pasarle la ruta de una y la trae ella misma:")
+        print('    python tests/test_ts_reading.py "/c/Users/tu.usuario/'
+              'Downloads/TU_TS.xlsx"')
         if orphans:
             print()
             print("Hay resumenes guardados cuya hoja no esta aqui. Las "
