@@ -98,6 +98,55 @@ def test_a_lone_creative_takes_everything():
     assert normalize_weights(["0.5"]) == ["100%"]
 
 
+def test_even_with_one_creative_left_is_one_hundred():
+    # Caso real de BlackRock: un grupo de cuatro donde dos se van y
+    # uno es el default. El unico asignado se lleva el 100%, no el
+    # 25% que salia de repartir entre los cuatro.
+    assert normalize_weights(
+        ["Even", "Even", "Even"], removed=[True, True, False]
+    ) == ["", "", "100%"]
+
+
+def test_a_creative_being_removed_gets_no_share():
+    labels = normalize_weights(["Even"] * 4, removed=[True, False, False, False])
+    assert labels[0] == ""
+    assert labels[1:] == ["33.33%"] * 3
+
+
+def test_an_empty_rotation_does_not_take_a_share():
+    # El default de BlackRock viene sin rotacion porque se trafica en
+    # el decision set oficial de su dimension. Contarlo daba el 50%.
+    assert normalize_weights(["", "Even"]) == ["", "100%"]
+
+
+def test_numbers_are_rescaled_without_the_removed_ones():
+    assert normalize_weights(
+        [50, 50, 50], removed=[True, False, False]
+    ) == ["", "50%", "50%"]
+
+
+def test_without_removed_nothing_changes():
+    # La firma crecio; el comportamiento de siempre, no.
+    assert normalize_weights(["EVEN"] * 4) == ["25%"] * 4
+    assert normalize_weights([13, 13, 74]) == ["13%", "13%", "74%"]
+    assert normalize_weights([1, 2, 1]) == ["25%", "50%", "25%"]
+
+
+def test_removing_every_creative_leaves_no_shares():
+    assert normalize_weights(["Even", "Even"], removed=[True, True]) == ["", ""]
+
+
+def test_the_default_is_marked_so_it_can_be_left_out():
+    # Quien lo deja fuera del reparto es el llamador, y para eso
+    # necesita distinguirlo.
+    import dataclasses
+
+    from core.matching import ExpectedCreative
+
+    names = {f.name for f in dataclasses.fields(ExpectedCreative)}
+    assert "is_default" in names
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

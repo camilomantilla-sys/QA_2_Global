@@ -156,7 +156,7 @@ def to_bool(value: object) -> bool | None:
 _EVEN = {"even", "evenly", "equal", "rotate even", "even rotation"}
 
 
-def normalize_weights(values) -> list[str]:
+def normalize_weights(values, removed=None) -> list[str]:
     """
     Pesos de rotacion de un grupo, en porcentajes que suman 100.
 
@@ -184,14 +184,35 @@ def normalize_weights(values) -> list[str]:
     creativos del placement. Con media rotacion, el reparto por cuotas
     daria porcentajes inflados.
 
-    EVEN no es un numero: es "que roten por igual". Si TODO el grupo
-    dice EVEN, cada creativo se lleva 100/N. Mezclado con numeros se
-    deja como esta, porque su parte no se puede deducir sin
+    EVEN no es un numero: es "que roten por igual". Cada creativo que
+    vaya a correr se lleva 100/N -- y con uno solo, 100%. Mezclado con
+    numeros se deja como esta, porque su parte no se puede deducir sin
     inventarla.
+
+    Quien reparte ese 100 son los que van a correr, y solo ellos:
+
+      `removed`   los que la TS pinto de rojo. Se van: ni cuentan para
+                  el reparto ni reciben porcentaje.
+      celda vacia el default de BlackRock viene sin fechas ni rotacion
+                  porque se traficá en el DS oficial de su dimension.
+                  Tampoco entra.
+
+    Contarlos daba el 25% de un grupo de cuatro donde solo quedaba un
+    creativo -- que son 100% -- y el 50% del default, que no lleva
+    rotacion ninguna.
     """
     raw = ["" if v is None else str(v).strip() for v in values]
     if not raw:
         return []
+
+    gone = list(removed or [])
+    gone += [False] * (len(raw) - len(gone))
+    # Lo que reparte el 100: ni los que se van ni los que no piden
+    # rotacion.
+    running = [
+        text for text, is_gone in zip(raw, gone)
+        if text and not is_gone
+    ]
 
     def _number(text: str) -> float | None:
         candidate = text.rstrip("%").replace("x", "").strip()
@@ -200,14 +221,24 @@ def normalize_weights(values) -> list[str]:
         except ValueError:
             return None
 
+    # Dos lecturas: una alineada con la lista original, para devolver
+    # cada etiqueta en su sitio, y otra solo de los que reparten, para
+    # deducir la escala.
     parsed = [_number(text) for text in raw]
-    numeric = [value for value in parsed if value is not None]
+    numeric = [
+        value for value in (_number(text) for text in running)
+        if value is not None
+    ]
 
     if not numeric:
-        if all(text.lower() in _EVEN for text in raw if text):
-            share = 100.0 / len(raw)
-            return [_label(share) if text else "" for text in raw]
-        return raw
+        if running and all(text.lower() in _EVEN for text in running):
+            share = 100.0 / len(running)
+            return [
+                "" if (not text or is_gone) else _label(share)
+                for text, is_gone in zip(raw, gone)
+            ]
+        return ["" if is_gone else text
+                for text, is_gone in zip(raw, gone)]
 
     total = sum(numeric)
 
@@ -219,11 +250,13 @@ def normalize_weights(values) -> list[str]:
         scale = lambda value: value / total * 100.0
     else:
         # Todo en cero: no hay reparto, y dividir seria inventarlo.
-        return raw
+        return ["" if is_gone else text
+                for text, is_gone in zip(raw, gone)]
 
     return [
-        text if value is None else _label(scale(value))
-        for text, value in zip(raw, parsed)
+        "" if is_gone
+        else (text if value is None else _label(scale(value)))
+        for text, value, is_gone in zip(raw, parsed, gone)
     ]
 
 

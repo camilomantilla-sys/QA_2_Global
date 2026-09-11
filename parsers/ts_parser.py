@@ -225,6 +225,30 @@ def detect_profile(path: Path) -> tuple[str, str]:
         return "adobe_variante_a", f"CGEN in {cgen_where} + Creative Rotations has data"
     return "adobe_variante_b", f"CGEN in {cgen_where} + Creative Rotations is empty"
 
+def _row_own(colors: dict) -> set:
+    """
+    Los colores que describen a ESTA fila.
+
+    Fuera dos cosas. El blanco, que no es un color sino "esta celda no
+    se pinto". Y la celda del nombre del grupo, que la comparten todas
+    las filas del grupo y habla del grupo, no de la fila.
+
+    Las dos exclusiones salen de un caso real cada una. En BlackRock,
+    cada "... Default Web Ad" trae dos filas y la del default viejo va
+    entera en gris menos esa celda compartida, que va en blanco:
+    exigiendo que TODO fuera gris, ese blanco bastaba para que la fila
+    pasara por contexto y el creativo gris se colara en el decision
+    set. Y al reves, en la TS de Dove hay placements con SOLO la celda
+    de grupo en gris y el resto en blanco: mirando cualquier color
+    pintado, esos cuatro se habrian quedado fuera de alcance sin que
+    nadie lo pidiera.
+    """
+    return {
+        family for field, family in colors.items()
+        if family != WHITE and field != "group_name"
+    }
+
+
 def _impl_type(vals: dict[str, object]) -> str:
     if norm_dims(vals.get("dimensions")) == "1x1":
         return IMPL_SITE_SERVED_1X1
@@ -512,7 +536,16 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
             intent = GREEN
         elif RED in fams:
             intent = RED
-        elif fams and fams <= {YELLOW, GREY}:
+        elif _row_own(colors) and _row_own(colors) <= {YELLOW, GREY}:
+            # Blanco no es un color: es "esta celda no se pinto". Lo
+            # que decide es lo que SI se pinto.
+            #
+            # En BlackRock cada grupo "... Default Web Ad" trae dos
+            # filas, y la del default viejo va entera en gris -- menos
+            # la celda del nombre del grupo, que es compartida por las
+            # dos y va en blanco. Exigiendo que TODO fuera gris, ese
+            # blanco bastaba para que la fila pasara por contexto
+            # normal y el creativo gris se colara en el decision set.
             intent = "SCOPE_EXCLUDED"
         elif UNKNOWN in fams:
             intent = "REVIEW"

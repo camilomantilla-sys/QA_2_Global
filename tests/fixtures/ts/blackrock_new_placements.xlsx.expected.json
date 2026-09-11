@@ -128,7 +128,8 @@
     },
     "intent_counts": {
       "GREEN": 84,
-      "WHITE": 300
+      "SCOPE_EXCLUDED": 90,
+      "WHITE": 210
     },
     "impl_counts": {
       "UNKNOWN": 384

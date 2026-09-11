@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 
 from core.matching import norm_creative
+from core.colors import RED
 from core.normalize import norm_compare, normalize_weights
 
 # Las columnas, en orden. Cada par (TS, Innovid) se pinta de verde
@@ -192,7 +193,9 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
         # La rotacion de la TS se normaliza por placement, que es
         # donde el reparto suma 100.
         ts_weights = normalize_weights(
-            [cl.expected.rotation_weight for cl in links]
+            [cl.expected.rotation_weight for cl in links],
+            removed=[cl.expected.intent == RED or cl.expected.is_default
+                     for cl in links],
         )
 
         if not links:

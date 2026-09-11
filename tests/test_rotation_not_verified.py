@@ -34,6 +34,10 @@ class _Expected:
     rotation_weight: str = ""
     intent_fields: frozenset = frozenset()
     creative_id: str = ""
+    # El default ad se engancha por dimension y tiene su propio
+    # decision set: no reparte el 100% con los que el placement
+    # declara.
+    is_default: bool = False
 
 
 @dataclass

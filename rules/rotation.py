@@ -16,7 +16,7 @@ no se sabia. Esta regla dice esa segunda parte.
 Cuando Innovid si esta conectado, quien compara es INV-002, y esta
 regla se calla para no duplicar el hallazgo.
 """
-from core.colors import WHITE
+from core.colors import RED, WHITE
 from core.findings import Capability, Domain, EntityType, Status
 from core.normalize import normalize_weights
 
@@ -32,7 +32,9 @@ def _weights_label(creatives) -> str:
     """
     seen: list[str] = []
     for label in normalize_weights(
-        [creative.rotation_weight for creative in creatives]
+        [creative.rotation_weight for creative in creatives],
+        removed=[creative.intent == RED or creative.is_default
+                 for creative in creatives],
     ):
         if label and label not in seen:
             seen.append(label)

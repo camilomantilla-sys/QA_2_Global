@@ -99,6 +99,14 @@ class ExpectedCreative:
     sequence: str = ""
     dims: str = ""            # <-- NUEVA
 
+    # El default ad, enganchado por dimension y no declarado por el
+    # placement. Vive en su propio decision set -- el oficial de su
+    # dimension -- asi que no reparte el 100% de rotacion con los
+    # creativos que el placement si declara. Sin distinguirlo, un
+    # grupo con un solo creativo asignado mas su default salia 50/50
+    # cuando el asignado se lleva el 100%.
+    is_default: bool = False
+
     # Que celdas venian pintadas en la TS. La hoja marca el CAMPO que
     # cambia, no la fila entera: un cambio de rotacion pinta solo la
     # celda de Rotation (%) sobre un creativo que ya existia. Sin
@@ -480,7 +488,9 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             # dejara con su intencion original, un default en verde
             # pasaria a ser exigible en todos los placements de esa
             # dimension y los que no lo llevan darian FAIL.
-            ep.creatives.append(replace(creative, intent=WHITE))
+            ep.creatives.append(
+                replace(creative, intent=WHITE, is_default=True)
+            )
             have.add(creative.key_norm)
 
     # --- URL esperada del placement, siguiendo la cadena de la TS.

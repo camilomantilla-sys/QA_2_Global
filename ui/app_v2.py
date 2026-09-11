@@ -4086,7 +4086,10 @@ if True:
                         (id(cl) for cl in creative_links),
                         normalize_weights(
                             [cl.expected.rotation_weight
-                             for cl in creative_links]
+                             for cl in creative_links],
+                            removed=[cl.expected.intent == RED
+                                     or cl.expected.is_default
+                                     for cl in creative_links],
                         ),
                     )) if placement_match is not None else {}
 
