@@ -1752,9 +1752,12 @@ with st.sidebar:
         st.session_state["qa2_script_runs"] = _runs
 
         _beacon = st.session_state.get("qa2_click_beacon")
+        _seen = st.session_state.get("qa2_last_button_seen")
         st.caption(
             f"Script runs: `{_runs}`  \n"
-            "Last click received: "
+            "Last button seen: "
+            + (f"`{_seen}`" if _seen else "`(none yet)`")
+            + "  \nLast click received: "
             + (f"`{_beacon}`" if _beacon else "`(none yet)`")
         )
 
@@ -1998,6 +2001,25 @@ with st.sidebar:
             st.caption(
                 f"{len(st.session_state['qa2_review_state'])} "
                 "signed off so far."
+            )
+
+        # Las dos unicas cosas que desde fuera se ven igual.
+        #
+        # "Script runs" sube con cada pasada: si no sube al pulsar,
+        # el clic no salio del navegador. "Last button seen" se
+        # escribe aqui, en el instante en que Streamlit devuelve True
+        # -- antes de que nada de la seccion de resultados pueda
+        # estropearlo. Si el contador sube y esto sigue vacio, el
+        # clic llego pero Streamlit no se lo atribuyo a este boton, y
+        # eso ya es un problema concreto y mio.
+        if sign_all_clicked or sign_group_clicked or clear_all_clicked:
+            _which = (
+                "sign all" if sign_all_clicked
+                else "sign group" if sign_group_clicked
+                else "clear"
+            )
+            st.session_state["qa2_last_button_seen"] = (
+                f"{_which} at {datetime.now():%H:%M:%S}"
             )
 
     # st.button() only returns True on the single rerun triggered by
