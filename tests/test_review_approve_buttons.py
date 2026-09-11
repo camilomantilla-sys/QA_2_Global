@@ -1,22 +1,21 @@
 """
-Como se firma en el panel de aprobacion.
+Como se firma el QA2, y por que el boton esta donde esta.
 
-Los tres botones de aprobar tienen que ir por `on_click`. Con el
-valor de retorno (`if st.button(...)`) la firma depende de que el
-script entero vuelva a llegar hasta ese punto, y la seccion de
-resultados vive dentro de un `try` de 2700 lineas: cualquier cosa
-que falle antes se traga el clic sin decir nada. Un callback corre
-antes del rerun y no depende de eso.
+En la maquina de Camilo, Run QA llega siempre al servidor y los
+botones de firmar no llegaban nunca -- ni el del panel ni el de la
+barra lateral, ni leyendo el valor de retorno ni por `on_click`. El
+contador de pasadas lo confirmo: el script corria seis veces (carga,
+archivos, Run QA) y ninguna venia de un clic de aprobar.
 
-Ademas, la observacion se lee por su key de session_state dentro del
-callback, no de una variable de la pasada anterior.
+Run QA se distingue de ellos en tres cosas: no lleva `key`, no lleva
+`on_click`, y esta fuera del `try` de 2700 lineas de la seccion de
+resultados. El control de firmar copia las tres.
 
 Run with pytest, or directly:
     python tests/test_review_approve_buttons.py
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -25,109 +24,104 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 APP = Path(__file__).resolve().parents[1] / "ui" / "app_v2.py"
 SOURCE = APP.read_text(encoding="utf-8")
 
-BUTTON_KEYS = (
-    "qa2_review_approve_all",
-    "qa2_review_approve_group",
-    "qa2_review_clear",
-    "qa2_sidebar_sign_all",
-    "qa2_sidebar_clear",
+RESULTS_TRY = SOURCE.index("\nif True:\n    try:")
+
+SIGN_BUTTONS = (
+    'sign_all_clicked = st.button(',
+    'sign_group_clicked = st.button(',
+    'clear_all_clicked = st.button(',
 )
 
 
-def _call_around(key: str) -> str:
-    """El texto de la llamada a st.button que usa esa key."""
-    at = SOURCE.index(f'key="{key}"')
-    start = SOURCE.rindex("st.button(", 0, at)
+def _call(prefix: str) -> str:
+    """El texto de la llamada a st.button que empieza con `prefix`."""
+    start = SOURCE.index(prefix)
+    open_at = SOURCE.index("(", start + len(prefix) - 1)
     depth = 0
-    for i in range(start + len("st.button"), len(SOURCE)):
+    for i in range(open_at, len(SOURCE)):
         if SOURCE[i] == "(":
             depth += 1
         elif SOURCE[i] == ")":
             depth -= 1
             if depth == 0:
                 return SOURCE[start:i + 1]
-    raise AssertionError(f"llamada sin cerrar para {key}")
+    raise AssertionError(f"llamada sin cerrar: {prefix}")
 
 
-def test_every_approve_button_uses_a_callback():
-    for key in BUTTON_KEYS:
-        assert "on_click=" in _call_around(key), key
+def test_the_sign_off_buttons_live_outside_the_results_try():
+    # Dentro, un fallo cualquiera de las 2700 lineas se traga el
+    # clic sin decir nada.
+    for prefix in SIGN_BUTTONS:
+        assert SOURCE.index(prefix) < RESULTS_TRY, prefix
 
 
-def test_no_approve_button_is_read_from_its_return_value():
-    # `if st.button(..., key="qa2_review_approve_all"):` es justo el
-    # patron que dejaba de responder.
-    for key in BUTTON_KEYS:
-        call = _call_around(key)
-        at = SOURCE.index(call)
-        line_start = SOURCE.rindex("\n", 0, at) + 1
-        prefix = SOURCE[line_start:at].strip()
-        assert not prefix.startswith("if "), key
-        assert not prefix.endswith("and"), key
+def test_no_sign_off_button_carries_a_key():
+    # Run QA tampoco lo lleva, y Run QA es el que funciona.
+    for prefix in SIGN_BUTTONS:
+        assert "key=" not in _call(prefix), prefix
 
 
-def test_the_observation_is_read_inside_the_callback():
-    # Por key, no por variable: cuando el callback corre, el valor
-    # del text_input ya esta en session_state.
-    body = SOURCE[SOURCE.index("def _sign("):SOURCE.index("def _clear_all(")]
-    assert "st.session_state.get(note_key)" in body
+def test_no_sign_off_button_uses_a_callback():
+    # Se leen por valor de retorno, igual que Run QA.
+    for prefix in SIGN_BUTTONS:
+        assert "on_click" not in _call(prefix), prefix
+    assert "on_click=" not in SOURCE
 
 
-def test_signing_records_that_it_happened():
-    body = SOURCE[SOURCE.index("def _sign("):SOURCE.index("def _clear_all(")]
+def test_the_panel_has_no_buttons_of_its_own():
+    # Un solo sitio donde firmar. Tener el mismo boton en dos sitios
+    # solo multiplica las formas de que falle.
+    for gone in (
+        'key="qa2_review_approve_all"',
+        'key="qa2_review_approve_group"',
+        'key="qa2_review_clear"',
+        'key="qa2_sidebar_sign_all"',
+    ):
+        assert gone not in SOURCE, gone
+
+
+def test_the_sidebar_label_comes_from_the_last_run():
+    # Arriba todavia no existe ningun hallazgo: el numero y los
+    # grupos salen de lo que la pasada anterior dejo guardado.
+    assert 'st.session_state["qa2_review_pending"] = len(review_findings)' in SOURCE
+    assert 'st.session_state.get("qa2_review_pending", 0)' in SOURCE
+    assert 'st.session_state["qa2_review_groups"]' in SOURCE
+
+
+def test_signing_is_applied_where_the_findings_exist():
+    assert "if sign_all_clicked:" in SOURCE
+    assert "sign_findings(review_findings, sign_note)" in SOURCE
+    assert "elif sign_group_clicked and sign_group_choice:" in SOURCE
+    assert "if clear_all_clicked:" in SOURCE
+
+
+def test_signing_reruns_so_every_number_agrees():
+    # La barra lateral se dibujo antes de firmar, con los numeros
+    # viejos. Sin repetir la pasada, el contador miente.
+    body = SOURCE[SOURCE.index("if sign_all_clicked:"):]
+    body = body[:body.index("st.divider()")]
+    assert "st.rerun()" in body
+
+
+def test_signing_leaves_a_trace_that_survives_the_rerun():
+    body = SOURCE[SOURCE.index("def sign_findings("):SOURCE.index("def clear_signatures(")]
     assert "qa2_review_last_action" in body
     assert "qa2_click_beacon" in body
+    assert 'entry["approved"] = True' in body
 
 
-def test_the_beacon_is_drawn_outside_the_results_try():
-    # Si estuviera dentro, el mismo fallo que se quiere diagnosticar
-    # se lo llevaria por delante.
-    beacon = SOURCE.index('st.session_state.get("qa2_click_beacon")')
-    results_try = SOURCE.index("\nif True:\n    try:")
-    assert beacon < results_try
+def test_the_click_beacon_is_drawn_outside_the_results_try():
+    assert SOURCE.index('st.session_state.get("qa2_click_beacon")') < RESULTS_TRY
 
 
-def test_clearing_empties_the_state_it_shares_with_signing():
-    body = SOURCE[SOURCE.index("def _clear_all("):]
-    body = body[:body.index("_pending =")]
-    assert '"qa2_review_state"' in body
-    assert ".clear()" in body
-
-
-def test_the_sidebar_can_sign_off_too():
-    # Todo lo que le responde en su maquina esta en la barra
-    # lateral; todo lo que no, en el panel del centro. El mismo
-    # boton, en el sitio que funciona.
-    assert 'key="qa2_sidebar_sign_all"' in SOURCE
-    assert "with _sidebar_review_slot:" in SOURCE
-    assert "on_click=" in _call_around("qa2_sidebar_sign_all")
-
-
-def test_the_sidebar_slot_is_reserved_next_to_run_qa():
-    slot = SOURCE.index("_sidebar_review_slot = st.container()")
-    run_qa = SOURCE.index('"Run QA",')
-    results_try = SOURCE.index("\nif True:\n    try:")
-    assert run_qa < slot < results_try
-
-
-def test_the_sidebar_reads_its_own_observation():
-    # Si el area central no llega al servidor, tampoco llega lo que
-    # se escriba alli: la barra lateral necesita su propia caja.
-    call = _call_around("qa2_sidebar_sign_all")
-    assert '"qa2_sidebar_note"' in call
-    assert 'key="qa2_sidebar_note"' in SOURCE
+def test_the_script_run_counter_is_drawn_outside_the_results_try():
+    assert SOURCE.index('st.session_state["qa2_script_runs"] = _runs') < RESULTS_TRY
 
 
 def test_nothing_is_signed_off_before_the_run():
-    # Firmar antes de ver los hallazgos no es un QA2. Se corre, se
+    # Firmar antes de ver los hallazgos no es un QA2: se corre, se
     # miran las fechas, y despues se firma.
     assert "qa2_preapprove" not in SOURCE
-
-
-def test_the_script_run_counter_is_shown_outside_the_results_try():
-    counter = SOURCE.index('st.session_state["qa2_script_runs"] = _runs')
-    results_try = SOURCE.index("\nif True:\n    try:")
-    assert counter < results_try
 
 
 if __name__ == "__main__":

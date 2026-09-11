@@ -360,6 +360,46 @@ def running_checkout() -> tuple[str, str]:
 # aunque nadie vuelva a pulsar Run QA. No es el mecanismo principal
 # -- ese es `refresh` -- sino el freno para una pestana que lleva
 # toda la tarde abierta.
+def sign_findings(findings, note: str) -> int:
+    """
+    Marca como firmado todo lo que se le pase.
+
+    Vive aqui, fuera de la seccion de resultados, porque quien la
+    llama es un boton de la barra lateral que se dibuja mucho antes
+    de que exista un solo hallazgo.
+    """
+    state = st.session_state.setdefault("qa2_review_state", {})
+    note = str(note or "").strip()
+    for finding in findings:
+        entry = state.setdefault(finding.finding_id, {})
+        entry["approved"] = True
+        if note or "note" not in entry:
+            entry["note"] = note
+
+    st.session_state["qa2_review_nonce"] = (
+        int(st.session_state.get("qa2_review_nonce", 0)) + 1
+    )
+    stamp = datetime.now().strftime("%H:%M:%S")
+    st.session_state["qa2_review_last_action"] = (
+        f"{len(findings)} signed off at {stamp}"
+    )
+    st.session_state["qa2_click_beacon"] = (
+        f"sign off {len(findings)} at {stamp}"
+    )
+    return len(findings)
+
+
+def clear_signatures() -> None:
+    """Lo mismo al reves."""
+    st.session_state.get("qa2_review_state", {}).clear()
+    st.session_state["qa2_review_nonce"] = (
+        int(st.session_state.get("qa2_review_nonce", 0)) + 1
+    )
+    stamp = datetime.now().strftime("%H:%M:%S")
+    st.session_state["qa2_review_last_action"] = f"cleared at {stamp}"
+    st.session_state["qa2_click_beacon"] = f"clear at {stamp}"
+
+
 INNOVID_CACHE_SECONDS = 3600
 
 
@@ -1904,16 +1944,61 @@ with st.sidebar:
         use_container_width=True,
     )
 
-    # Se reserva aqui y se rellena cuando ya hay hallazgos, mas de
-    # mil lineas mas abajo.
+    # Firmar QA2. Un solo sitio, y con la forma exacta de Run QA.
     #
-    # Firmar es lo ultimo que se hace: primero se corre, se miran las
-    # fechas y se decide. Pero en la barra lateral, no en el panel:
-    # todo lo que le responde a Camilo esta aqui -- Run QA, los
-    # archivos, la casilla de Innovid -- y todo lo que no le
-    # responde esta en el panel del centro. Mismo boton, sitio que
-    # funciona.
-    _sidebar_review_slot = st.container()
+    # Run QA es el unico boton que en su maquina llega siempre al
+    # servidor, y se distingue de los que no llegan en tres cosas:
+    # no lleva `key`, no lleva `on_click`, y esta fuera del `try` de
+    # 2700 lineas de la seccion de resultados. Este las copia las
+    # tres. Se lee por valor de retorno, como aquel.
+    #
+    # El numero y los grupos salen de la pasada anterior, guardados
+    # en session_state: aqui arriba todavia no existe ningun
+    # hallazgo. No cambian entre pasadas mientras no se vuelva a
+    # correr el QA, asi que la etiqueta siempre dice la verdad.
+    _pending_review = int(st.session_state.get("qa2_review_pending", 0))
+    sign_note = ""
+    sign_all_clicked = False
+    sign_group_clicked = False
+    sign_group_choice = ""
+    clear_all_clicked = False
+
+    if _pending_review:
+        st.divider()
+        st.caption(f"**QA2 Review** -- {_pending_review} to sign off")
+        sign_note = st.text_input(
+            "Observation (optional)",
+            placeholder="Why this is acceptable",
+        )
+        sign_all_clicked = st.button(
+            f"Sign off all {_pending_review}",
+            type="primary",
+            use_container_width=True,
+        )
+
+        _known_groups = list(
+            st.session_state.get("qa2_review_groups") or []
+        )
+        if len(_known_groups) > 1:
+            sign_group_choice = st.selectbox(
+                "Or sign off just one group",
+                options=["(everything)"] + _known_groups,
+            )
+            if sign_group_choice != "(everything)":
+                sign_group_clicked = st.button(
+                    "Sign off that group",
+                    use_container_width=True,
+                )
+
+        if st.session_state.get("qa2_review_state"):
+            clear_all_clicked = st.button(
+                "Clear all sign-offs",
+                use_container_width=True,
+            )
+            st.caption(
+                f"{len(st.session_state['qa2_review_state'])} "
+                "signed off so far."
+            )
 
     # st.button() only returns True on the single rerun triggered by
     # the click itself -- on every later rerun (e.g. changing a filter
@@ -2707,6 +2792,13 @@ if True:
             "qa2_review_state", {}
         )
 
+        # Lo que la barra lateral necesita saber en la proxima
+        # pasada: cuantos hay y como se agrupan.
+        st.session_state["qa2_review_pending"] = len(review_findings)
+        st.session_state["qa2_review_groups"] = list(
+            bulk_groups(review_findings)
+        )
+
         if review_findings:
             with st.expander(
                 f"📝 QA2 Review ({len(review_findings)})",
@@ -2726,9 +2818,11 @@ if True:
                 st.caption(
                     "QA2 is mandatory: the second-pass reviewer goes "
                     "through what's below and signs off what is "
-                    "acceptable -- everything at once with the button, "
-                    "one group at a time, or row by row. Whatever you "
-                    "approve counts as PASS from here down: the "
+                    "acceptable. The buttons are in the sidebar, on "
+                    "the left: everything at once, one group at a "
+                    "time, or tick the rows here one by one. "
+                    "Whatever you approve counts as PASS from here "
+                    "down: the "
                     "verdict, the tabs, the PDF and the Excel.\n\n"
                     "Failures are in this list too, and signing one "
                     "off does not hide it: the report and the Excel "
@@ -2748,177 +2842,37 @@ if True:
                     ).get("approved")
                 )
 
-                def _sign(finding_ids, note_key: str) -> None:
-                    """
-                    Firma, desde on_click.
-
-                    Un callback corre ANTES de que el script se
-                    vuelva a ejecutar, asi que no depende de que el
-                    resto de la pagina llegue a dibujarse ni del
-                    orden en que lo haga -- que es justo lo que se
-                    rompia. Todo lo que toca sale de session_state,
-                    no de variables de la pasada anterior: los ids
-                    llegan por `args`, y la observacion se lee por su
-                    key, ya actualizada cuando el callback corre.
-                    """
-                    state = st.session_state.setdefault(
-                        "qa2_review_state", {}
-                    )
-                    note = str(
-                        st.session_state.get(note_key) or ""
-                    ).strip()
-                    for finding_id in finding_ids:
-                        entry = state.setdefault(finding_id, {})
-                        entry["approved"] = True
-                        if note or "note" not in entry:
-                            entry["note"] = note
-
-                    st.session_state["qa2_review_nonce"] = (
-                        int(st.session_state.get("qa2_review_nonce", 0))
-                        + 1
-                    )
-                    stamp = datetime.now().strftime("%H:%M:%S")
-                    st.session_state["qa2_review_last_action"] = (
-                        f"{len(finding_ids)} signed off at {stamp}"
-                    )
-                    st.session_state["qa2_click_beacon"] = (
-                        f"approve {len(finding_ids)} at {stamp}"
-                    )
-
-                def _clear_all() -> None:
-                    """Lo mismo al reves, y por la misma razon."""
-                    st.session_state.get(
-                        "qa2_review_state", {}
-                    ).clear()
-                    st.session_state["qa2_review_nonce"] = (
-                        int(st.session_state.get("qa2_review_nonce", 0))
-                        + 1
-                    )
-                    stamp = datetime.now().strftime("%H:%M:%S")
-                    st.session_state["qa2_review_last_action"] = (
-                        f"cleared at {stamp}"
-                    )
-                    st.session_state["qa2_click_beacon"] = (
-                        f"clear at {stamp}"
-                    )
-
+                # Los botones viven en la barra lateral, no aqui.
+                # Esta tabla es para mirar y, si se quiere, firmar
+                # fila por fila.
                 _pending = len(review_findings) - _approved_before
 
-                # Sin formulario. El formulario estaba para que el
-                # texto llegara junto al clic, pero la observacion es
-                # opcional: si llega un instante tarde, lo peor que
-                # pasa es que quede vacia, que esta permitido. Un
-                # boton normal tiene menos piezas que puedan fallar.
-                _all_note = st.text_input(
-                    "Observation (optional) -- applies to everything "
-                    "you approve here",
-                    key="qa2_review_all_note",
-                    placeholder=(
-                        "e.g. \"Creatives start a day early on "
-                        "purpose, to test before the placement "
-                        "goes live.\""
-                    ),
-                )
-
-                # No se deshabilita nunca: firmar lo ya firmado no
-                # hace dano, y el contador de pendientes va siempre un
-                # turno por detras.
-                st.button(
-                    f"Approve all {len(review_findings)}",
-                    key="qa2_review_approve_all",
-                    use_container_width=True,
-                    type="primary",
-                    on_click=_sign,
-                    args=(
-                        [f.finding_id for f in review_findings],
-                        "qa2_review_all_note",
-                    ),
-                )
-
-                # El mismo boton, en la barra lateral.
+                # Firmar y volver a empezar la pasada.
                 #
-                # Se dibuja desde aqui porque aqui es donde existen
-                # _sign y la lista de hallazgos; `with` solo cambia
-                # el sitio donde aparece. Mira la tabla, decide, y
-                # firma desde la izquierda -- que es la parte de la
-                # pagina que en su maquina responde.
-                with _sidebar_review_slot:
-                    st.divider()
-                    st.caption(
-                        f"**QA2 Review** -- {len(review_findings)} to "
-                        "sign off"
-                    )
-                    st.text_input(
-                        "Observation (optional)",
-                        key="qa2_sidebar_note",
-                        placeholder="Why this is acceptable",
-                    )
-                    st.button(
-                        f"Sign off all {len(review_findings)}",
-                        key="qa2_sidebar_sign_all",
-                        use_container_width=True,
-                        type="primary",
-                        on_click=_sign,
-                        args=(
-                            [f.finding_id for f in review_findings],
-                            "qa2_sidebar_note",
+                # La barra lateral se dibuja mucho antes que esto, asi
+                # que en la pasada del clic ya salio con los numeros
+                # viejos. Repetir la pasada deja el contador, la
+                # tabla, el veredicto y los exports diciendo lo
+                # mismo. Ya no cuesta lo que costaba: Innovid solo se
+                # relee al pulsar Run QA.
+                _signed_now = False
+                if sign_all_clicked:
+                    sign_findings(review_findings, sign_note)
+                    _signed_now = True
+                elif sign_group_clicked and sign_group_choice:
+                    sign_findings(
+                        bulk_groups(review_findings).get(
+                            sign_group_choice, []
                         ),
+                        sign_note,
                     )
-                    if _review_state:
-                        st.button(
-                            "Clear all",
-                            key="qa2_sidebar_clear",
-                            use_container_width=True,
-                            on_click=_clear_all,
-                        )
-                        st.caption(
-                            f"{len(_review_state)} signed off so far."
-                        )
+                    _signed_now = True
+                if clear_all_clicked:
+                    clear_signatures()
+                    _signed_now = True
 
-                if _review_state:
-                    st.button(
-                        "Clear all approvals",
-                        key="qa2_review_clear",
-                        on_click=_clear_all,
-                    )
-
-                # Por grupo, para quien quiera firmar solo una parte
-                # con su propia razon. Va plegado: es la excepcion.
-                _bulk_groups = bulk_groups(review_findings)
-
-                # Un checkbox, no un expander: este bloque ya vive
-                # dentro del expander del panel, y Streamlit no
-                # soporta uno dentro de otro. El formulario anidado
-                # nunca llegaba a responder al clic -- por eso
-                # "Approve all" funcionaba y este no.
-                if _bulk_groups and st.checkbox(
-                    f"Approve just one group instead "
-                    f"({len(_bulk_groups)} group"
-                    f"{'s' if len(_bulk_groups) != 1 else ''})",
-                    key="qa2_review_show_groups",
-                ):
-                    _bulk_choice = st.selectbox(
-                        "Group",
-                        options=list(_bulk_groups),
-                        key="qa2_review_bulk_group",
-                        label_visibility="collapsed",
-                    )
-                    _bulk_items = _bulk_groups[_bulk_choice]
-
-                    _note = st.text_input(
-                        "Observation for this group",
-                        key="qa2_review_bulk_note",
-                    )
-                    st.button(
-                        f"Approve these {len(_bulk_items)}",
-                        key="qa2_review_approve_group",
-                        use_container_width=True,
-                        on_click=_sign,
-                        args=(
-                            [f.finding_id for f in _bulk_items],
-                            "qa2_review_bulk_note",
-                        ),
-                    )
+                if _signed_now:
+                    st.rerun()
 
                 st.divider()
 
