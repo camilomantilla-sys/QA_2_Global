@@ -46,6 +46,12 @@ AGREE_FILL = PatternFill("solid", start_color="E8F8E4", end_color="E8F8E4")
 # teñirlo mandaria a revisar algo que nadie ha contradicho.
 DISAGREE_FILL = PatternFill("solid", start_color="FFE0B2", end_color="FFE0B2")
 
+# Lo que no coincide PERO alguien firmo a mano. En naranja se
+# confundia con lo que sigue abierto, y justo eso -- que se aprobo por
+# decision de una persona y no porque cuadrara -- es lo que hay que
+# poder ver de un vistazo al abrir el archivo.
+SIGNED_OFF_FILL = PatternFill("solid", start_color="D9CCF0", end_color="D9CCF0")
+
 STATUS_FILLS = {
     "PASS": "D9F7EC",
     "FAIL": "FDE2E2",
@@ -214,39 +220,10 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
 
     row += 1
 
-    # El nombre y la fecha de quien firmo. El desplegable dice SI se
-    # aprobo; esta linea dice QUIEN y CUANDO.
-    signoff_cell = ws.cell(
-        row=row, column=1,
-        value=(
-            f"QA2 Approval: {meta.qa2_by}"
-            + (f" -- {meta.qa2_date.isoformat()}" if meta.qa2_date else "")
-            if meta.qa2_by
-            else "QA2 Approval: pending -- edit this cell to sign off"
-        ),
-    )
-    signoff_cell.font = Font(
-        color=STATUS_FONT_COLORS.get(
-            "PASS" if meta.qa2_by else "REVIEW", WPP_INK
-        ),
-        bold=True, size=11,
-    )
-    signoff_cell.fill = PatternFill(
-        "solid",
-        fgColor=STATUS_FILLS["PASS" if meta.qa2_by else "REVIEW"],
-    )
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
-    row += 1
-
-    ws.cell(
-        row=row, column=1,
-        value=(
-            "This cell is the record of QA2 approval for this campaign "
-            "-- confirm or update it directly here in SharePoint/Excel "
-            "Web, e.g. \"QA2 Approval: Camilo Mantilla -- 2026-09-05\"."
-        ),
-    ).font = Font(color=WPP_MUTED, italic=True, size=9)
-    row += 2
+    # Quien firmo y cuando ya viven en el Implementation Record, unas
+    # filas mas abajo. Aqui habia ademas una celda de texto libre que
+    # repetia lo mismo y pedia editarla a mano: dos sitios donde
+    # escribir la misma firma es un sitio de mas.
 
     info_rows = [
         ("Profile used", meta.profile_used),
@@ -344,6 +321,7 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
     # que el color es un veredicto sobre Innovid y no sobre el acuerdo
     # entre ambos.
     for offset, row in enumerate(qa_rows, start=2):
+        signed_off = "MANUALLY" in str(row.get("Notes") or "")
         for left, right in PAIRS:
             left_value = str(row.get(left) or "").strip()
             right_value = str(row.get(right) or "").strip()
@@ -353,13 +331,50 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
                 # comparacion que no se pudo hacer. Sin color.
                 continue
 
-            fill = (
-                AGREE_FILL
-                if cells_agree(left_value, right_value)
-                else DISAGREE_FILL
-            )
+            if cells_agree(left_value, right_value):
+                fill = AGREE_FILL
+            elif signed_off:
+                # La fila es un creativo, y la nota dice que alguien
+                # firmo lo que aqui no cuadra -- las fechas que
+                # arrancan antes para testear, casi siempre. Si una
+                # fila llevara dos discrepancias y solo una firmada,
+                # las dos saldrian de este color: la nota, al lado,
+                # dice cual se firmo.
+                fill = SIGNED_OFF_FILL
+            else:
+                fill = DISAGREE_FILL
+
             for column in (left, right):
                 ws.cell(row=offset, column=index[column]).fill = fill
+
+    _colour_legend(ws, len(qa_rows) + 3)
+
+
+def _colour_legend(ws, row: int) -> None:
+    """
+    Que significa cada color, debajo de la tabla.
+
+    Tres colores sin leyenda son tres colores que cada quien
+    interpreta a su manera, y el morado -- "no cuadra pero se firmo"
+    -- es justo el que nadie adivina.
+    """
+    ws.cell(row=row, column=1, value="Colours").font = Font(
+        color=WPP_INK, bold=True, size=10
+    )
+    entries = (
+        (AGREE_FILL, "Traffic Sheet and Innovid agree"),
+        (DISAGREE_FILL, "They differ, and it is still open"),
+        (SIGNED_OFF_FILL,
+         "They differ, and a reviewer signed it off by hand "
+         "-- see Notes for who and why"),
+    )
+    for offset, (fill, text) in enumerate(entries, start=1):
+        swatch = ws.cell(row=row + offset, column=1, value="")
+        swatch.fill = fill
+        swatch.border = Border(*(Side(style="thin", color=WPP_MUTED),) * 4)
+        ws.cell(row=row + offset, column=2, value=text).font = Font(
+            color=WPP_MUTED, size=9
+        )
 
 
 def build_excel_report(

@@ -14,6 +14,7 @@ Run with pytest, or directly:
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -145,6 +146,27 @@ def test_the_default_is_marked_so_it_can_be_left_out():
 
     names = {f.name for f in dataclasses.fields(ExpectedCreative)}
     assert "is_default" in names
+
+
+def test_every_place_that_normalises_passes_the_removed_ones():
+    # Fueron cuatro sitios, y el cuarto se quedo atras: la tabla de
+    # creativos mostraba 100% y la comparacion de Innovid seguia
+    # esperando 25%, asi que INV-002 fallaba contra un numero que ya
+    # nadie mas usaba.
+    root = Path(__file__).resolve().parents[1]
+    for path in (
+        "core/qa_export.py",
+        "core/innovid_reconciliation.py",
+        "rules/rotation.py",
+        "ui/app_v2.py",
+    ):
+        body = (root / path).read_text(encoding="utf-8")
+        # Sin el guion bajo de _normalize_weights, que es otra cosa.
+        calls = list(re.finditer(r"(?<![_\w])normalize_weights\(", body))
+        assert calls, f"{path} ya no normaliza pesos"
+        for call in calls:
+            window = body[call.start():call.start() + 400]
+            assert "removed=" in window, f"{path} @ {call.start()}"
 
 
 if __name__ == "__main__":

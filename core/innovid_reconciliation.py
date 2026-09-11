@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from core.colors import RED
 from core.matching import norm_creative
 from core.normalize import norm_compare, normalize_weights
 
@@ -43,6 +44,11 @@ class CreativeFlightCheck:
     # set no se lea como "extra", pero no generan hallazgos. Sin este
     # campo la regla no puede distinguirlos.
     intent: str = ""
+
+    # El default ad: se engancha por dimension y corre en el decision
+    # set oficial de su tamano, con su propio 100%. No reparte con los
+    # creativos que el placement declara.
+    is_default: bool = False
 
     expected_start: date | None = None
     expected_end: date | None = None
@@ -197,14 +203,31 @@ def _normalize_weights(out: InnovidReconciliation) -> None:
     Lleva los pesos de los dos lados a porcentajes, placement por
     placement. Cada rotacion reparte el 100% entre sus creativos, asi
     que el placement es el grupo que revela la escala de cada fuente.
+
+    Quien reparte son los que van a correr: ni los que la TS pinto de
+    rojo ni el default, que tiene su propio decision set. Este era el
+    cuarto sitio donde se normaliza y el unico que se quedo sin esa
+    regla: la tabla de creativos mostraba 100% y esta comparacion
+    seguia esperando 25%, asi que INV-002 fallaba contra un numero
+    que ya nadie mas usaba.
     """
     by_placement: dict[str, list[CreativeFlightCheck]] = {}
     for check in out.flights:
         by_placement.setdefault(check.placement_id, []).append(check)
 
     for checks in by_placement.values():
-        expected = normalize_weights([c.expected_weight for c in checks])
-        actual = normalize_weights([c.actual_weight for c in checks])
+        gone = [
+            c.intent == RED or getattr(c, "is_default", False)
+            for c in checks
+        ]
+        expected = normalize_weights(
+            [c.expected_weight for c in checks], removed=gone
+        )
+        # Innovid no sabe de rojos: su lado se reparte entre los que
+        # siguen en el decision set, que son justo los que quedan.
+        actual = normalize_weights(
+            [c.actual_weight for c in checks], removed=gone
+        )
         for check, exp, act in zip(checks, expected, actual):
             check.expected_weight_pct = exp
             check.actual_weight_pct = act
@@ -313,6 +336,7 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
                 creative_name=creative.name,
                 status=MISSING_IN_INNOVID,
                 intent=creative.intent,
+                is_default=creative.is_default,
                 intent_fields=frozenset(
                     getattr(creative, 'intent_fields', None) or ()
                 ),
@@ -331,6 +355,7 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
                 creative_name=creative.name,
                 status=AMBIGUOUS,
                 intent=creative.intent,
+                is_default=creative.is_default,
                 intent_fields=frozenset(
                     getattr(creative, 'intent_fields', None) or ()
                 ),
@@ -350,6 +375,7 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
             creative_name=creative.name,
             status=MATCHED,
             intent=creative.intent,
+                is_default=creative.is_default,
             intent_fields=frozenset(
                 getattr(creative, 'intent_fields', None) or ()
             ),
