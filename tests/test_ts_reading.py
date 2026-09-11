@@ -49,6 +49,23 @@ def traffic_sheets() -> list[Path]:
     return sorted(found)
 
 
+def snapshots_without_a_sheet() -> list[Path]:
+    """
+    Resumenes guardados cuya hoja de calculo no esta aqui.
+
+    Es lo normal en una maquina recien clonada: los resumenes viajan
+    por git y las hojas no. No es un fallo, pero decirlo evita la
+    duda de "y esto por que no comprueba nada".
+    """
+    if not FIXTURES.exists():
+        return []
+    orphans = []
+    for snapshot in sorted(FIXTURES.glob("*.expected.json")):
+        if not FIXTURES.joinpath(snapshot.name[:-len(".expected.json")]).exists():
+            orphans.append(snapshot)
+    return orphans
+
+
 def check_one(path: Path) -> tuple[str, list[str]]:
     """
     Devuelve (veredicto, diferencias) para una TS.
@@ -113,10 +130,22 @@ def test_a_missing_fixtures_folder_is_not_a_failure():
 
 
 if __name__ == "__main__":
+    orphans = snapshots_without_a_sheet()
     sheets = traffic_sheets()
+
     if not sheets:
         print(f"No hay Traffic Sheets en {FIXTURES}")
-        print("Deja una ahi y vuelve a correr para fijar su lectura.")
+        if orphans:
+            print()
+            print("Hay resumenes guardados cuya hoja no esta aqui. Las "
+                  "hojas no se suben a git, asi que para comprobar una "
+                  "tienes que dejarla en esa carpeta con ese mismo "
+                  "nombre:")
+            for snapshot in orphans:
+                print(f"    {snapshot.name[:-len('.expected.json')]}")
+        print()
+        print("O deja cualquier otra TS ahi y vuelve a correr para "
+              "fijar su lectura.")
         sys.exit(0)
 
     print(f"{len(sheets)} Traffic Sheet(s) en {FIXTURES}\n")
@@ -133,6 +162,10 @@ if __name__ == "__main__":
             print(f"CAMBIO  {sheet.name}")
             for line in diff:
                 print(f"          {line}")
+
+    for snapshot in orphans:
+        print(f"falta   {snapshot.name[:-len('.expected.json')]}")
+        print("        hay resumen pero no la hoja -- nada que comprobar")
 
     print()
     if failed:
