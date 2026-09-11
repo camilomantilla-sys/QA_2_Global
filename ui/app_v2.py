@@ -1779,12 +1779,9 @@ with st.sidebar:
         st.session_state["qa2_script_runs"] = _runs
 
         _beacon = st.session_state.get("qa2_click_beacon")
-        _seen = st.session_state.get("qa2_last_button_seen")
         st.caption(
             f"Script runs: `{_runs}`  \n"
-            "Last button seen: "
-            + (f"`{_seen}`" if _seen else "`(none yet)`")
-            + "  \nLast click received: "
+            "Last sign-off: "
             + (f"`{_beacon}`" if _beacon else "`(none yet)`")
         )
 
@@ -1975,81 +1972,6 @@ with st.sidebar:
         use_container_width=True,
     )
 
-    # Firmar QA2. Un solo sitio, y con la forma exacta de Run QA.
-    #
-    # Run QA es el unico boton que en su maquina llega siempre al
-    # servidor, y se distingue de los que no llegan en tres cosas:
-    # no lleva `key`, no lleva `on_click`, y esta fuera del `try` de
-    # 2700 lineas de la seccion de resultados. Este las copia las
-    # tres. Se lee por valor de retorno, como aquel.
-    #
-    # El numero y los grupos salen de la pasada anterior, guardados
-    # en session_state: aqui arriba todavia no existe ningun
-    # hallazgo. No cambian entre pasadas mientras no se vuelva a
-    # correr el QA, asi que la etiqueta siempre dice la verdad.
-    _pending_review = int(st.session_state.get("qa2_review_pending", 0))
-    sign_note = ""
-    sign_all_clicked = False
-    sign_group_clicked = False
-    sign_group_choice = ""
-    clear_all_clicked = False
-
-    if _pending_review:
-        st.divider()
-        st.caption(f"**QA2 Review** -- {_pending_review} to sign off")
-        sign_note = st.text_input(
-            "Observation (optional)",
-            placeholder="Why this is acceptable",
-        )
-        sign_all_clicked = st.button(
-            f"Sign off all {_pending_review}",
-            type="primary",
-            use_container_width=True,
-        )
-
-        _known_groups = list(
-            st.session_state.get("qa2_review_groups") or []
-        )
-        if len(_known_groups) > 1:
-            sign_group_choice = st.selectbox(
-                "Or sign off just one group",
-                options=["(everything)"] + _known_groups,
-            )
-            if sign_group_choice != "(everything)":
-                sign_group_clicked = st.button(
-                    "Sign off that group",
-                    use_container_width=True,
-                )
-
-        if st.session_state.get("qa2_review_state"):
-            clear_all_clicked = st.button(
-                "Clear all sign-offs",
-                use_container_width=True,
-            )
-            st.caption(
-                f"{len(st.session_state['qa2_review_state'])} "
-                "signed off so far."
-            )
-
-        # Las dos unicas cosas que desde fuera se ven igual.
-        #
-        # "Script runs" sube con cada pasada: si no sube al pulsar,
-        # el clic no salio del navegador. "Last button seen" se
-        # escribe aqui, en el instante en que Streamlit devuelve True
-        # -- antes de que nada de la seccion de resultados pueda
-        # estropearlo. Si el contador sube y esto sigue vacio, el
-        # clic llego pero Streamlit no se lo atribuyo a este boton, y
-        # eso ya es un problema concreto y mio.
-        if sign_all_clicked or sign_group_clicked or clear_all_clicked:
-            _which = (
-                "sign all" if sign_all_clicked
-                else "sign group" if sign_group_clicked
-                else "clear"
-            )
-            st.session_state["qa2_last_button_seen"] = (
-                f"{_which} at {datetime.now():%H:%M:%S}"
-            )
-
     # st.button() only returns True on the single rerun triggered by
     # the click itself -- on every later rerun (e.g. changing a filter
     # in the results tabs) it goes back to False. Without persisting
@@ -2061,6 +1983,50 @@ with st.sidebar:
 
     if analyze_button:
         st.session_state.qa2_has_run = True
+
+    # Firmar QA2. Sin botones.
+    #
+    # El boton de Run QA le llega siempre al servidor y el de firmar
+    # -- mismo tipo, misma forma, misma barra lateral, dos centimetros
+    # mas abajo -- no le llega nunca: el rastro de logs/qa_run.log lo
+    # dejo claro, ni una pasada del script tras el clic. En esta
+    # maquina el mismo boton firma los 24 a la primera, asi que no es
+    # el codigo.
+    #
+    # Lo que si le responde, ademas de Run QA, son las casillas y los
+    # desplegables: con la de Innovid probo su solicitud con y sin
+    # conexion. Asi que la firma pasa a ser una casilla. De paso sobra
+    # el boton de limpiar: destildar es limpiar.
+    _pending_review = int(st.session_state.get("qa2_review_pending", 0))
+    sign_note = ""
+    sign_all = False
+    sign_groups: list[str] = []
+
+    if _pending_review:
+        st.divider()
+        st.caption(f"**QA2 Review** -- {_pending_review} to sign off")
+        sign_note = st.text_input(
+            "Observation (optional)",
+            placeholder="Why this is acceptable",
+        )
+        sign_all = st.checkbox(
+            f"Sign off all {_pending_review}",
+            help=(
+                "Everything in QA2 Review counts as PASS, with the "
+                "observation above. Untick to undo it. Failures still "
+                "read \"MANUALLY Approved by ...\" in the report and "
+                "the Excel."
+            ),
+        )
+
+        _known_groups = list(
+            st.session_state.get("qa2_review_groups") or []
+        )
+        if not sign_all and len(_known_groups) > 1:
+            sign_groups = st.multiselect(
+                "Or sign off only these groups",
+                options=_known_groups,
+            )
 
     st.divider()
 
@@ -2915,32 +2881,28 @@ if True:
                 # fila por fila.
                 _pending = len(review_findings) - _approved_before
 
-                # Firmar y volver a empezar la pasada.
+                # La casilla manda, y se aplica en esta misma
+                # pasada: la tabla de abajo y el resumen ya salen
+                # firmados, sin repetir nada.
                 #
-                # La barra lateral se dibuja mucho antes que esto, asi
-                # que en la pasada del clic ya salio con los numeros
-                # viejos. Repetir la pasada deja el contador, la
-                # tabla, el veredicto y los exports diciendo lo
-                # mismo. Ya no cuesta lo que costaba: Innovid solo se
-                # relee al pulsar Run QA.
-                _signed_now = False
-                if sign_all_clicked:
+                # Destildar limpia, pero solo si estaba tildada: si
+                # no, cada pasada borraria las filas marcadas a mano
+                # en la tabla.
+                _was_all = bool(st.session_state.get("qa2_sign_all_was"))
+                if sign_all:
                     sign_findings(review_findings, sign_note)
-                    _signed_now = True
-                elif sign_group_clicked and sign_group_choice:
+                elif _was_all:
+                    clear_signatures()
+                elif sign_groups:
+                    _groups = bulk_groups(review_findings)
                     sign_findings(
-                        bulk_groups(review_findings).get(
-                            sign_group_choice, []
-                        ),
+                        [
+                            finding for name in sign_groups
+                            for finding in _groups.get(name, [])
+                        ],
                         sign_note,
                     )
-                    _signed_now = True
-                if clear_all_clicked:
-                    clear_signatures()
-                    _signed_now = True
-
-                if _signed_now:
-                    st.rerun()
+                st.session_state["qa2_sign_all_was"] = bool(sign_all)
 
                 st.divider()
 
