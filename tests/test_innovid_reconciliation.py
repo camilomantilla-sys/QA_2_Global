@@ -49,7 +49,11 @@ class FakeMatchResult:
 
 
 def _ts(placement_id: str, creatives: list[ExpectedCreative],
-        fmt: str = "display", dims: str = "300x600") -> FakeMatchResult:
+        fmt: str = "display", dims: str = "300x600",
+        vendors: str = "DV Monitoring / Blocking") -> FakeMatchResult:
+    # Por defecto una TS que SI pide DV Blocking: es lo unico que se
+    # implementa con un Verification Partner, y sin eso la mayoria de
+    # estas pruebas no tendrian nada que comprobar.
     expected = ExpectedPlacement(
         placement_id=placement_id,
         start=date(2026, 9, 14),
@@ -57,6 +61,7 @@ def _ts(placement_id: str, creatives: list[ExpectedCreative],
         creatives=creatives,
         fmt=fmt,
         dims=dims,
+        vendors=vendors,
     )
     return FakeMatchResult(matched=[FakeMatch(placement_id, expected)])
 
@@ -422,9 +427,22 @@ def test_a_configured_verification_partner_passes():
     assert "DoubleVerify" in findings[0].message
 
 
+def test_monitoring_only_needs_no_verification_partner():
+    # BlackRock: "DV Event Monitoring, Dynata". El partner es como
+    # Innovid implementa DV Blocking; sin Blocking no hay nada que
+    # configurar y pedir revision era ruido sobre algo bien puesto.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)],
+             vendors="DV Event Monitoring, Dynata")
+    got = _innovid("11087616", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings and findings[0].status.name == "PASS"
+
+
 def test_a_missing_verification_partner_is_a_review_not_a_failure():
-    # Muchas campanas legitimamente no llevan. Afirmar que esta mal
-    # seria inventar un requisito.
+    # Cuando la TS SI pide DV Blocking. No se afirma que este mal:
+    # se afirma que no esta puesto, que es un hecho.
     ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
     got = _innovid("11087616", 40316,
                    [_node(V2, "2026-09-14", "2026-10-31")], partner="")

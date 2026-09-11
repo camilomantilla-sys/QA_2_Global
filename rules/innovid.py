@@ -11,6 +11,7 @@ abriendo la interfaz a mano:
 Los creativos WHITE entran a la comparacion como contexto pero no
 generan hallazgos, igual que en el resto de QA2.
 """
+from core.colors import RED, WHITE
 from core.findings import Domain, EntityType
 from core.innovid_reconciliation import (
     AMBIGUOUS,
@@ -52,6 +53,23 @@ def _flight_dates(reconciliation, buffer):
         )
 
         if check.status == MISSING_IN_INNOVID:
+            # Un creativo en rojo es una REMOCION. Que no este en el
+            # decision set no es que falte: es que se hizo lo que la
+            # TS pedia. Reportarlo como fallo ponia en rojo un QA
+            # correcto, y encima en la misma tabla donde la otra
+            # columna ya decia "Removed (confirmed)".
+            if check.intent == RED:
+                buffer.pass_(
+                    message=(
+                        f"{check.creative_name} is no longer in the "
+                        "decision set, as the Traffic Sheet asked"
+                    ),
+                    expected="(removed)",
+                    actual="(not in the decision set)",
+                    **common,
+                )
+                continue
+
             buffer.fail(
                 message=(
                     f"{check.creative_name} is in the Traffic Sheet but "
@@ -250,6 +268,26 @@ def _rotation_weights(reconciliation, buffer):
 
 def _verification_partner(reconciliation, buffer):
     for check in reconciliation.partners:
+        # Solo DV Blocking se implementa con un Verification Partner
+        # en Innovid. Con DV Monitoring a secas -- o sin DV -- no hay
+        # nada que configurar, y pedir revision por cada placement era
+        # ruido sobre algo bien traficado.
+        if not check.partner_expected and not check.configured:
+            buffer.pass_(
+                rule_id="INV-003",
+                domain=Domain.ATTRIBUTION,
+                entity_type=EntityType.PLACEMENT,
+                placement_id=check.placement_id,
+                reason="Innovid placement",
+                message=(
+                    "No Verification Partner is needed: the Traffic "
+                    "Sheet doesn't ask for DV Blocking on this "
+                    "placement"
+                ),
+                actual="(not set)",
+            )
+            continue
+
         # Un 1x1 site-served no lleva Verification Partner: el sitio
         # sirve el creativo, no hay nada que verificar. Reportarlo
         # llenaria el QA de revisiones sobre placements correctos.

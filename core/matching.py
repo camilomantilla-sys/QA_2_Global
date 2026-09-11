@@ -128,6 +128,11 @@ class ExpectedPlacement:
     end: date | None = None
     cgen: str = ""
     group_name: str = ""
+
+    # "Vendors / Pixels" tal cual lo escribio la TS. De ahi sale si la
+    # solicitud pide DV Blocking, que es lo unico que se implementa
+    # con un Verification Partner en Innovid.
+    vendors: str = ""
     impl_type: str = ""
     fmt: str = ""
     request_type: str = ""
@@ -427,6 +432,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             ep.group_name = str(row.values.get("group_name"))
         if not ep.cgen and row.values.get("cgen"):
             ep.cgen = str(row.values.get("cgen"))
+        if not ep.vendors and row.values.get("vendors"):
+            ep.vendors = str(row.values.get("vendors"))
 
         # creativos declarados a nivel placement (Variante B)
         cname = str(row.values.get("creative_names") or "")

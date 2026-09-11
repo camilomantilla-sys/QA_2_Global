@@ -87,6 +87,10 @@ class VerificationPartnerCheck:
     actual_status: str = ""
     configured: bool = False
 
+    # Si la TS pidio DV Blocking. Es lo unico que se implementa con un
+    # Verification Partner: sin eso, no tenerlo es lo correcto.
+    partner_expected: bool = False
+
     # Los 1x1 site-served no llevan Verification Partner: el sitio
     # sirve el creativo y no hay nada que verificar. Pedir revision
     # por cada uno seria ruido sobre algo que esta bien puesto.
@@ -153,6 +157,7 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             actual_partner=innovid_placement.verification_partner,
             actual_status=innovid_placement.verification_status,
             configured=bool(innovid_placement.verification_partner),
+            partner_expected=_asks_for_dv_blocking(pm),
             site_served_1x1=_is_site_served_1x1(pm),
         ))
 
@@ -203,6 +208,22 @@ def _normalize_weights(out: InnovidReconciliation) -> None:
         for check, exp, act in zip(checks, expected, actual):
             check.expected_weight_pct = exp
             check.actual_weight_pct = act
+
+
+def _asks_for_dv_blocking(pm) -> bool:
+    """
+    Si la TS pide DV Blocking en este placement.
+
+    Es lo unico que se implementa con un Verification Partner en
+    Innovid. DV Monitoring a secas se verifica con el pixel del
+    placement, y DV Omni con una columna del archivo de tags: en esos
+    dos, y sin DV, no hay partner que poner.
+    """
+    from core.dv_subtype import MONITORING_BLOCKING, dv_subtype
+
+    expected = getattr(pm, "expected", None)
+    vendors = getattr(expected, "vendors", "") if expected else ""
+    return dv_subtype(vendors) == MONITORING_BLOCKING
 
 
 def _is_site_served_1x1(pm) -> bool:
