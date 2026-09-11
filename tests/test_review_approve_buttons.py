@@ -118,6 +118,23 @@ def test_the_script_run_counter_is_drawn_outside_the_results_try():
     assert SOURCE.index('st.session_state["qa2_script_runs"] = _runs') < RESULTS_TRY
 
 
+def test_the_first_run_asks_for_a_second_pass():
+    # Huevo y gallina: la barra lateral lee el numero antes de que
+    # los resultados lo escriban, asi que en la pasada de Run QA sale
+    # con cero y no dibuja boton -- y sin boton no hay nada que
+    # provoque otra pasada. El boton no aparecia nunca.
+    body = SOURCE[SOURCE.index("_prev_pending = st.session_state.get"):]
+    body = body[:body.index("if review_findings:")]
+    assert 'st.session_state["qa2_review_pending"] = len(review_findings)' in body
+    assert "if _prev_pending != len(review_findings):" in body
+    assert "st.rerun()" in body
+
+
+def test_the_second_pass_does_not_reread_innovid():
+    # Si la releyera, cada Run QA costaria dos descargas.
+    assert "refresh=bool(analyze_button)" in SOURCE
+
+
 def test_nothing_is_signed_off_before_the_run():
     # Firmar antes de ver los hallazgos no es un QA2: se corre, se
     # miran las fechas, y despues se firma.

@@ -2792,12 +2792,23 @@ if True:
             "qa2_review_state", {}
         )
 
-        # Lo que la barra lateral necesita saber en la proxima
-        # pasada: cuantos hay y como se agrupan.
+        # Lo que la barra lateral necesita saber, y una pasada mas
+        # para que se entere.
+        #
+        # La barra lateral se dibuja mucho antes que esto, asi que en
+        # la pasada de Run QA salio con el numero viejo -- cero la
+        # primera vez, y sin numero no hay boton. Y sin boton no hay
+        # nada que provoque otra pasada: el boton no aparecia nunca.
+        # Asi que la pide el propio codigo, una sola vez, cuando el
+        # numero cambia. La segunda pasada no vuelve a leer Innovid
+        # (eso solo lo hace Run QA), asi que es barata.
+        _prev_pending = st.session_state.get("qa2_review_pending")
         st.session_state["qa2_review_pending"] = len(review_findings)
         st.session_state["qa2_review_groups"] = list(
             bulk_groups(review_findings)
         )
+        if _prev_pending != len(review_findings):
+            st.rerun()
 
         if review_findings:
             with st.expander(
