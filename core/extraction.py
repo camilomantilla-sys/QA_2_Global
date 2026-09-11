@@ -370,13 +370,98 @@ def map_columns(grid: SheetGrid, header_row: int,
         (cmap.missing_required if f.required else cmap.missing_optional).append(f.name)
 
     if cmap.missing_required:
+        # Una columna con datos y sin encabezado es casi siempre un
+        # encabezado que alguien borro, no un formato distinto.
+        #
+        # Paso de verdad: llego una TS de BlackRock con B1 en blanco
+        # en "Creative Rotations" y QA leyo CERO de sus 384
+        # rotaciones. Decir solo "falta creative_name" deja a quien lo
+        # recibe sin saber donde mirar; decir la hoja y la celda lo
+        # convierte en un arreglo de cinco segundos.
+        orphans = _blank_headers_with_data(grid, header_row)
+
+        message = (
+            f"Missing required columns: {', '.join(cmap.missing_required)}"
+            f" (sheet '{grid.sheet}')"
+        )
+        if orphans:
+            where = ", ".join(
+                f"{_column_letter(col)}{header_row} "
+                f"({filled}{'+' if filled >= _SAMPLE else ''} "
+                f"value(s) below it)"
+                for col, filled in orphans
+            )
+            message += (
+                f". These columns hold data but their header cell is "
+                f"empty: {where}. It looks like a deleted header -- "
+                f"put the name back and run it again."
+            )
+
         anomalies.append(Anomaly(
             "EXT-COLUMN-MISSING", "FATAL",
-            f"Missing required columns: {', '.join(cmap.missing_required)}",
-            detail={"missing": cmap.missing_required},
+            message,
+            ref=grid.sheet,
+            detail={
+                "missing": cmap.missing_required,
+                "sheet": grid.sheet,
+                "blank_headers_with_data": [
+                    [f"{_column_letter(col)}{header_row}", filled]
+                    for col, filled in orphans
+                ],
+            },
         ))
 
     return cmap, anomalies
+
+
+def _blank_headers_with_data(grid: SheetGrid,
+                             header_row: int) -> list[tuple[int, int]]:
+    """
+    Columnas con datos cuyo encabezado esta vacio.
+
+    Se recorren todas las columnas de la hoja, no solo las que tienen
+    celda de encabezado: una celda que nunca se escribio puede no
+    existir en el grid, y esa es justo la que hay que encontrar.
+    """
+    header_cells = grid.row_cells(header_row)
+    found: list[tuple[int, int]] = []
+    for col in range(1, grid.max_col + 1):
+        cell = header_cells.get(col)
+        if cell is not None and cell.text:
+            continue
+        filled = _column_has_data(grid, col, header_row)
+        if filled:
+            found.append((col, filled))
+    return found
+
+
+def _column_letter(col: int) -> str:
+    """1 -> A, 27 -> AA. Para poder nombrar la celda."""
+    letters = ""
+    while col > 0:
+        col, remainder = divmod(col - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters
+
+
+_SAMPLE = 200
+
+
+def _column_has_data(grid: SheetGrid, col: int, header_row: int,
+                     sample: int = _SAMPLE) -> int:
+    """
+    Cuantas celdas con texto hay bajo esa columna.
+
+    Se mira una muestra, no la hoja entera: basta para saber que la
+    columna lleva datos, y la cuenta exacta no cambia el diagnostico.
+    """
+    filled = 0
+    last = min(grid.max_row, header_row + sample)
+    for row in range(header_row + 1, last + 1):
+        cell = grid.cell(row, col)
+        if cell is not None and cell.text:
+            filled += 1
+    return filled
 
 def check_empty_required(grid: SheetGrid, cmap: ColumnMap, spec: SheetSpec,
                          first_data_row: int, last_row: int) -> list[Anomaly]:

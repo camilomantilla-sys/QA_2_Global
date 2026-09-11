@@ -1,0 +1,185 @@
+{
+  "profile": "wpp_standard",
+  "profile_evidence": "no CGEN column in Placements or Creative Rotations",
+  "sheets": {
+    "in_scope": [
+      "Campaign Information",
+      "Placements",
+      "Creative Rotations",
+      "Landing Pages"
+    ],
+    "out_of_scope": [
+      "Training Guide",
+      "Prisma Output"
+    ],
+    "hidden": []
+  },
+  "campaign_info_fields": [
+    "campaignend",
+    "campaignid",
+    "campaignname",
+    "campaignstart"
+  ],
+  "site_contacts": 0,
+  "placements": {
+    "sheet": "Placements",
+    "header_row": 1,
+    "rows": 348,
+    "merged_applied": 0,
+    "mapped_columns": [
+      "dimensions",
+      "end_date",
+      "group_name",
+      "lp_ref",
+      "placement_id",
+      "placement_name",
+      "site",
+      "start_date",
+      "vendors"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [
+      [
+        10,
+        "Additional Requirements (Transcodes, Macros, Attribution Settings, etc.)"
+      ]
+    ],
+    "missing_required": [],
+    "missing_optional": [
+      "cgen",
+      "creative_names",
+      "extra_requirements",
+      "rotation_weight"
+    ],
+    "row_class_counts": {
+      "DATA": 348
+    },
+    "intent_counts": {
+      "GREEN": 72,
+      "SCOPE_EXCLUDED": 12,
+      "WHITE": 264
+    },
+    "impl_counts": {
+      "THIRD_PARTY": 348
+    },
+    "fill_rates": {
+      "dimensions": 1.0,
+      "end_date": 1.0,
+      "group_name": 1.0,
+      "lp_ref": 1.0,
+      "placement_id": 1.0,
+      "placement_name": 1.0,
+      "site": 1.0,
+      "start_date": 1.0,
+      "vendors": 1.0
+    },
+    "dates": {
+      "end_date": {
+        "order": "NATIVE",
+        "native": 348,
+        "text": 0,
+        "unparsed": 0
+      },
+      "start_date": {
+        "order": "NATIVE",
+        "native": 348,
+        "text": 0,
+        "unparsed": 0
+      }
+    },
+    "anomalies": []
+  },
+  "rotations": {
+    "sheet": "Creative Rotations",
+    "header_row": 1,
+    "rows": 0,
+    "merged_applied": 618,
+    "mapped_columns": [
+      "companion",
+      "companion_id",
+      "creative_links",
+      "creative_type",
+      "dims_or_duration",
+      "end_date",
+      "group_name",
+      "lp_url",
+      "rotation_weight",
+      "sequence",
+      "start_date"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [],
+    "missing_required": [
+      "creative_name"
+    ],
+    "missing_optional": [
+      "as_campaign",
+      "as_content",
+      "as_source",
+      "cgen",
+      "creative_id",
+      "rich_media_click",
+      "status_of_rotation",
+      "universal_ad_id"
+    ],
+    "row_class_counts": {},
+    "intent_counts": {},
+    "impl_counts": {},
+    "fill_rates": {},
+    "dates": {},
+    "anomalies": [
+      "EXT-COLUMN-MISSING"
+    ]
+  },
+  "landing_pages": {
+    "sheet": "Landing Pages",
+    "header_row": 1,
+    "rows": 20,
+    "merged_applied": 0,
+    "mapped_columns": [
+      "lp_name",
+      "lp_url"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [],
+    "missing_required": [],
+    "missing_optional": [
+      "as_content",
+      "fmt",
+      "io"
+    ],
+    "row_class_counts": {
+      "DATA": 20
+    },
+    "intent_counts": {
+      "SCOPE_EXCLUDED": 3,
+      "WHITE": 17
+    },
+    "impl_counts": {
+      "UNKNOWN": 20
+    },
+    "fill_rates": {
+      "lp_name": 1.0,
+      "lp_url": 1.0
+    },
+    "dates": {},
+    "anomalies": []
+  },
+  "groups": 0,
+  "lp_worked": 0,
+  "scope": 348,
+  "request_counts": {
+    "NEW_PLACEMENT": 72,
+    "NOT_WORKED": 276
+  },
+  "format_counts": {
+    "display": 72
+  },
+  "source_counts": {
+    "color propio": 72
+  },
+  "theme_colors": 12,
+  "anomalies": [
+    "EXT-COLUMN-MISSING"
+  ]
+}

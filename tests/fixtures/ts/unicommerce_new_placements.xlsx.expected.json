@@ -1,0 +1,231 @@
+{
+  "profile": "wpp_standard",
+  "profile_evidence": "no CGEN column in Placements or Creative Rotations",
+  "sheets": {
+    "in_scope": [
+      "Campaign Information",
+      "Placements",
+      "Creative Rotations",
+      "Landing Pages",
+      "Google Ads Rotation"
+    ],
+    "out_of_scope": [
+      "Training Guide",
+      "Prisma Output"
+    ],
+    "hidden": []
+  },
+  "campaign_info_fields": [
+    "campaignend",
+    "campaignid",
+    "campaignname",
+    "campaignstart"
+  ],
+  "site_contacts": 2,
+  "placements": {
+    "sheet": "Placements",
+    "header_row": 1,
+    "rows": 15,
+    "merged_applied": 0,
+    "mapped_columns": [
+      "dimensions",
+      "end_date",
+      "group_name",
+      "lp_ref",
+      "placement_id",
+      "placement_name",
+      "site",
+      "start_date",
+      "vendors"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [
+      [
+        7,
+        "Length"
+      ],
+      [
+        11,
+        "AI Labeling"
+      ],
+      [
+        12,
+        "Additional Requirements (Transcodes, Macros, Attribution Settings, etc.)"
+      ],
+      [
+        13,
+        "Google Ads"
+      ]
+    ],
+    "missing_required": [],
+    "missing_optional": [
+      "cgen",
+      "creative_names",
+      "extra_requirements",
+      "rotation_weight"
+    ],
+    "row_class_counts": {
+      "DATA": 15
+    },
+    "intent_counts": {
+      "GREEN": 15
+    },
+    "impl_counts": {
+      "THIRD_PARTY": 15
+    },
+    "fill_rates": {
+      "dimensions": 1.0,
+      "end_date": 1.0,
+      "group_name": 1.0,
+      "lp_ref": 1.0,
+      "placement_id": 1.0,
+      "placement_name": 1.0,
+      "site": 1.0,
+      "start_date": 1.0,
+      "vendors": 1.0
+    },
+    "dates": {
+      "end_date": {
+        "order": "NATIVE",
+        "native": 15,
+        "text": 0,
+        "unparsed": 0
+      },
+      "start_date": {
+        "order": "NATIVE",
+        "native": 15,
+        "text": 0,
+        "unparsed": 0
+      }
+    },
+    "anomalies": []
+  },
+  "rotations": {
+    "sheet": "Creative Rotations",
+    "header_row": 1,
+    "rows": 3,
+    "merged_applied": 0,
+    "mapped_columns": [
+      "companion",
+      "companion_id",
+      "creative_id",
+      "creative_links",
+      "creative_name",
+      "creative_type",
+      "dims_or_duration",
+      "end_date",
+      "group_name",
+      "lp_url",
+      "rich_media_click",
+      "rotation_weight",
+      "sequence",
+      "start_date",
+      "universal_ad_id"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [
+      [
+        4,
+        "AI Labeling"
+      ]
+    ],
+    "missing_required": [],
+    "missing_optional": [
+      "as_campaign",
+      "as_content",
+      "as_source",
+      "cgen",
+      "status_of_rotation"
+    ],
+    "row_class_counts": {
+      "DATA": 3
+    },
+    "intent_counts": {
+      "GREEN": 3
+    },
+    "impl_counts": {
+      "UNKNOWN": 3
+    },
+    "fill_rates": {
+      "companion": 0.0,
+      "companion_id": 0.0,
+      "creative_id": 1.0,
+      "creative_links": 1.0,
+      "creative_name": 1.0,
+      "creative_type": 1.0,
+      "dims_or_duration": 1.0,
+      "end_date": 1.0,
+      "group_name": 1.0,
+      "lp_url": 1.0,
+      "rich_media_click": 0.0,
+      "rotation_weight": 1.0,
+      "sequence": 0.0,
+      "start_date": 1.0,
+      "universal_ad_id": 0.0
+    },
+    "dates": {
+      "end_date": {
+        "order": "NATIVE",
+        "native": 3,
+        "text": 0,
+        "unparsed": 0
+      },
+      "start_date": {
+        "order": "NATIVE",
+        "native": 3,
+        "text": 0,
+        "unparsed": 0
+      }
+    },
+    "anomalies": [
+      "EXT-HIDDEN-ROWS"
+    ]
+  },
+  "landing_pages": {
+    "sheet": "Landing Pages",
+    "header_row": 1,
+    "rows": 1,
+    "merged_applied": 0,
+    "mapped_columns": [
+      "lp_name",
+      "lp_url"
+    ],
+    "multi_columns": [],
+    "unmapped_columns": [],
+    "missing_required": [],
+    "missing_optional": [
+      "as_content",
+      "fmt",
+      "io"
+    ],
+    "row_class_counts": {
+      "DATA": 1
+    },
+    "intent_counts": {
+      "GREEN": 1
+    },
+    "impl_counts": {
+      "UNKNOWN": 1
+    },
+    "fill_rates": {
+      "lp_name": 1.0,
+      "lp_url": 1.0
+    },
+    "dates": {},
+    "anomalies": []
+  },
+  "groups": 3,
+  "lp_worked": 1,
+  "scope": 15,
+  "request_counts": {
+    "NEW_PLACEMENT": 15
+  },
+  "format_counts": {
+    "display": 15
+  },
+  "source_counts": {
+    "propio + propagado": 15
+  },
+  "theme_colors": 12,
+  "anomalies": []
+}

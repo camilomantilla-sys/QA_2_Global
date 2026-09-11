@@ -2532,6 +2532,7 @@ if True:
                 match_result,
                 account=selected_account,
                 innovid_reconciliation=innovid_reconciliation,
+                ts_result=ts_result,
             )
 
             tag_matches = []

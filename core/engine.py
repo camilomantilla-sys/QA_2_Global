@@ -8,7 +8,7 @@ Recibe:
 Devuelve:
   - FindingsBuffer con todos los resultados QA2.
 """
-from core.findings import Capability, FindingsBuffer
+from core.findings import Capability, Domain, FindingsBuffer
 from core.tag_matching import match_tags
 from rules import attribution
 from rules import creatives
@@ -27,6 +27,34 @@ from rules import defaults  # idem: recibe `reconciliation`
 from rules import innovid  # idem: recibe `reconciliation`
 
 
+def _fatal_extraction(ts_result) -> list:
+    """
+    Las anomalias FATAL de la lectura, de la hoja y de sus pestanas.
+
+    Cada pestana guarda las suyas aparte de las del documento, asi
+    que mirar solo `anomalies` de arriba deja fuera justo las que
+    dicen que una pestana no se pudo leer.
+    """
+    if ts_result is None:
+        return []
+
+    seen: list = []
+    sources = [ts_result]
+    for name in ("placements", "rotations", "landing_pages"):
+        sheet = getattr(ts_result, name, None)
+        if sheet is not None:
+            sources.append(sheet)
+
+    for source in sources:
+        for anomaly in getattr(source, "anomalies", []):
+            if getattr(anomaly, "severity", "") != "FATAL":
+                continue
+            key = (anomaly.code, anomaly.message)
+            if key not in {(a.code, a.message) for a in seen}:
+                seen.append(anomaly)
+    return seen
+
+
 def run_rules(
     match_result,
     tags_result=None,
@@ -37,8 +65,27 @@ def run_rules(
     default_ad_reconciliation=None,
     innovid_reconciliation=None,
     account: str = "",
+    ts_result=None,
 ) -> FindingsBuffer:
     buffer = FindingsBuffer()
+
+    # Una lectura que fallo no puede terminar en PASSED.
+    #
+    # Llego una TS de BlackRock con el encabezado de B1 borrado en
+    # "Creative Rotations". El parser lo marco FATAL, leyo cero de
+    # sus 384 rotaciones, y el motor -- que no miraba las anomalias
+    # de extraccion -- dio PASSED sobre 144 comprobaciones que nunca
+    # tocaron un creativo. Verde sobre algo que nadie leyo es el peor
+    # resultado posible: la app bloquea antes de llegar aqui, pero
+    # esa defensa es de la interfaz y esto lo usan tambien el CLI y
+    # los scripts.
+    for anomaly in _fatal_extraction(ts_result):
+        buffer.blocker(
+            "EXT-000",
+            Domain.INGESTION,
+            "The Traffic Sheet could not be read: "
+            + anomaly.message,
+        )
 
     # El peso de rotacion no esta en ningun archivo. Cuando el
     # placement corre por Decision Tree, la columna Rotation del
