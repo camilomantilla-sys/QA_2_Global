@@ -121,6 +121,30 @@ def test_no_vendors_asks_for_nothing():
     assert not _asks_for_dv_blocking(_Match(""))
 
 
+def test_a_site_served_1x1_has_nothing_to_check_and_passes():
+    # No le falta el decision set: no lo tiene. El sitio sirve el
+    # creativo, va asignado directo al placement y corre con SUS
+    # fechas. Mandarlo a "no se pudo comprobar" dejaba la solicitud
+    # entera sin poder llegar a PASSED por algo bien traficado.
+    reconciliation = InnovidReconciliation()
+    reconciliation.site_served = ["10738419"]
+    buffer = FindingsBuffer()
+    innovid.evaluate(reconciliation, buffer)
+    found = [f for f in buffer.findings if f.rule_id == "INV-001"]
+    assert found and found[0].status.value == "PASS", found
+    assert "Site-served 1x1" in found[0].message
+
+
+def test_a_decision_set_that_could_not_be_read_is_still_not_verified():
+    # La exencion no puede tragarse el caso de verdad.
+    reconciliation = InnovidReconciliation()
+    reconciliation.unchecked = [("10738419", "Innovid returned nothing")]
+    buffer = FindingsBuffer()
+    innovid.evaluate(reconciliation, buffer)
+    found = [f for f in buffer.findings if f.rule_id == "INV-001"]
+    assert found and found[0].status.value == "NOT_VERIFIED", found
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

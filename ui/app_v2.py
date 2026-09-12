@@ -725,8 +725,9 @@ def findings_dataframe(findings) -> pd.DataFrame:
 
 def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
     """
-    Turns an approved REVIEW or FAIL finding into PASS, carrying the
-    QA's observation forward as the reason a human can read later.
+    Turns an approved REVIEW, FAIL or NOT_VERIFIED finding into PASS,
+    carrying the QA's observation forward as the reason a human can
+    read later.
 
     A FAIL is signed off, not silenced: the observation is what makes
     it acceptable, and it stays on the record in the report and in
@@ -747,7 +748,7 @@ def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
         if (
             not entry
             or not entry.get("approved")
-            or finding.status.value not in ("REVIEW", "FAIL")
+            or finding.status.value not in ("REVIEW", "FAIL", "NOT_VERIFIED")
         ):
             out.append(finding)
             continue
@@ -2792,11 +2793,20 @@ if True:
         #
         # Firmar un FAIL no lo tapa: la desviacion queda escrita en el
         # reporte y en el Excel como "MANUALLY Approved by ...".
-        # Solo lo que necesita una decision. Un PASS no se firma: ya
-        # esta bien, y meterlo aqui convertia el panel en la lista
-        # entera del QA -- 778 filas donde habia 114 que revisar.
+        # NOT_VERIFIED tambien. Me equivoque dejandolo fuera: "no se
+        # pudo comparar" no es "no se puede decidir". Una persona
+        # abre Innovid, lo mira y lo confirma -- que es justo lo que
+        # el panel existe para recoger. Fuera, esas filas no se podian
+        # firmar Y ademas impedian el PASSED para siempre, asi que
+        # firmar todo lo demas no movia el veredicto y parecia que el
+        # boton estuviera roto. En el reporte queda "MANUALLY Approved
+        # by ...", igual que un FAIL firmado.
+        #
+        # Un PASS no se firma: ya esta bien, y meterlo aqui convertia
+        # el panel en la lista entera del QA -- 778 filas donde habia
+        # 114 que revisar.
         trace("building the review panel")
-        REVIEWABLE = ("REVIEW", "FAIL")
+        REVIEWABLE = ("REVIEW", "FAIL", "NOT_VERIFIED")
         review_findings = [
             finding for finding in findings_buffer.findings
             if finding.status.value in REVIEWABLE
@@ -3031,60 +3041,6 @@ if True:
                         f"{len(review_findings)} to review. Nothing "
                         "approved yet."
                     )
-
-                # Un panel de hechos, no de adivinanzas.
-                #
-                # "El clic no llego", "llego y no cambio nada" y "cambio
-                # algo que otra cosa deshizo" se ven identicos desde
-                # fuera. Esto los separa, y sirve igual el dia que
-                # falle otra cosa parecida.
-                with st.expander("Why isn't approving working?"):
-                    st.caption(
-                        "If the button seems to do nothing, send this. "
-                        "It says whether the click reached the app at "
-                        "all, which is the part that can't be guessed "
-                        "from a screenshot."
-                    )
-                    st.caption(
-                        "If the run never finishes -- the little "
-                        "figure next to Stop keeps moving -- nothing "
-                        "on this page updates, including everything "
-                        "above. Then open `logs/qa_run.log` in the "
-                        "project folder: its last line is where the "
-                        "run got stuck."
-                    )
-                    st.code(
-                        "\n".join([
-                            f"streamlit        {st.__version__}",
-                            f"python           {sys.version.split()[0]}",
-                            f"build            {running_version()}",
-                            f"folder           {running_checkout()[0]}",
-                            f"branch           {running_checkout()[1]}",
-                            "script runs      "
-                            + str(
-                                st.session_state.get("qa2_script_runs", 0)
-                            ),
-                            f"findings shown   {len(review_findings)}",
-                            f"approvals held   {len(_review_state)}",
-                            f"editor key       {_editor_key}",
-                            f"signed this run  {_signed}",
-                            "last action      "
-                            + str(
-                                st.session_state.get(
-                                    "qa2_review_last_action"
-                                )
-                                or "(never)"
-                            ),
-                        ]),
-                        language="text",
-                    )
-
-                _last = st.session_state.get("qa2_review_last_action")
-                if _last:
-                    # Distingue "el clic no llego" de "el clic llego y
-                    # no cambio nada". Sin esto, los dos se ven igual
-                    # -- que es donde llevamos varias rondas.
-                    st.caption(f"Last approve action: {_last}")
 
                 _no_reason = [
                     finding for finding in review_findings

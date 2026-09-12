@@ -34,8 +34,8 @@ def _reviewable() -> tuple[str, ...]:
     )
 
 
-def test_only_review_and_fail_reach_the_panel():
-    assert _reviewable() == ("REVIEW", "FAIL")
+def test_everything_that_needs_a_decision_reaches_the_panel():
+    assert set(_reviewable()) == {"REVIEW", "FAIL", "NOT_VERIFIED"}
 
 
 def test_a_pass_never_reaches_the_panel():
@@ -48,10 +48,34 @@ def test_an_info_never_reaches_the_panel():
     assert "INFO" not in _reviewable()
 
 
-def test_a_not_verified_never_reaches_the_panel():
-    # No se firma lo que no se pudo comparar: firmarlo seria dar por
-    # bueno algo que nadie miro.
-    assert "NOT_VERIFIED" not in _reviewable()
+def test_a_not_verified_can_be_signed_off():
+    # Al reves de lo que este archivo decia antes, y por un caso real.
+    #
+    # "No se pudo comparar" no es "no se puede decidir": la persona
+    # abre Innovid, lo mira y lo confirma. Dejandolo fuera, esas filas
+    # no se podian firmar Y ademas impedian el PASSED para siempre --
+    # 54 rotaciones NOT_VERIFIED en un run de Unicommerce -- asi que
+    # firmar los 9 REVIEW no movia el veredicto y parecia que el boton
+    # estuviera roto. Queda "MANUALLY Approved by ..." en el reporte,
+    # igual que un FAIL firmado.
+    assert "NOT_VERIFIED" in _reviewable()
+
+
+def test_an_approved_not_verified_becomes_a_pass():
+    # Sin esto el panel lo dejaria marcar y el veredicto seguiria
+    # igual, que es el peor de los dos mundos.
+    source = APP.read_text(encoding="utf-8")
+    body = source[source.index("def apply_review_overrides("):]
+    body = body[:body.index("\ndef ")]
+    assert '("REVIEW", "FAIL", "NOT_VERIFIED")' in body
+
+
+def test_the_guessing_panel_is_gone():
+    # Existio para separar "el clic no llego" de "llego y no hizo
+    # nada". Ya cumplio: el rastro de logs/qa_run.log hace ese trabajo
+    # sin ocupar sitio en la pantalla de todos los dias.
+    source = APP.read_text(encoding="utf-8")
+    assert "Why isn't approving working?" not in source
 
 
 def test_no_debug_markers_are_left_in_the_app():

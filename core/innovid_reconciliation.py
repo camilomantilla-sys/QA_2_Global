@@ -116,6 +116,14 @@ class InnovidReconciliation:
     flights: list[CreativeFlightCheck] = field(default_factory=list)
     partners: list[VerificationPartnerCheck] = field(default_factory=list)
     unchecked: list[tuple[str, str]] = field(default_factory=list)
+
+    # Los 1x1 site-served: no tienen decision set y no les falta. El
+    # sitio sirve el creativo, va asignado directo al placement y
+    # corre con SUS fechas. Van aparte de `unchecked` porque no estan
+    # sin revisar: estan revisados, y el resultado es que aqui no hay
+    # nada que comparar.
+    site_served: list[str] = field(default_factory=list)
+
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -172,6 +180,15 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             if not n.is_default
         ]
         if not nodes:
+            # Un 1x1 site-served no tiene decision set, y no le falta:
+            # el sitio sirve el creativo, que va asignado directo al
+            # placement y corre con SUS fechas. Mandarlo a "no se pudo
+            # comprobar" dejaba la solicitud entera sin poder llegar a
+            # PASSED por algo que esta bien traficado.
+            if _is_site_served_1x1(pm):
+                out.site_served.append(pid)
+                continue
+
             out.unchecked.append(
                 (pid, "no decision set could be read for this placement")
             )

@@ -327,6 +327,20 @@ def _verification_partner(reconciliation, buffer):
 
 
 def _unchecked(reconciliation, buffer):
+    for placement_id in getattr(reconciliation, "site_served", ()):
+        buffer.pass_(
+            rule_id="INV-001",
+            domain=Domain.DATES,
+            entity_type=EntityType.PLACEMENT,
+            placement_id=placement_id,
+            message=(
+                "Site-served 1x1: the creative is assigned to the "
+                "placement and runs on its dates, so there is no "
+                "decision set to check"
+            ),
+            reason="Innovid decision set",
+        )
+
     for placement_id, why in reconciliation.unchecked:
         buffer.not_verified(
             rule_id="INV-001",
