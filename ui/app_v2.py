@@ -2720,14 +2720,36 @@ if True:
                 # nothing like a placement that happens to be
                 # fine.
                 if innovid_result.errors:
-                    st.warning(
-                        "Innovid didn't answer everything. These "
-                        "checks are reported as not verified:\n\n"
-                        + "\n\n".join(
-                            f"- {error}"
-                            for error in innovid_result.errors
-                        )
+                    # Plegado, y diciendo lo que cuesta.
+                    #
+                    # Ocupaba media pantalla con el detalle tecnico de
+                    # unos HTTP 400 y no decia lo unico que importa:
+                    # que esos creativos no se compararon y hay que
+                    # mirarlos a mano. Eso ahora se puede firmar en
+                    # QA2 Review, asi que el aviso solo tiene que
+                    # llevar hasta alli.
+                    _unchecked = len(
+                        getattr(innovid_reconciliation, "unchecked", ())
+                        or ()
                     )
+                    _headline = (
+                        f"Innovid didn't return {_unchecked} decision "
+                        "set(s): those creatives' dates and rotation "
+                        "were not compared"
+                        if _unchecked
+                        else "Innovid didn't answer everything"
+                    )
+                    with st.expander(f"⚠️ {_headline}", expanded=False):
+                        st.caption(
+                            "Nothing is wrong with the request because "
+                            "of this -- QA simply could not read those "
+                            "decision sets. Whatever it could not "
+                            "check is listed in QA2 Review as not "
+                            "verified: look at it in Innovid and sign "
+                            "it off there."
+                        )
+                        for error in innovid_result.errors:
+                            st.markdown(f"- {error}")
 
                     # Solo cuando el fallo es de sesion o de
                     # token. Los 400 de placementDecisionSetId
