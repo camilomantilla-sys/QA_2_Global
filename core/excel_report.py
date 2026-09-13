@@ -14,6 +14,7 @@ import pandas as pd  # type: ignore
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -78,6 +79,21 @@ VALUE_FONT = Font(color=WPP_INK, size=10)
 BODY_FONT = Font(color=WPP_INK, size=9.5)
 
 
+# Excel no admite mas de 32767 caracteres en una celda, ni caracteres
+# de control. Un tag es texto que viene de fuera: si uno llega asi, no
+# puede tumbar el informe entero.
+_EXCEL_CELL_LIMIT = 32000
+
+
+def _excel_safe(value):
+    if not isinstance(value, str):
+        return value
+    clean = ILLEGAL_CHARACTERS_RE.sub("", value)
+    if len(clean) > _EXCEL_CELL_LIMIT:
+        return clean[:_EXCEL_CELL_LIMIT] + "... [truncated for Excel]"
+    return clean
+
+
 def _write_table(
     ws: Worksheet, df: pd.DataFrame, start_row: int = 1,
     status_col: str | None = None,
@@ -107,7 +123,9 @@ def _write_table(
             value = row[col_name]
             if pd.isna(value):
                 value = ""
-            cell = ws.cell(row=row_num, column=col_idx, value=value)
+            cell = ws.cell(
+                row=row_num, column=col_idx, value=_excel_safe(value)
+            )
             cell.font = BODY_FONT
             cell.alignment = Alignment(
                 vertical="top", wrap_text=(col_idx != status_idx)
@@ -377,6 +395,112 @@ def _colour_legend(ws, row: int) -> None:
         )
 
 
+def _tags_sheet(
+    wb: Workbook,
+    summary_rows: list[dict],
+    tags_df: "pd.DataFrame | None",
+    coverage: dict | None,
+) -> None:
+    """
+    Los tags como se importarian, con el veredicto delante.
+
+    Arriba el panel: cuantos tags hay, de que tipo de placement, y si
+    cada tipo trae las columnas que le tocan. Debajo la tabla entera --
+    todas las columnas de tag, con el tag completo -- porque quien hace
+    el QA no revisa los cientos que se entregan, revisa unos cuantos, y
+    para eso tiene que poder verlos y copiarlos.
+    """
+    ws = wb.create_sheet("Tags")
+
+    row = 1
+    ws.cell(row=row, column=1, value="Tag analysis").font = TITLE_FONT
+    row += 2
+
+    if coverage:
+        for label, value in coverage.items():
+            ws.cell(row=row, column=1, value=label).font = LABEL_FONT
+            ws.cell(row=row, column=2, value=value).font = VALUE_FONT
+            row += 1
+        row += 1
+
+    if summary_rows:
+        ws.cell(
+            row=row, column=1, value="By placement type"
+        ).font = Font(color=WPP_INK, bold=True, size=10)
+        row += 1
+        row = _write_table(
+            ws, pd.DataFrame(summary_rows), start_row=row, status_col="Status"
+        )
+
+    ws.cell(
+        row=row, column=1, value="Every tag row, as delivered"
+    ).font = Font(color=WPP_INK, bold=True, size=10)
+    row += 1
+
+    _write_table(
+        ws,
+        tags_df if tags_df is not None else pd.DataFrame(),
+        start_row=row,
+        status_col="Status",
+    )
+
+    # El panel de arriba se queda a la vista al bajar por la tabla; el
+    # freeze que pone _write_table cuenta desde su propia cabecera.
+    ws.freeze_panes = ws.cell(row=row + 1, column=1).coordinate
+
+
+def _evidence_sheet(wb: Workbook, images: list[tuple[str, bytes]]) -> None:
+    """
+    Los pantallazos de que los tags sirven, dentro del entregable.
+
+    Es la otra mitad del QA de tags: nadie prueba los cientos que se
+    mandan, se prueban unos cuantos y se guarda la foto. Hasta ahora
+    esa foto solo iba en el PDF, que es el que se firma; aqui va al
+    lado de la tabla que dice de que placement era.
+    """
+    if not images:
+        return
+
+    ws = wb.create_sheet("Evidence")
+    ws.cell(row=1, column=1, value="Implementation Evidence").font = TITLE_FONT
+    ws.cell(
+        row=2, column=1,
+        value=(
+            "Screenshots uploaded with this run. They are the proof that "
+            "the delivered tags fire; the Tags sheet is the proof that "
+            "none is missing."
+        ),
+    ).font = Font(color=WPP_MUTED, size=9)
+    ws.column_dimensions["A"].width = 120
+
+    row = 4
+    for name, payload in images:
+        ws.cell(row=row, column=1, value=name).font = Font(
+            color=WPP_INK, bold=True, size=10
+        )
+        row += 1
+        try:
+            image = XLImage(io.BytesIO(payload))
+        except Exception:
+            # Un archivo que openpyxl no sabe abrir no puede tumbar el
+            # informe entero: se dice y se sigue.
+            ws.cell(
+                row=row, column=1,
+                value="(this image could not be embedded)",
+            ).font = Font(color=WPP_MUTED, size=9)
+            row += 2
+            continue
+
+        # Ancho fijo para que dos pantallazos de tamanos distintos no
+        # salgan uno diminuto al lado de otro gigante.
+        if image.width:
+            scale = min(1.0, 900 / image.width)
+            image.width = int(image.width * scale)
+            image.height = int(image.height * scale)
+        ws.add_image(image, f"A{row}")
+        row += max(int(image.height / 19) + 2, 6)
+
+
 def build_excel_report(
     meta: ReportMeta,
     findings_df: pd.DataFrame,
@@ -386,6 +510,11 @@ def build_excel_report(
     tag_coverage_df: pd.DataFrame | None = None,
     logo_path: Path | None = None,
     qa_rows: list[dict] | None = None,
+    tags_df: pd.DataFrame | None = None,
+    tag_summary_rows: list[dict] | None = None,
+    tag_coverage_counts: dict | None = None,
+    dv_tags_df: pd.DataFrame | None = None,
+    evidence_images: list[tuple[str, bytes]] | None = None,
 ) -> bytes:
     """Render the full branded QA2 workbook and return it as XLSX bytes."""
     wb = Workbook()
@@ -411,9 +540,20 @@ def build_excel_report(
     ws = wb.create_sheet("Files & Extraction")
     _write_table(ws, files_df, status_col="Status")
 
+    if tags_df is not None:
+        _tags_sheet(
+            wb, tag_summary_rows or [], tags_df, tag_coverage_counts
+        )
+
+    if dv_tags_df is not None:
+        ws = wb.create_sheet("DV Pinnacle Tags")
+        _write_table(ws, dv_tags_df, status_col="Status")
+
     if tag_coverage_df is not None:
         ws = wb.create_sheet("Tag Coverage")
         _write_table(ws, tag_coverage_df)
+
+    _evidence_sheet(wb, evidence_images or [])
 
     buffer = io.BytesIO()
     wb.save(buffer)

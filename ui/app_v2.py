@@ -52,6 +52,11 @@ from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
     reconcile_adobe_tag_policy,
 )
+from core.tag_analysis import (
+    analyse_tags,
+    dv_table,
+    import_table,
+)
 from core.tag_coverage_reconciliation import reconcile_tag_coverage
 from core.adobe_pixel_reconciliation import (
     load_adobe_vendor_rows,
@@ -2274,6 +2279,18 @@ if True:
                 )
 
         # ----------------------------------------------------
+        # Tag analysis
+        #
+        # Las reglas TAG-0xx juzgan el contenido de cada tag. Esto
+        # juzga la cobertura: que esten todas las filas que la TS
+        # pide, y que a ninguna fila le falte una columna que sus
+        # hermanas si traen. Es lo que se revisa a mano delante de un
+        # archivo de tags.
+        # ----------------------------------------------------
+
+        tag_analysis = analyse_tags(tags_results, ts_result)
+
+        # ----------------------------------------------------
         # File understanding
         # ----------------------------------------------------
 
@@ -3633,6 +3650,52 @@ if True:
             for file_name, tags_result, tag_match_result in tag_matches
         ]
 
+        # El panel de arriba de la hoja Tags: una linea por tipo de
+        # placement, diciendo si cada uno trae las columnas que le
+        # tocan.
+        tag_family_rows = [
+            {
+                "Status": family.status,
+                "Placement Type": family.family,
+                "Rows": family.rows,
+                "Placements": family.placements,
+                "Tags": family.tags,
+                "Complete": family.complete,
+                "To Look At": family.incomplete,
+                "Tag Columns": ", ".join(family.columns) or "-",
+            }
+            for family in tag_analysis.families
+        ]
+
+        tag_coverage_counts = {}
+
+        if tag_analysis.rows:
+            tag_coverage_counts["Tag files"] = len(tags_results)
+            tag_coverage_counts["Tag rows"] = len(tag_analysis.rows)
+            tag_coverage_counts["Placements in the tag files"] = (
+                tag_analysis.placements
+            )
+            tag_coverage_counts["Tags delivered"] = (
+                tag_analysis.total_tags
+            )
+
+            if tag_analysis.coverage_known:
+                tag_coverage_counts[
+                    "Worked placements in the Traffic Sheet"
+                ] = tag_analysis.ts_worked
+                tag_coverage_counts[
+                    "Of those, found in the tag files"
+                ] = tag_analysis.ts_covered
+                tag_coverage_counts["Missing from the tag files"] = len(
+                    tag_analysis.missing_from_tags
+                )
+
+            tag_coverage_counts["Rows to look at"] = len(
+                tag_analysis.incomplete
+            )
+
+        dv_rows_for_excel = dv_table(dv_result)
+
         trace("building the Excel")
         excel_report_bytes = build_excel_report(
             ReportMeta(
@@ -3682,6 +3745,17 @@ if True:
                 pd.DataFrame(tag_coverage_rows_for_excel)
                 if tag_coverage_rows_for_excel else None
             ),
+            tags_df=(
+                pd.DataFrame(import_table(tag_analysis))
+                if tag_analysis.rows else None
+            ),
+            tag_summary_rows=tag_family_rows,
+            tag_coverage_counts=tag_coverage_counts,
+            dv_tags_df=(
+                pd.DataFrame(dv_rows_for_excel)
+                if dv_rows_for_excel else None
+            ),
+            evidence_images=evidence_images,
             logo_path=logo_path(),
             qa_rows=build_qa_rows(
                 match_result,
@@ -3721,13 +3795,15 @@ if True:
             tab_rules,
             tab_files,
             tab_tags,
+            tab_dv,
         ) = st.tabs(
             [
                 "Worked Placements",
                 "Findings",
                 "Rules Executed",
                 "Files & Extraction",
-                "Tag Coverage",
+                "Tags",
+                "DV Pinnacle Tags",
             ]
         )
 
@@ -4821,87 +4897,322 @@ if True:
                 )
 
         # ====================================================
-        # TAB: Tag Coverage
+        # TAB: Tags
+        #
+        # Nadie revisa los cientos de tags que se entregan. Se revisan
+        # unos cuantos, se guarda el pantallazo, y se comprueba que no
+        # falte ninguno. Esta pestana es esa comprobacion, y ademas
+        # deja ver y copiar cualquier tag.
         # ====================================================
 
         with tab_tags:
             st.subheader(
-                "Tag File Coverage"
+                "Tags"
             )
 
-            if not tag_matches:
+            if not tag_analysis.rows:
                 st.info(
                     "No Tag files were uploaded."
                 )
             else:
-                tag_file_summary = []
+                counters = st.columns(4)
 
-                for (
-                    file_name,
-                    tags_result,
-                    tag_match_result,
-                ) in tag_matches:
-                    tag_file_summary.append(
-                        {
-                            "File": file_name,
-                            "Campaign ID": (
-                                tags_result.campaign_id
-                            ),
-                            "Sheet": tags_result.sheet,
-                            "Placements": (
-                                tags_result.distinct_placements
-                            ),
-                            "Materialized Tags": (
-                                tags_result.total_tags
-                            ),
-                            "Rows In Scope": (
-                                len(
-                                    tag_match_result
-                                    .matched_to_scope
-                                )
-                            ),
-                            "Rows Out of Scope": (
-                                len(
-                                    tag_match_result
-                                    .outside_scope
-                                )
-                            ),
-                            "No Innovid Match": (
-                                len(
-                                    tag_match_result
-                                    .missing_in_innovid
-                                )
-                            ),
-                        }
+                counters[0].metric(
+                    "Tag files",
+                    len(tags_results),
+                )
+                counters[1].metric(
+                    "Placements",
+                    tag_analysis.placements,
+                )
+                counters[2].metric(
+                    "Tags delivered",
+                    tag_analysis.total_tags,
+                )
+                counters[3].metric(
+                    "Rows to look at",
+                    len(tag_analysis.incomplete),
+                )
+
+                # --- Cobertura contra la Traffic Sheet ---
+
+                if tag_analysis.coverage_known:
+                    if tag_analysis.missing_from_tags:
+                        st.warning(
+                            f"{tag_analysis.ts_covered} of "
+                            f"{tag_analysis.ts_worked} worked placements "
+                            "in the Traffic Sheet appear in the tag "
+                            "files. "
+                            f"{len(tag_analysis.missing_from_tags)} "
+                            "are missing."
+                        )
+
+                        with st.expander(
+                            "Which placements are missing from the "
+                            "tag files",
+                            expanded=False,
+                        ):
+                            st.dataframe(
+                                pd.DataFrame(
+                                    tag_analysis.missing_from_tags
+                                ),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                    else:
+                        st.success(
+                            "All "
+                            f"{tag_analysis.ts_worked} worked placements "
+                            "in the Traffic Sheet appear in the tag "
+                            "files."
+                        )
+                else:
+                    st.caption(
+                        "No readable Traffic Sheet, so coverage "
+                        "against the request is not being claimed."
                     )
 
+                # --- Por tipo de placement ---
+
+                st.markdown(
+                    "#### By placement type"
+                )
+
+                st.markdown(
+                    """
+                    <div class="section-note">
+                        What each kind of placement should carry:
+                        a 1x1 needs an impression and a click tag,
+                        a display needs its display tags, a video or
+                        audio placement needs its VAST. The columns
+                        expected are the ones the file itself fills
+                        for its other rows of the same kind.
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
                 st.dataframe(
-                    pd.DataFrame(
-                        tag_file_summary
-                    ),
+                    pd.DataFrame(tag_family_rows),
                     use_container_width=True,
                     hide_index=True,
                 )
 
+                # --- Lo que hay que mirar ---
+
                 st.markdown(
-                    "#### Tag Placements "
-                    "Outside Worked Scope"
+                    "#### Rows to look at"
                 )
 
-                if outside_scope_tag_rows:
+                if tag_analysis.incomplete:
                     st.dataframe(
                         pd.DataFrame(
-                            outside_scope_tag_rows
+                            [
+                                {
+                                    "Status": row.status,
+                                    "File": row.file_name,
+                                    "Row": row.row,
+                                    "Placement ID": row.placement_id,
+                                    "Placement Name": (
+                                        row.placement_name
+                                    ),
+                                    "Dimensions": row.dimensions,
+                                    "Type": row.family,
+                                    "QA Note": row.note,
+                                }
+                                for row in tag_analysis.incomplete
+                            ]
                         ),
                         use_container_width=True,
                         hide_index=True,
-                        height=500,
                     )
                 else:
                     st.success(
-                        "All placements found in Tags "
-                        "belong to the worked scope."
+                        "Every tag row carries the columns its "
+                        "placement type calls for."
                     )
+
+                # --- La tabla entera, como se importaria ---
+
+                st.markdown(
+                    "#### Every tag row, as delivered"
+                )
+
+                st.markdown(
+                    """
+                    <div class="section-note">
+                        The tag files as they would be imported, with
+                        the verdict in front. Every tag column comes
+                        through whole -- click a cell to read or copy
+                        the tag.
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                tag_filter_columns = st.columns([2, 1, 1])
+
+                with tag_filter_columns[0]:
+                    tag_search = st.text_input(
+                        "Search Placement ID or name",
+                        placeholder=(
+                            "Type an ID or part of the name"
+                        ),
+                        key="qa2_tag_search",
+                    )
+
+                with tag_filter_columns[1]:
+                    tag_type_filter = st.multiselect(
+                        "Placement type",
+                        options=[
+                            family.family
+                            for family in tag_analysis.families
+                        ],
+                        default=[
+                            family.family
+                            for family in tag_analysis.families
+                        ],
+                        key="qa2_tag_type",
+                    )
+
+                with tag_filter_columns[2]:
+                    tag_status_filter = st.multiselect(
+                        "Result",
+                        options=["FAIL", "REVIEW", "PASS"],
+                        default=["FAIL", "REVIEW", "PASS"],
+                        key="qa2_tag_status",
+                    )
+
+                visible_tag_rows = [
+                    record
+                    for record in import_table(tag_analysis)
+                    if record["Status"] in tag_status_filter
+                    and record["Type"] in tag_type_filter
+                    and (
+                        not tag_search
+                        or tag_search.lower()
+                        in str(record["Placement ID"]).lower()
+                        or tag_search.lower()
+                        in str(record["Placement Name"]).lower()
+                    )
+                ]
+
+                if visible_tag_rows:
+                    st.dataframe(
+                        pd.DataFrame(visible_tag_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=520,
+                    )
+
+                    st.caption(
+                        f"{len(visible_tag_rows)} of "
+                        f"{len(tag_analysis.rows)} rows shown. The "
+                        "same table is in the Excel report, on the "
+                        "Tags sheet."
+                    )
+                else:
+                    st.info(
+                        "No tag rows match these filters."
+                    )
+
+                # --- El conteo por archivo, como estaba ---
+
+                with st.expander(
+                    "Per-file coverage",
+                    expanded=False,
+                ):
+                    st.dataframe(
+                        pd.DataFrame(tag_coverage_rows_for_excel),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.markdown(
+                        "**Tag placements outside the worked scope**"
+                    )
+
+                    if outside_scope_tag_rows:
+                        st.dataframe(
+                            pd.DataFrame(
+                                outside_scope_tag_rows
+                            ),
+                            use_container_width=True,
+                            hide_index=True,
+                            height=400,
+                        )
+                    else:
+                        st.success(
+                            "All placements found in Tags belong to "
+                            "the worked scope."
+                        )
+
+        # ====================================================
+        # TAB: DV Pinnacle Tags
+        #
+        # Llega como archivo aparte del de Innovid y se lee distinto,
+        # asi que se mira aparte. Mezclarlo con la tabla de Innovid
+        # daria una tabla con la mitad de las columnas vacias en la
+        # mitad de las filas.
+        # ====================================================
+
+        with tab_dv:
+            st.subheader(
+                "DV Pinnacle Tags"
+            )
+
+            if not dv_rows_for_excel:
+                st.info(
+                    "No DV Pinnacle tag file was uploaded. It is only "
+                    "needed for placements whose \"Vendors / Pixels\" "
+                    "value mentions DV."
+                )
+            else:
+                dv_missing = [
+                    row for row in dv_rows_for_excel
+                    if row["Status"] != "PASS"
+                ]
+
+                dv_counters = st.columns(3)
+
+                dv_counters[0].metric(
+                    "Rows",
+                    len(dv_rows_for_excel),
+                )
+                dv_counters[1].metric(
+                    "With a tag",
+                    len(dv_rows_for_excel) - len(dv_missing),
+                )
+                dv_counters[2].metric(
+                    "Without a tag",
+                    len(dv_missing),
+                )
+
+                if dv_result is not None and dv_result.sheet:
+                    st.caption(
+                        f"Read from sheet \"{dv_result.sheet}\" of "
+                        f"{uploaded_dv.name}"
+                        if uploaded_dv is not None
+                        else f"Read from sheet \"{dv_result.sheet}\""
+                    )
+
+                if dv_missing:
+                    st.warning(
+                        f"{len(dv_missing)} row(s) in the DV file "
+                        "carry a Placement ID but no tag."
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(dv_rows_for_excel),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=520,
+                )
+
+                st.caption(
+                    "The same table is in the Excel report, on the "
+                    "DV Pinnacle Tags sheet."
+                )
 
         trace("SCRIPT RUN finished")
 
