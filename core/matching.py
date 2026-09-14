@@ -705,6 +705,22 @@ def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
         return "N/A", t
 
     if ep.group_name and not ap.group_name:
+        # Un 1x1 va asignado DIRECTO al placement: no tiene decision
+        # set y no le falta ninguno. La TS le pone un Creative
+        # Rotation Name igual, como guia de quien traficara, pero eso
+        # es una etiqueta, no algo que tenga que existir en Innovid.
+        # Reportarlo como grupo faltante marcaba los treinta 1x1 de
+        # una solicitud correcta.
+        if is_site_served_1x1(ep):
+            t.winner = "n/a"
+            t.note = (
+                "1x1: the creative is assigned straight to the "
+                "placement, so there is no decision set -- the Traffic "
+                "Sheet's Creative Rotation Name is a label for the "
+                "trafficker"
+            )
+            return "N/A", t
+
         t.winner = "none"
         t.note = "the TS declares a group and the export doesn't have one"
         return "MISSING", t
@@ -733,6 +749,45 @@ def _match_group(ep: ExpectedPlacement, ap: ActualPlacement,
     return "MISMATCH", t
 
 # ------------------------------------------------------------------ L4 creativo
+
+def is_site_served_1x1(expected) -> bool:
+    """
+    Un 1x1 de tracking servido por el sitio.
+
+    Se mira el formato que ya derivo la TS y, como respaldo, las
+    dimensiones: un 1x1 puede llegar por cualquiera de los dos, y
+    equivocarse aqui significa pedir revision de algo correcto.
+    """
+    if expected is None:
+        return False
+    if norm_compare(getattr(expected, "fmt", "")) == "1x1":
+        return True
+    return norm_compare(getattr(expected, "dims", "")) == "1x1"
+
+
+def placement_clicktags(ap: ActualPlacement) -> list[str]:
+    """
+    Los clicktags que gobiernan el placement.
+
+    En un 1x1 el creativo va asignado DIRECTO al placement, asi que su
+    clicktag es el del placement -- y el Placement View a menudo no
+    trae ninguno. Mirando solo ahi, la URL de esas solicitudes se
+    quedaba sin comparar con el export delante.
+    """
+    if ap is None:
+        return []
+    if ap.clicktags:
+        return list(ap.clicktags)
+
+    out: list[str] = []
+    for creative in ap.creatives:
+        if not creative.running:
+            continue
+        for tag in creative.clicktags:
+            if tag and tag not in out:
+                out.append(tag)
+    return out
+
 
 def _tracker_cgen(ap: ActualPlacement) -> str:
     """
@@ -842,34 +897,6 @@ def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
     res.extra_running_total += len(pm.extra_running)
     res.extra_stopped_total += len(pm.extra_stopped)
 
-    # --- URL y atribucion del PLACEMENT.
-    #
-    # Adobe Direct / Site-Served: la TS pone "N/A" en Creative
-    # Names, el creativo es el pixel generico de la cuenta, y todo
-    # lo que hay que revisar vive a nivel de placement -- la
-    # landing page en su propia columna, el CGEN en la suya, y del
-    # lado de Innovid el Clicktag_1 del Placement View y el
-    # Third_Party_ID de la fila del pixel. Sin esto esas dos
-    # comprobaciones no se hacian en ninguna solicitud de 1x1.
-    if not pm.creative_links:
-        placement_url = ap.clicktags[0] if ap.clicktags else ""
-
-        if ep.url or placement_url:
-            pm.url = compare_urls(ep.url, placement_url)
-            res.url_counts[pm.url.result] = (
-                res.url_counts.get(pm.url.result, 0) + 1
-            )
-
-        if ep.cgen:
-            pm.triangle = check_triangle(
-                ep.cgen,
-                _tracker_cgen(ap) or ap.third_party_id,
-                placement_url,
-            )
-            res.triangle_counts[pm.triangle.result] = (
-                res.triangle_counts.get(pm.triangle.result, 0) + 1
-            )
-
     for cl in pm.creative_links:
         res.creative_conf_counts[cl.confidence] = \
             res.creative_conf_counts.get(cl.confidence, 0) + 1
@@ -903,8 +930,8 @@ def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
         # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
         actual_tags = cl.actual.clicktags if cl.actual else []
         # en 1x1 el ClickTag vive a nivel placement
-        if not actual_tags and ap.clicktags:
-            actual_tags = ap.clicktags
+        if not actual_tags:
+            actual_tags = placement_clicktags(ap)
         actual_url = actual_tags[0] if actual_tags else ""
 
         cl.url = compare_urls(cl.expected.url, actual_url)
@@ -920,6 +947,42 @@ def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
         cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
         res.triangle_counts[cl.triangle.result] = \
             res.triangle_counts.get(cl.triangle.result, 0) + 1
+
+    # --- URL y atribucion del PLACEMENT.
+    #
+    # Adobe Direct / Site-Served: la TS pone "N/A" en Creative
+    # Names, el creativo es el pixel generico de la cuenta, y todo
+    # lo que hay que revisar vive a nivel de placement -- la
+    # landing page en su propia columna, el CGEN en la suya, y del
+    # lado de Innovid el Clicktag_1 del Placement View y el
+    # Third_Party_ID de la fila del pixel. Sin esto esas dos
+    # comprobaciones no se hacian en ninguna solicitud de 1x1.
+    # El placement se revisa cuando NINGUN creativo dio veredicto.
+    #
+    # No basta con "no hay creativos declarados": un swap de 1x1 deja
+    # en la TS el creativo viejo en blanco, que en Innovid ya no esta,
+    # asi que hay un link y ninguna comparacion. La URL del placement
+    # estaba en el export, en el clicktag del creativo que si corre, y
+    # nadie la miraba.
+    if not any(cl.url is not None for cl in pm.creative_links):
+        _tags = placement_clicktags(ap)
+        placement_url = _tags[0] if _tags else ""
+
+        if ep.url or placement_url:
+            pm.url = compare_urls(ep.url, placement_url)
+            res.url_counts[pm.url.result] = (
+                res.url_counts.get(pm.url.result, 0) + 1
+            )
+
+        if ep.cgen:
+            pm.triangle = check_triangle(
+                ep.cgen,
+                _tracker_cgen(ap) or ap.third_party_id,
+                placement_url,
+            )
+            res.triangle_counts[pm.triangle.result] = (
+                res.triangle_counts.get(pm.triangle.result, 0) + 1
+            )
 
 
 def match(ts, export_pc, export_pl=None) -> MatchResult:

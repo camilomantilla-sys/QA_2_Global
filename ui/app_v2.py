@@ -2954,6 +2954,62 @@ if True:
                     )
                 st.session_state["qa2_sign_all_was"] = bool(sign_all)
 
+                # Los mismos botones, aqui, donde esta la tabla.
+                #
+                # Los de la barra lateral se dibujan ANTES de que
+                # exista un solo hallazgo, asi que dependen de que el
+                # script se vuelva a correr entero para enterarse de
+                # cuantos hay. Con Innovid conectado y casi doscientos
+                # hallazgos esa segunda pasada tarda, y mientras tanto
+                # se ven los resultados y no hay con que firmarlos --
+                # que se lee exactamente como que el boton no sirve.
+                #
+                # Aqui el numero ya se sabe, asi que no hace falta
+                # ninguna pasada de mas: se pulsa y queda firmado en
+                # la misma.
+                _panel_note = st.text_input(
+                    "Observation (optional)",
+                    placeholder="Why this is acceptable",
+                    key="qa2_panel_note",
+                )
+
+                _button_columns = st.columns([1, 1, 2])
+
+                if _button_columns[0].button(
+                    f"Sign off all {len(review_findings)}",
+                    key="qa2_panel_sign_all",
+                    use_container_width=True,
+                ):
+                    sign_findings(review_findings, _panel_note)
+
+                if _button_columns[1].button(
+                    "Clear signatures",
+                    key="qa2_panel_clear",
+                    use_container_width=True,
+                ):
+                    clear_signatures()
+
+                _panel_groups = bulk_groups(review_findings)
+
+                if len(_panel_groups) > 1:
+                    _chosen = _button_columns[2].multiselect(
+                        "Or sign off only these groups",
+                        options=list(_panel_groups),
+                        key="qa2_panel_groups",
+                    )
+                    if _chosen and _button_columns[2].button(
+                        f"Sign off the {len(_chosen)} chosen group(s)",
+                        key="qa2_panel_sign_groups",
+                        use_container_width=True,
+                    ):
+                        sign_findings(
+                            [
+                                finding for name in _chosen
+                                for finding in _panel_groups.get(name, [])
+                            ],
+                            _panel_note,
+                        )
+
                 st.divider()
 
                 # La key del editor sale de session_state, que

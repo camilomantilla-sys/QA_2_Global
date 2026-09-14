@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from core.colors import RED
-from core.matching import norm_creative
+from core.matching import is_site_served_1x1, norm_creative
 from core.normalize import norm_compare, normalize_weights
 
 MATCHED = "MATCHED"
@@ -267,20 +267,8 @@ def _asks_for_dv_blocking(pm) -> bool:
 
 
 def _is_site_served_1x1(pm) -> bool:
-    """
-    Un 1x1 de tracking servido por el sitio.
-
-    Se mira el formato que ya derivo la TS y, como respaldo, las
-    dimensiones: un 1x1 puede llegar por cualquiera de los dos y
-    equivocarse aqui significa pedir revision de algo correcto.
-    """
-    expected = getattr(pm, "expected", None)
-    if expected is None:
-        return False
-
-    if norm_compare(getattr(expected, "fmt", "")) == "1x1":
-        return True
-    return norm_compare(getattr(expected, "dims", "")) == "1x1"
+    """Un 1x1 de tracking servido por el sitio."""
+    return is_site_served_1x1(getattr(pm, "expected", None))
 
 
 def _expected_creatives(pm) -> list:

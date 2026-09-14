@@ -44,9 +44,8 @@ def test_the_sign_off_controls_live_outside_the_results_try():
         assert SOURCE.index(marker) < RESULTS_TRY, marker
 
 
-def test_there_are_no_sign_off_buttons_left():
-    # Un solo sitio y un solo mecanismo. El boton no le funcionaba y
-    # tenerlo ademas de la casilla solo multiplica las dudas.
+def test_the_old_broken_sign_off_buttons_are_gone():
+    # Los de entonces, con sus mismas keys, no volvieron.
     for gone in (
         "sign_all_clicked",
         "sign_group_clicked",
@@ -55,6 +54,34 @@ def test_there_are_no_sign_off_buttons_left():
         'key="qa2_sidebar_sign_all"',
     ):
         assert gone not in SOURCE, gone
+
+
+def test_the_panel_can_sign_without_waiting_for_another_pass():
+    """
+    Los mismos controles, dentro del panel.
+
+    La casilla de la barra lateral se dibuja ANTES de que exista un
+    solo hallazgo, asi que para saber cuantos hay depende de que el
+    script se vuelva a correr entero. Con Innovid conectado y casi
+    doscientos hallazgos esa segunda pasada tarda, y mientras tanto se
+    ven los resultados y no hay con que firmarlos -- que se lee igual
+    que un boton roto. Dentro del panel el numero ya se sabe.
+    """
+    for marker in (
+        'key="qa2_panel_sign_all"',
+        'key="qa2_panel_clear"',
+        'key="qa2_panel_groups"',
+    ):
+        assert marker in SOURCE, marker
+
+
+def test_the_panel_controls_come_before_the_table():
+    # Si se dibujaran despues, la tabla saldria sin lo que se acaba
+    # de firmar y habria que volver a correr para verlo.
+    assert (
+        SOURCE.index('key="qa2_panel_sign_all"')
+        < SOURCE.index("key=_editor_key,")
+    )
 
 
 def test_no_callbacks_anywhere():
