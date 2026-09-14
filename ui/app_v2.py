@@ -1996,49 +1996,24 @@ with st.sidebar:
     if analyze_button:
         st.session_state.qa2_has_run = True
 
-    # Firmar QA2. Sin botones.
+    # Cuantas revisiones hay, y nada mas.
     #
-    # El boton de Run QA le llega siempre al servidor y el de firmar
-    # -- mismo tipo, misma forma, misma barra lateral, dos centimetros
-    # mas abajo -- no le llega nunca: el rastro de logs/qa_run.log lo
-    # dejo claro, ni una pasada del script tras el clic. En esta
-    # maquina el mismo boton firma los 24 a la primera, asi que no es
-    # el codigo.
-    #
-    # Lo que si le responde, ademas de Run QA, son las casillas y los
-    # desplegables: con la de Innovid probo su solicitud con y sin
-    # conexion. Asi que la firma pasa a ser una casilla. De paso sobra
-    # el boton de limpiar: destildar es limpiar.
+    # Los controles de firma vivian aqui, y la barra lateral se dibuja
+    # mucho antes de que exista un solo hallazgo: para saber el numero
+    # obligaban a volver a correr el script entero desde la seccion de
+    # resultados. Ese st.rerun() descarta la pasada en curso, y con
+    # ella el clic que la habia provocado -- asi que pulsar firmar
+    # podia no firmar nada, sin error ni rastro. Ahora los controles
+    # estan donde se usan, dentro de QA2 Review, donde el numero ya se
+    # sabe y no hace falta ninguna pasada de mas.
     _pending_review = int(st.session_state.get("qa2_review_pending", 0))
-    sign_note = ""
-    sign_all = False
-    sign_groups: list[str] = []
 
     if _pending_review:
         st.divider()
-        st.caption(f"**QA2 Review** -- {_pending_review} to sign off")
-        sign_note = st.text_input(
-            "Observation (optional)",
-            placeholder="Why this is acceptable",
+        st.caption(
+            f"**QA2 Review** -- {_pending_review} to sign off, "
+            "in the results below"
         )
-        sign_all = st.checkbox(
-            f"Sign off all {_pending_review}",
-            help=(
-                "Everything in QA2 Review counts as PASS, with the "
-                "observation above. Untick to undo it. Failures still "
-                "read \"MANUALLY Approved by ...\" in the report and "
-                "the Excel."
-            ),
-        )
-
-        _known_groups = list(
-            st.session_state.get("qa2_review_groups") or []
-        )
-        if not sign_all and len(_known_groups) > 1:
-            sign_groups = st.multiselect(
-                "Or sign off only these groups",
-                options=_known_groups,
-            )
 
     st.divider()
 
@@ -2871,23 +2846,14 @@ if True:
             "qa2_review_state", {}
         )
 
-        # Lo que la barra lateral necesita saber, y una pasada mas
-        # para que se entere.
-        #
-        # La barra lateral se dibuja mucho antes que esto, asi que en
-        # la pasada de Run QA salio con el numero viejo -- cero la
-        # primera vez, y sin numero no hay boton. Y sin boton no hay
-        # nada que provoque otra pasada: el boton no aparecia nunca.
-        # Asi que la pide el propio codigo, una sola vez, cuando el
-        # numero cambia. La segunda pasada no vuelve a leer Innovid
-        # (eso solo lo hace Run QA), asi que es barata.
-        _prev_pending = st.session_state.get("qa2_review_pending")
+        # El numero, para el rotulo de la barra lateral. Sin pedir
+        # otra pasada: un st.rerun() aqui descarta la pasada en curso
+        # -- y con ella el clic que la habia provocado, porque el
+        # boton de firmar se evalua doscientas lineas mas abajo. Se
+        # pulsaba firmar y no se firmaba nada, sin error y sin rastro.
+        # La barra lateral puede ir una pasada por detras; los
+        # controles que importan estan aqui al lado.
         st.session_state["qa2_review_pending"] = len(review_findings)
-        st.session_state["qa2_review_groups"] = list(
-            bulk_groups(review_findings)
-        )
-        if _prev_pending != len(review_findings):
-            st.rerun()
 
         if review_findings:
             with st.expander(
@@ -2908,9 +2874,8 @@ if True:
                 st.caption(
                     "QA2 is mandatory: the second-pass reviewer goes "
                     "through what's below and signs off what is "
-                    "acceptable. The buttons are in the sidebar, on "
-                    "the left: everything at once, one group at a "
-                    "time, or tick the rows here one by one. "
+                    "acceptable. Everything at once, one group at a "
+                    "time, or tick the rows in the table one by one. "
                     "Whatever you approve counts as PASS from here "
                     "down: the "
                     "verdict, the tabs, the PDF and the Excel.\n\n"
@@ -2932,47 +2897,23 @@ if True:
                     ).get("approved")
                 )
 
-                # Los botones viven en la barra lateral, no aqui.
-                # Esta tabla es para mirar y, si se quiere, firmar
-                # fila por fila.
+                # La tabla es para mirar y, si se quiere, firmar fila
+                # por fila; los botones de arriba hacen el lote.
                 _pending = len(review_findings) - _approved_before
 
-                # La casilla manda, y se aplica en esta misma
-                # pasada: la tabla de abajo y el resumen ya salen
-                # firmados, sin repetir nada.
+                # Firmar, aqui, donde esta la tabla.
                 #
-                # Destildar limpia, pero solo si estaba tildada: si
-                # no, cada pasada borraria las filas marcadas a mano
-                # en la tabla.
-                _was_all = bool(st.session_state.get("qa2_sign_all_was"))
-                if sign_all:
-                    sign_findings(review_findings, sign_note)
-                elif _was_all:
-                    clear_signatures()
-                elif sign_groups:
-                    _groups = bulk_groups(review_findings)
-                    sign_findings(
-                        [
-                            finding for name in sign_groups
-                            for finding in _groups.get(name, [])
-                        ],
-                        sign_note,
-                    )
-                st.session_state["qa2_sign_all_was"] = bool(sign_all)
-
-                # Los mismos botones, aqui, donde esta la tabla.
+                # Estos controles vivian en la barra lateral, que se
+                # dibuja ANTES de que exista un solo hallazgo: para
+                # poner el numero en el rotulo hacia falta volver a
+                # correr el script entero desde aqui abajo. Y ese
+                # st.rerun() descarta la pasada en curso -- con el
+                # clic dentro. Se pulsaba firmar, el script volvia a
+                # empezar, y en la pasada nueva el boton ya devolvia
+                # False: nada firmado, sin error y sin rastro.
                 #
-                # Los de la barra lateral se dibujan ANTES de que
-                # exista un solo hallazgo, asi que dependen de que el
-                # script se vuelva a correr entero para enterarse de
-                # cuantos hay. Con Innovid conectado y casi doscientos
-                # hallazgos esa segunda pasada tarda, y mientras tanto
-                # se ven los resultados y no hay con que firmarlos --
-                # que se lee exactamente como que el boton no sirve.
-                #
-                # Aqui el numero ya se sabe, asi que no hace falta
-                # ninguna pasada de mas: se pulsa y queda firmado en
-                # la misma.
+                # Aqui el numero ya se sabe: se pulsa y queda firmado
+                # en la misma pasada.
                 _panel_note = st.text_input(
                     "Observation (optional)",
                     placeholder="Why this is acceptable",

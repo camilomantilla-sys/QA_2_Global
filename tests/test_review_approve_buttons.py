@@ -29,19 +29,37 @@ SOURCE = APP.read_text(encoding="utf-8")
 RESULTS_TRY = SOURCE.index("\nif True:\n    try:")
 
 
-def test_signing_off_is_a_checkbox():
-    assert 'sign_all = st.checkbox(' in SOURCE
-    assert 'f"Sign off all {_pending_review}"' in SOURCE
+def test_the_results_section_never_asks_for_another_pass():
+    """
+    Un st.rerun() aqui se come el clic que lo provoco.
+
+    La barra lateral se dibuja antes de que exista un solo hallazgo,
+    asi que para poner el numero en el rotulo de su boton pedia una
+    pasada mas desde la seccion de resultados. Esa pasada DESCARTA la
+    que esta corriendo -- y con ella el boton de firmar, que se evalua
+    doscientas lineas mas abajo. Se pulsaba firmar, el script volvia a
+    empezar, y en la pasada nueva el boton ya devolvia False: nada
+    firmado, sin error y sin rastro.
+
+    Camilo, sobre tres solicitudes distintas: "no me deja aprobarlos
+    el boton de firma".
+    """
+    called = [
+        line.strip() for line in SOURCE.splitlines()
+        if line.strip().startswith("st.rerun()")
+    ]
+    assert not called, called
 
 
-def test_groups_are_a_multiselect():
-    assert 'sign_groups = st.multiselect(' in SOURCE
-
-
-def test_the_sign_off_controls_live_outside_the_results_try():
-    # Dentro, un fallo cualquiera de las 2700 lineas se los traga.
-    for marker in ("sign_all = st.checkbox(", "sign_groups = st.multiselect("):
-        assert SOURCE.index(marker) < RESULTS_TRY, marker
+def test_there_is_one_place_to_sign_and_it_is_the_panel():
+    # Los controles de la barra lateral dependian de esa pasada de
+    # mas. Un solo sitio, donde el numero ya se sabe.
+    for gone in (
+        "sign_all = st.checkbox(",
+        "sign_groups = st.multiselect(",
+        "qa2_sign_all_was",
+    ):
+        assert gone not in SOURCE, gone
 
 
 def test_the_old_broken_sign_off_buttons_are_gone():
@@ -54,6 +72,12 @@ def test_the_old_broken_sign_off_buttons_are_gone():
         'key="qa2_sidebar_sign_all"',
     ):
         assert gone not in SOURCE, gone
+
+
+def test_the_sidebar_only_says_how_many_are_pending():
+    # Un rotulo, no un widget: sin widget no hace falta que la barra
+    # lateral este al dia, y sin eso no hace falta la pasada de mas.
+    assert "to sign off, " in SOURCE
 
 
 def test_the_panel_can_sign_without_waiting_for_another_pass():
@@ -88,29 +112,23 @@ def test_no_callbacks_anywhere():
     assert "on_click=" not in SOURCE
 
 
-def test_unticking_clears_but_only_if_it_was_ticked():
-    # Si limpiara en cada pasada, borraria las filas marcadas a mano
-    # en la tabla.
-    body = SOURCE[SOURCE.index("_was_all = bool("):]
-    body = body[:body.index('st.session_state["qa2_sign_all_was"]')]
-    assert "if sign_all:" in body
-    assert "elif _was_all:" in body
-    assert "clear_signatures()" in body
+def test_clearing_is_its_own_button_and_nothing_else_clears():
+    """
+    Limpiar se pide, no se deduce.
+
+    Antes, destildar la casilla de la barra lateral limpiaba -- y la
+    casilla no llevaba key, asi que bastaba con que su rotulo cambiara
+    de numero para que Streamlit la diera por nueva y sin tildar. Eso
+    borraba las firmas sin que nadie lo hubiera pedido.
+    """
+    assert 'key="qa2_panel_clear"' in SOURCE
+    assert "elif _was_all:" not in SOURCE
 
 
 def test_the_sidebar_label_comes_from_the_last_run():
     # Arriba todavia no existe ningun hallazgo.
     assert 'st.session_state["qa2_review_pending"] = len(review_findings)' in SOURCE
     assert 'st.session_state.get("qa2_review_pending", 0)' in SOURCE
-
-
-def test_the_first_run_asks_for_a_second_pass():
-    # Huevo y gallina: sin numero no hay control, y sin control no
-    # habia nada que provocara otra pasada.
-    body = SOURCE[SOURCE.index("_prev_pending = st.session_state.get"):]
-    body = body[:body.index("if review_findings:")]
-    assert "if _prev_pending != len(review_findings):" in body
-    assert "st.rerun()" in body
 
 
 def test_run_qa_still_remembers_that_it_ran():
