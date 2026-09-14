@@ -198,6 +198,69 @@ def test_the_creative_level_check_also_reads_the_placement_clicktag():
     assert match.creative_links[0].url.result == "MATCH"
 
 
+# ------------------------------------------------------------------
+# Lo que sobra en un placement que ya no corre
+# ------------------------------------------------------------------
+
+def test_a_leftover_clicktag_on_a_stopped_placement_is_not_a_review():
+    """
+    Camilo: "esta bien que flagee eso que aun tiene url, pero pues
+    igual esta apagado el placement entonces no afecta."
+
+    Un placement que se desasigna puede conservar su clicktag. No
+    sirve nada, asi que se dice y no ocupa una firma: ocho revisiones
+    por solicitud que no cambian nada.
+    """
+    from core.findings import FindingsBuffer
+    from rules import urls as _urls
+
+    class _Result:
+        def __init__(self, matched):
+            self.matched = matched
+            self.only_expected = []
+            self.only_actual_in_scope = []
+            self.ambiguous = []
+
+    expected = expected_placement(url="")
+    expected.request_type = "CREATIVE_REMOVE"
+    actual = actual_placement(placement_tags=[URL])
+    actual.status = "Stopped"
+    match = compare(expected, actual)
+
+    buffer = FindingsBuffer()
+    _urls.evaluate(_Result([match]), buffer)
+    found = [f for f in buffer.findings if f.rule_id == "URL-003"]
+
+    assert found, "dejo de decirse del todo"
+    assert found[0].status.value == "INFO", found[0].status.value
+    assert "no longer running" in found[0].message
+
+
+def test_a_running_placement_with_a_clicktag_and_no_landing_page_is_reviewed():
+    # El mismo caso sobre un placement que si corre sigue siendo algo
+    # que mirar.
+    from core.findings import FindingsBuffer
+    from rules import urls as _urls
+
+    class _Result:
+        def __init__(self, matched):
+            self.matched = matched
+            self.only_expected = []
+            self.only_actual_in_scope = []
+            self.ambiguous = []
+
+    expected = expected_placement(url="")
+    expected.request_type = "NEW_PLACEMENT"
+    actual = actual_placement(placement_tags=[URL])
+    match = compare(expected, actual)
+
+    buffer = FindingsBuffer()
+    _urls.evaluate(_Result([match]), buffer)
+    found = [f for f in buffer.findings if f.rule_id == "URL-003"]
+
+    assert found and found[0].status.value == "NOT_VERIFIED"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

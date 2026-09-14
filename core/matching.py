@@ -150,9 +150,11 @@ class ExpectedPlacement:
     # aparte de `url` para que la cadena de la TS siga mandando cuando
     # existe, y esto solo entre cuando no hay nada mas.
     inline_url: str = ""
-    # Si `cgen` y `inline_url` salieron de una fila de esta solicitud
-    # o de una vieja que quedo en gris mas arriba en la misma hoja.
+    # De que fila salio cada uno: de una de esta solicitud, o de una
+    # vieja que quedo en gris mas arriba en la misma hoja.
+    group_name_in_scope: bool = False
     cgen_in_scope: bool = False
+    vendors_in_scope: bool = False
     inline_url_in_scope: bool = False
     visual_review: bool = False
     source: str = ""
@@ -346,7 +348,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
       Variante A  -> Creative Rotations, via el grupo que declara el placement,
                      filtrando por dimension (bug B39)
     """
-    from parsers.ts_parser import REQ_NOT_WORKED
+    from parsers.ts_parser import REQ_CREATIVE_REMOVE, REQ_NOT_WORKED
 
     out: dict[str, ExpectedPlacement] = {}
     if ts.placements is None:
@@ -450,33 +452,40 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             out[pid] = ep
         ep.ts_rows.append(row.row)
 
-        # el grupo o el cgen pueden venir en cualquiera de las filas
-        if not ep.group_name and row.values.get("group_name"):
-            ep.group_name = str(row.values.get("group_name"))
-        # El CGEN del placement, de una fila que sea de ESTA solicitud.
+        # El grupo, el CGEN, los vendors y la landing page pueden
+        # venir en cualquiera de las filas del placement -- pero no en
+        # cualquiera vale lo mismo.
         #
-        # Un placement de Adobe ocupa varias filas de la TS -- una por
-        # creativo, cada una con su CGEN y su landing page -- y las de
-        # arriba suelen ser solicitudes viejas, en gris. Quedarse con
-        # la primera que trajera algo tomaba el CGEN de una fila que
-        # nadie pidio tocar.
-        if row.values.get("cgen") and (
-            not ep.cgen or (
-                row.intent != "SCOPE_EXCLUDED"
-                and not ep.cgen_in_scope
-            )
-        ):
-            ep.cgen = str(row.values.get("cgen"))
-            ep.cgen_in_scope = row.intent != "SCOPE_EXCLUDED"
-        if not ep.vendors and row.values.get("vendors"):
-            ep.vendors = str(row.values.get("vendors"))
-        if not ep.inline_url or (
-            row.intent != "SCOPE_EXCLUDED" and not ep.inline_url_in_scope
-        ):
-            lp_ref = str(row.values.get("lp_ref") or "").strip()
-            if lp_ref.lower().startswith(("http://", "https://")):
-                ep.inline_url = lp_ref
-                ep.inline_url_in_scope = row.intent != "SCOPE_EXCLUDED"
+        # Un placement ocupa varias filas de la Traffic Sheet, y las
+        # de arriba suelen ser solicitudes anteriores que quedaron en
+        # gris. En un swap de BlackRock el mismo placement sale dos
+        # veces: la vieja en gris con su rotacion de entonces, y la
+        # nueva en verde con la rotacion que se acaba de hacer.
+        # Quedarse con la primera fila que trajera algo tomaba la
+        # rotacion vieja -- y con ella, sus creativos -- asi que el
+        # swap que se pedia revisar no se comparaba con nada.
+        _in_scope = row.intent != "SCOPE_EXCLUDED"
+
+        def _prefer(field: str, value: str) -> None:
+            """Lo pone si no habia nada, o si esta fila si es de hoy."""
+            value = str(value or "").strip()
+            if not value:
+                return
+            flag = f"{field}_in_scope"
+            if getattr(ep, field) and not (
+                _in_scope and not getattr(ep, flag)
+            ):
+                return
+            setattr(ep, field, value)
+            setattr(ep, flag, _in_scope)
+
+        _prefer("group_name", row.values.get("group_name"))
+        _prefer("cgen", row.values.get("cgen"))
+        _prefer("vendors", row.values.get("vendors"))
+
+        lp_ref = str(row.values.get("lp_ref") or "").strip()
+        if lp_ref.lower().startswith(("http://", "https://")):
+            _prefer("inline_url", lp_ref)
 
         # creativos declarados a nivel placement (Variante B)
         cname = str(row.values.get("creative_names") or "")
@@ -509,6 +518,18 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 continue
             if not dims_match(ep.dims, c.dims):
                 continue
+            # Si el placement entero va en rojo, lo que tenga asignado
+            # se va con el.
+            #
+            # BlackRock marca el placement en rojo -- desasignar -- y
+            # deja los creativos de su rotacion en blanco, porque esa
+            # rotacion la comparten otros placements que siguen
+            # corriendo. Mostrandolos como contexto, la fila del
+            # placement que hay que apagar se leia igual que una que
+            # no hay que tocar. Camilo: "su placement 10657690 esta en
+            # rojo asi que toca desasignarlo".
+            if ep.request_type == REQ_CREATIVE_REMOVE and c.intent == WHITE:
+                c = replace(c, intent=RED)
             ep.creatives.append(c)
             have.add(c.key_norm)
 
@@ -539,7 +560,20 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             # pasaria a ser exigible en todos los placements de esa
             # dimension y los que no lo llevan darian FAIL.
             ep.creatives.append(
-                replace(creative, intent=WHITE, is_default=True)
+                replace(
+                    creative,
+                    # Salvo que el placement entero se este
+                    # desasignando: entonces su default tampoco va a
+                    # servir nada, y mostrarlo en blanco hacia que la
+                    # fila del placement que hay que apagar se leyera
+                    # igual que una que no hay que tocar.
+                    intent=(
+                        RED
+                        if ep.request_type == REQ_CREATIVE_REMOVE
+                        else WHITE
+                    ),
+                    is_default=True,
+                )
             )
             have.add(creative.key_norm)
 

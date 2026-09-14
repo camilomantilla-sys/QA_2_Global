@@ -416,6 +416,9 @@ def sign_findings(findings, note: str) -> int:
     st.session_state["qa2_click_beacon"] = (
         f"sign off {len(findings)} at {stamp}"
     )
+    # En logs/qa_run.log, que es el unico sitio donde se puede ver
+    # despues si un clic llego al servidor o no.
+    trace(f"signed off {len(findings)} finding(s)")
     return len(findings)
 
 
@@ -428,6 +431,7 @@ def clear_signatures() -> None:
     stamp = datetime.now().strftime("%H:%M:%S")
     st.session_state["qa2_review_last_action"] = f"cleared at {stamp}"
     st.session_state["qa2_click_beacon"] = f"clear at {stamp}"
+    trace("cleared every signature")
 
 
 INNOVID_CACHE_SECONDS = 3600
@@ -1761,10 +1765,12 @@ with st.sidebar:
             "nothing to type."
         )
 
+        # La rama y el build, sin la ruta de la carpeta: ocupaba tres
+        # lineas y solo hizo falta el dia que habia dos copias del
+        # repositorio en la misma maquina.
         _root, _branch = running_checkout()
         st.caption(
-            f"QA build: `{running_version()}` on `{_branch}`  \n"
-            f"from `{_root}`"
+            f"QA build: `{running_version()}` on `{_branch}`"
         )
 
         # Fuera del try gigante de la seccion de resultados, y antes

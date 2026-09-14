@@ -44,7 +44,7 @@ from core.dv_subtype import (
 from core.normalize import clean_id, norm_compare, norm_dims
 from core.pixel_reconciliation import official_pixel_for, pixel_matches_official
 from core.tag_inventory import TagInventory
-from parsers.ts_parser import REQ_CREATIVE_REMOVE
+from parsers.ts_parser import REQ_CREATIVE_REMOVE, REQ_NEW_PLACEMENT
 
 F_1X1 = "1x1"
 F_VIDEO = "video"
@@ -202,6 +202,17 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
             )
 
         if not _has_any_row(tag_inventory, placement_id):
+            # Los tags se descargan cuando se CREA el placement.
+            #
+            # Un swap de creativo o un alta de creativos sobre un
+            # placement que ya corre no genera archivo de tags nuevo:
+            # los que ya se entregaron siguen sirviendo. Pedirlos
+            # llenaba de "sube el archivo de tags" solicitudes donde
+            # no existe ninguno que subir. Camilo: "me esta pidiendo
+            # tags para desasignaciones y swaps."
+            if worked[placement_id].request_type != REQ_NEW_PLACEMENT:
+                continue
+
             out.checks.append(
                 DVOmniCheck(
                     result="NOT_VERIFIED",

@@ -123,6 +123,20 @@ def evaluate_placement_urls(match_result, buffer):
             )
 
 
+_NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
+
+
+def _is_retired(pm) -> bool:
+    """El placement ya no sirve: la TS lo desasigna, o Innovid lo apago."""
+    from core.normalize import norm_compare
+    from parsers.ts_parser import REQ_CREATIVE_REMOVE as _REMOVE
+
+    if pm.expected.request_type == _REMOVE:
+        return True
+    status = pm.actual.status if pm.actual else ""
+    return norm_compare(status) in _NOT_RUNNING
+
+
 def evaluate_direct_placement_urls(match_result, buffer):
     """
     URL-003 -- la landing page de un placement sin creativos propios.
@@ -173,14 +187,30 @@ def evaluate_direct_placement_urls(match_result, buffer):
             )
 
         elif pm.url.result == URL_MISSING_EXPECTED:
-            buffer.not_verified(
-                message=(
-                    "Innovid has a Clicktag on this placement, but the "
-                    "Traffic Sheet declares no landing page to compare "
-                    "it against."
-                ),
-                **common,
-            )
+            # Un placement que se esta desasignando, o que Innovid ya
+            # tiene detenido, puede conservar su clicktag: no sirve
+            # nada, asi que no hay nada que corregir. Camilo: "esta
+            # bien que flagee eso que aun tiene url, pero pues igual
+            # esta apagado el placement entonces no afecta". Se dice,
+            # y no ocupa una firma.
+            if _is_retired(pm):
+                buffer.info(
+                    message=(
+                        "Innovid still has a Clicktag on this "
+                        "placement, but the placement is no longer "
+                        "running, so it serves nothing."
+                    ),
+                    **common,
+                )
+            else:
+                buffer.not_verified(
+                    message=(
+                        "Innovid has a Clicktag on this placement, but "
+                        "the Traffic Sheet declares no landing page to "
+                        "compare it against."
+                    ),
+                    **common,
+                )
 
         else:
             buffer.fail(
