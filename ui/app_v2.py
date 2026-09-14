@@ -4297,7 +4297,78 @@ if True:
                         )
                     ]
 
-                    if not url_links:
+                    # Adobe Direct / Site-Served: la TS pone "N/A" en
+                    # Creative Names, asi que no hay creativo donde
+                    # colgar la URL ni el CGEN -- viven en el
+                    # placement. Aqui salen como lo que son.
+                    _placement_url = getattr(placement_match, "url", None)
+                    _placement_triangle = getattr(
+                        placement_match, "triangle", None
+                    )
+
+                    if _placement_url is not None or _placement_triangle:
+                        with st.expander(
+                            f"{STATUS_ICON.get('PASS' if (_placement_url is None or _placement_url.result == 'MATCH') and (_placement_triangle is None or _placement_triangle.is_ok) else 'REVIEW', '')} "
+                            "This placement  |  "
+                            f"URL: {_placement_url.result if _placement_url else 'NOT_VERIFIED'}"
+                            "  |  Attribution: "
+                            f"{_placement_triangle.result if _placement_triangle else 'NOT_VERIFIED'}",
+                            expanded=True,
+                        ):
+                            st.caption(
+                                "This placement carries no creatives of "
+                                "its own, so its landing page and CGEN "
+                                "are the ones checked."
+                            )
+
+                            if _placement_url is not None:
+                                _url_columns = st.columns(2)
+
+                                with _url_columns[0]:
+                                    st.caption(
+                                        "Landing Page in the Traffic Sheet"
+                                    )
+                                    st.code(
+                                        _placement_url.expected.raw
+                                        or "Not declared",
+                                        language=None,
+                                    )
+
+                                with _url_columns[1]:
+                                    st.caption(
+                                        "Clicktag in Innovid"
+                                    )
+                                    st.code(
+                                        _placement_url.actual.raw
+                                        or "Not returned",
+                                        language=None,
+                                    )
+
+                                if _placement_url.note:
+                                    st.caption(_placement_url.note)
+
+                            if _placement_triangle is not None:
+                                _triangle_columns = st.columns(3)
+
+                                _triangle_columns[0].metric(
+                                    "CGEN in TS",
+                                    _placement_triangle.ts or "-",
+                                )
+                                _triangle_columns[1].metric(
+                                    "Third Party ID",
+                                    _placement_triangle.export or "-",
+                                )
+                                _triangle_columns[2].metric(
+                                    "sdid in URL",
+                                    _placement_triangle.url or "-",
+                                )
+
+                                st.caption(
+                                    _placement_triangle.note
+                                    or "No additional detail."
+                                )
+
+                    if not url_links and _placement_url is None:
                         st.info(
                             "No URL or attribution validations "
                             "were run for this placement."
@@ -4403,6 +4474,24 @@ if True:
                     # ----------------------------------------
                     # Extras
                     # ----------------------------------------
+
+                    if (
+                        placement_match is not None
+                        and getattr(placement_match, "actual_trackers", None)
+                    ):
+                        st.caption(
+                            "Site-served: Innovid serves this placement "
+                            "through its generic 1x1 pixel ("
+                            + ", ".join(
+                                sorted({
+                                    tracker.filename or tracker.name
+                                    for tracker in
+                                    placement_match.actual_trackers
+                                })
+                            )
+                            + "), which is how a 1x1 is trafficked -- "
+                            "not a creative the Traffic Sheet forgot."
+                        )
 
                     if (
                         placement_match is not None

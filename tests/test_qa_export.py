@@ -44,6 +44,8 @@ class _ActualPlacement:
     end: date | None = None
     group_name: str = ""
     dims: str = ""
+    # El Clicktag del placement, que es donde vive la URL de un 1x1.
+    clicktags: list = field(default_factory=list)
 
 
 @dataclass
@@ -58,6 +60,10 @@ class _Match:
     expected: ExpectedPlacement
     actual: object = None
     creative_links: list = field(default_factory=list)
+    # La URL y el triangulo del PLACEMENT, para los 1x1 de Adobe que
+    # no declaran creativos.
+    url: object = None
+    triangle: object = None
 
 
 @dataclass

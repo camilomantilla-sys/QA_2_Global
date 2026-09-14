@@ -256,10 +256,20 @@ class Finding:
     # ── identidad determinista: mismo hallazgo -> mismo ID entre corridas
     @property
     def finding_id(self) -> str:
+        # El nombre del creativo entra en la semilla.
+        #
+        # Sin el, dos hallazgos de la misma regla sobre el mismo
+        # placement, sin Creative ID declarado en la TS y con los
+        # mismos valores comparados, salian con el MISMO id. En la
+        # revision eso significa una sola firma para dos filas: se
+        # tildaban las dos, pero el contador de aprobados solo subia
+        # una -- las claves de un diccionario no se repiten -- asi que
+        # siempre quedaba algo sin firmar y el boton parecia no
+        # funcionar.
         seed = "|".join(
             str(x) for x in (
                 self.rule_id, self.domain.value, self.entity_type.value,
-                self.placement_id, self.creative_id,
+                self.placement_id, self.creative_id, self.creative_name,
                 self.expected, self.actual,
             )
         )

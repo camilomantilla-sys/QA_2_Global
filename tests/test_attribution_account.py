@@ -44,6 +44,10 @@ class _Matched:
     placement_id: str = "PL-1"
     expected: _Expected = field(default_factory=_Expected)
     creative_links: list = field(default_factory=list)
+    # El triangulo del placement (ATR-002), para los 1x1 de Adobe que
+    # no declaran creativos. Aqui va vacio: estas pruebas son las del
+    # triangulo por creativo.
+    triangle: object = None
 
 
 @dataclass

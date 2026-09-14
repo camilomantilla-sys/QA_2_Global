@@ -115,6 +115,57 @@ def test_nothing_is_signed_off_before_the_run():
     assert "qa2_preapprove" not in SOURCE
 
 
+# ------------------------------------------------------------------
+# Dos hallazgos distintos no pueden compartir firma
+# ------------------------------------------------------------------
+
+def test_two_findings_on_the_same_placement_have_different_ids():
+    """
+    El id de un hallazgo incluye el nombre del creativo.
+
+    Sin eso, dos creativos del mismo placement sin Creative ID en la
+    TS y con los mismos valores comparados daban el MISMO id. Firmar
+    uno tildaba los dos, pero el contador de aprobados solo subia una
+    -- las claves de un diccionario no se repiten -- asi que quedaba
+    siempre algo pendiente y el boton parecia no funcionar.
+    """
+    from core.findings import FindingsBuffer as _Buffer
+    from core.findings import Domain as _Domain
+
+    buffer = _Buffer()
+    for name in ("banner_a.jpg", "banner_b.jpg"):
+        buffer.review(
+            rule_id="URL-001",
+            domain=_Domain.URL,
+            message="The landing page differs",
+            placement_id="10738901",
+            creative_name=name,
+        )
+
+    ids = {finding.finding_id for finding in buffer.findings}
+    assert len(ids) == 2, [f.finding_id for f in buffer.findings]
+
+
+def test_the_same_finding_keeps_the_same_id():
+    # Lo que hace util el id: la firma sobrevive a volver a correr el
+    # QA sobre los mismos datos.
+    from core.findings import FindingsBuffer as _Buffer
+    from core.findings import Domain as _Domain
+
+    def build():
+        buffer = _Buffer()
+        buffer.review(
+            rule_id="URL-001",
+            domain=_Domain.URL,
+            message="The landing page differs",
+            placement_id="10738901",
+            creative_name="banner_a.jpg",
+        )
+        return buffer.findings[0].finding_id
+
+    assert build() == build()
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

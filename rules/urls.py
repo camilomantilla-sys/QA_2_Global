@@ -123,9 +123,84 @@ def evaluate_placement_urls(match_result, buffer):
             )
 
 
+def evaluate_direct_placement_urls(match_result, buffer):
+    """
+    URL-003 -- la landing page de un placement sin creativos propios.
+
+    Adobe Direct / Site-Served escribe "N/A" en Creative Names: el
+    creativo es el pixel generico de la cuenta y todo lo revisable vive
+    a nivel de placement. Sin creativos no hay CreativeLink, y URL-001
+    -- que recorre los links -- no tenia por donde entrar, asi que la
+    landing page de cada 1x1 salia del QA sin que nadie la mirara.
+
+    La URL esperada es la de la columna "Landing Page" de la TS; la
+    real, el Clicktag_1 que el Placement View trae para ese placement.
+    """
+    for pm in match_result.matched:
+
+        if pm.url is None:
+            continue
+
+        common = {
+            "rule_id": "URL-003",
+            "domain": Domain.URL,
+            "placement_id": pm.placement_id,
+            "placement_name": pm.expected.name,
+            "expected": pm.url.expected.raw,
+            "actual": pm.url.actual.raw,
+        }
+
+        if pm.url.result == URL_MATCH:
+            buffer.pass_(
+                message="The placement's landing page matches Innovid.",
+                **common,
+            )
+
+        elif pm.url.result == URL_BOTH_MISSING:
+            continue
+
+        elif pm.url.result == URL_MISSING_ACTUAL:
+            buffer.not_verified(
+                message=(
+                    "The Traffic Sheet declares a landing page for this "
+                    "placement, but Innovid reports no Clicktag."
+                ),
+                recommended_action=(
+                    "Upload the Placement View, which is where the "
+                    "placement's Clicktag lives."
+                ),
+                **common,
+            )
+
+        elif pm.url.result == URL_MISSING_EXPECTED:
+            buffer.not_verified(
+                message=(
+                    "Innovid has a Clicktag on this placement, but the "
+                    "Traffic Sheet declares no landing page to compare "
+                    "it against."
+                ),
+                **common,
+            )
+
+        else:
+            buffer.fail(
+                message=(
+                    "The placement's landing page isn't the one the "
+                    "Traffic Sheet declares."
+                ),
+                reason=pm.url.note,
+                recommended_action=(
+                    "Update the placement's Clicktag to the landing "
+                    "page in the Traffic Sheet."
+                ),
+                **common,
+            )
+
+
 def evaluate(match_result, buffer):
 
     evaluate_placement_urls(match_result, buffer)
+    evaluate_direct_placement_urls(match_result, buffer)
 
     for pm in match_result.matched:
 

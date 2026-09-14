@@ -199,9 +199,25 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
         )
 
         if not links:
+            # Adobe Direct / Site-Served: sin creativos declarados, la
+            # URL y el CGEN de este placement son los suyos, no los de
+            # ningun creativo. Sin esto la fila salia con las dos
+            # columnas en blanco y parecia que no se habia comparado
+            # nada, justo en la unica fila donde vive la comparacion.
             rows.append({
                 **{column: "" for column in COLUMNS},
                 **base,
+                "TS URL": _text(pm.expected.url),
+                "Innovid URL": _text(
+                    pm.url.actual.raw if pm.url is not None else (
+                        actual.clicktags[0]
+                        if actual and actual.clicktags else ""
+                    )
+                ),
+                "CGEN TS (Adobe)": _text(pm.expected.cgen),
+                "CGEN Innovid (Adobe)": _text(
+                    pm.triangle.export if pm.triangle is not None else ""
+                ),
                 "Status": _worst_status(by_row.get((pid, ""), set())),
                 "Notes": " | ".join(sorted(_notes(by_row, (pid, "")))),
             })

@@ -1699,7 +1699,19 @@ def fetch_campaign(
                     groups[0][1].setdefault(row.dtree_id, row.dtree_name)
                 if row.dset_id:
                     groups[1][1].setdefault(row.dset_id, row.dset_name)
-                if row.dset_link_id:
+                # placementDecisionSetId es el ULTIMO recurso, y solo
+                # para el placement que no trajo ningun id de decision
+                # set propio.
+                #
+                # No es el id de un decision set: es el del enlace
+                # entre el placement y el suyo, y pedirlo a /dset/{id}
+                # devuelve HTTP 400 siempre. Antes se anadia por cada
+                # placement, asi que una campana de 54 placements con
+                # 6 decision sets compartidos intentaba 60 lecturas,
+                # fallaban las 54 del enlace, y el aviso decia "3 de
+                # 60 no se pudieron leer" + "51 mas omitidos" sobre
+                # una campana en la que no faltaba ni un dato.
+                elif row.dset_link_id and not row.dtree_id:
                     groups[2][1].setdefault(row.dset_link_id, row.dset_name)
 
             # Never ask twice for the same number.

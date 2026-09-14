@@ -66,6 +66,8 @@ def evaluate(match_result, buffer, account: str = ""):
 
     for pm in match_result.matched:
 
+        _evaluate_placement_triangle(pm, buffer)
+
         for cl in pm.creative_links:
 
             if cl.triangle is None:
@@ -119,3 +121,58 @@ def evaluate(match_result, buffer, account: str = ""):
                         "Third Party ID in Innovid and the sdid in the URL."
                     ),
                 )
+
+
+def _evaluate_placement_triangle(pm, buffer):
+    """
+    ATR-002 -- la atribucion de un placement sin creativos propios.
+
+    Mismo triangulo que ATR-001, pero con los tres vertices tomados a
+    nivel de placement: el CGEN de la fila de la TS, el Third_Party_ID
+    que Innovid trae en la fila del pixel de ese placement, y el sdid
+    dentro de su Clicktag. Es como se trafica un Adobe 1x1, y por no
+    tener creativos declarados se quedaba sin revisar.
+    """
+    if pm.triangle is None:
+        return
+
+    common = {
+        "rule_id": "ATR-002",
+        "domain": Domain.ATTRIBUTION,
+        "placement_id": pm.placement_id,
+        "placement_name": pm.expected.name,
+    }
+
+    if pm.triangle.is_ok:
+        buffer.pass_(
+            message="Attribution is correct for this placement",
+            expected=pm.triangle.consensus or pm.triangle.ts,
+            **common,
+        )
+
+    elif pm.triangle.result == TRI_INCOMPLETE:
+        buffer.not_verified(
+            message=pm.triangle.note,
+            reason=(
+                "Missing: " + ", ".join(pm.triangle.missing)
+                if pm.triangle.missing
+                else ""
+            ),
+            recommended_action=(
+                "Upload the Placement View, which carries this "
+                "placement's Clicktag and Third Party ID."
+            ),
+            **common,
+        )
+
+    else:
+        buffer.fail(
+            message=pm.triangle.note,
+            expected=pm.triangle.consensus or pm.triangle.ts,
+            actual=pm.triangle.export,
+            recommended_action=(
+                "Align the CGEN in the Traffic Sheet, the Third Party "
+                "ID in Innovid and the sdid in the placement's Clicktag."
+            ),
+            **common,
+        )

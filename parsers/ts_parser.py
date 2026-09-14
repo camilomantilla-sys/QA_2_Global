@@ -209,12 +209,28 @@ def detect_profile(path: Path) -> tuple[str, str]:
                     cmap, _ = map_columns(grid, hres.row, TS_ROTATIONS)
                     col = cmap.col("creative_name") or cmap.col("group_name")
                     if col:
-                        for r in range(hres.row + 1,
-                                       min(hres.row + 60, grid.max_row) + 1):
-                            c = grid.cell(r, col)
-                            if c is not None and c.has_value:
-                                rot_has_data = True
-                                break
+                        # Toda la hoja, no las primeras filas.
+                        #
+                        # Una hoja de rotaciones de Adobe acumula ano y
+                        # medio de solicitudes, cada bloque bajo su
+                        # banner de fecha, y el analista deja visible
+                        # solo el bloque de hoy -- que puede empezar en
+                        # la fila 28423. Mirar sesenta filas veia el
+                        # hueco de arriba, concluia "Creative Rotations
+                        # esta vacia", elegia el perfil de 1x1 y no
+                        # leia la hoja: 48 placements con sus creativos
+                        # contados como sobrantes y ni una validacion
+                        # de creativos, URL o CGEN.
+                        #
+                        # `grid.rows` solo trae las filas visibles, asi
+                        # que esto recorre cientos, no decenas de
+                        # miles.
+                        rot_has_data = any(
+                            (c := grid.cell(r, col)) is not None
+                            and c.has_value
+                            for r in grid.rows
+                            if r > hres.row
+                        )
         except Exception:
             pass
 

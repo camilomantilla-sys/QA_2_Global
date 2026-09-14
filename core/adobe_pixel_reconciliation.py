@@ -35,7 +35,7 @@ from pathlib import Path
 from enum import Enum
 from typing import Iterable
 
-from core.normalize import norm_compare
+from core.normalize import norm_compare, norm_dims
 from core.pixel_reconciliation import pixel_matches_official
 from core.tag_inventory import TagInventory, TagSourceRow
 
@@ -135,6 +135,9 @@ class AdobePixelCheck:
     placement_name: str = ""
     site: str = ""
     request_type: str = ""
+    # 1x1 o no: decide DONDE se espera el pixel del vendor, que es
+    # distinto segun como se trafica el placement.
+    dimensions: str = ""
 
     vendor_raw: str = ""
     requirements: tuple[str, ...] = ()
@@ -442,6 +445,7 @@ def _worked_vendor_data(ts_result) -> dict[str, dict]:
                 "placement_name": "",
                 "site": "",
                 "request_type": "",
+                "dimensions": "",
                 "raw_values": set(),
                 "requirements": set(),
             },
@@ -456,6 +460,11 @@ def _worked_vendor_data(ts_result) -> dict[str, dict]:
             record["site"] = str(
                 row.values.get("site") or ""
             ).strip()
+
+        if not record["dimensions"]:
+            record["dimensions"] = norm_dims(
+                row.values.get("dimensions")
+            )
 
         scope = ts_result.scope.get(placement_id)
 
@@ -543,6 +552,7 @@ def reconcile_adobe_pixels(
             "request_type": (
                 record["request_type"]
             ),
+            "dimensions": record["dimensions"],
             "vendor_raw": " | ".join(
                 raw_values
             ),
@@ -586,6 +596,94 @@ def reconcile_adobe_pixels(
             )
             continue
 
+        # Donde se espera el pixel depende de como se trafica el
+        # placement, no del vendor.
+        #
+        # Camilo: "disqo en Third Party Impression 1 column solo
+        # aplica para 3p, no 1x1; en 1x1 se anade la columna en los
+        # tags y se adjunta cuando el vendor lo provee."
+        #
+        # Un 1x1 es site-served: el sitio pone el pixel, asi que llega
+        # como una columna mas del archivo de tags. Un third-party se
+        # sirve desde Innovid, y ahi el pixel va en
+        # Third_Party_Impression. Antes los dos se juzgaban igual, y
+        # el mensaje de PASS hablaba del "1x1 tag file" incluso sobre
+        # un display de 300x250.
+        site_served = norm_dims(record["dimensions"]) == "1x1"
+
+        if site_served:
+            if tags_have_disqo and not innovid_has_disqo:
+                result.checks.append(
+                    AdobePixelCheck(
+                        result=PixelResult.PASS.value,
+                        message=(
+                            "DISQO is in the tag file, which is where "
+                            "a site-served 1x1 carries it."
+                        ),
+                        expected=(
+                            "Populated DISQO column in the 1x1 tag file"
+                        ),
+                        actual="DISQO found in the delivered tag file",
+                        recommended_action=(
+                            "Nothing to correct. A 1x1 does not need "
+                            "DISQO in Innovid's Third_Party_Impression."
+                        ),
+                        **common,
+                    )
+                )
+                continue
+
+            if innovid_has_disqo:
+                # Raro, no necesariamente mal: la medicion existe,
+                # pero no por donde se trafica un 1x1.
+                result.checks.append(
+                    AdobePixelCheck(
+                        result=PixelResult.REVIEW.value,
+                        message=(
+                            "DISQO is in Innovid's "
+                            "Third_Party_Impression, but a site-served "
+                            "1x1 carries it in the tag file"
+                            + (
+                                " -- and it is in both."
+                                if tags_have_disqo
+                                else ", not there."
+                            )
+                        ),
+                        expected=(
+                            "Populated DISQO column in the 1x1 tag file"
+                        ),
+                        actual="Found in Innovid Placement View",
+                        recommended_action=(
+                            "Check which one actually fires, so the "
+                            "placement is not measured twice."
+                        ),
+                        **common,
+                    )
+                )
+                continue
+
+            result.checks.append(
+                AdobePixelCheck(
+                    result=PixelResult.REVIEW.value,
+                    message=(
+                        "DISQO is required but the tag file carries no "
+                        "DISQO column yet (may still be pending from "
+                        "the vendor)."
+                    ),
+                    expected=(
+                        "Populated DISQO column in the 1x1 tag file"
+                    ),
+                    actual="Not found in the tag files",
+                    recommended_action=(
+                        "Confirm with DISQO whether the pixel for this "
+                        "placement has been delivered; it is attached "
+                        "to the tags once the vendor provides it."
+                    ),
+                    **common,
+                )
+            )
+            continue
+
         if (
             innovid_has_disqo
             and not tags_have_disqo
@@ -616,25 +714,22 @@ def reconcile_adobe_pixels(
         ):
             result.checks.append(
                 AdobePixelCheck(
-                    result=PixelResult.PASS.value,
+                    result=PixelResult.REVIEW.value,
                     message=(
-                        "DISQO is correctly included "
-                        "in the 1x1 tag file."
+                        "DISQO is in the tag file, but a third-party "
+                        "placement carries it in Innovid's "
+                        "Third_Party_Impression."
                     ),
                     expected=(
-                        "Populated DISQO column "
-                        "in the 1x1 tag file"
+                        "DISQO integration in Innovid"
                     ),
                     actual=(
-                        "DISQO found in delivered "
-                        "tag file"
+                        "Found only in the delivered tag file"
                     ),
                     recommended_action=(
-                        "No correction is required. "
-                        "Additional DISQO evidence in "
-                        "Innovid Third_Party_Impression "
-                        "is not required for this "
-                        "Site-Served 1x1 placement."
+                        "Integrate DISQO in Innovid for this "
+                        "placement, or confirm the tag is the one "
+                        "actually serving."
                     ),
                     **common,
                 )
