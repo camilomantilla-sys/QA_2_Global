@@ -7,7 +7,7 @@ Initial validations:
   TAG-003 Placement ID belongs to the worked scope.
   TAG-004 Placement Name.
   TAG-005 Dimensions.
-  TAG-006 Third Party ID.
+  TAG-006 (retired) Third Party ID in the tag file.
   TAG-007 (disabled) Placement ID embedded in the tag.
   TAG-008 Campaign ID embedded in the tag.
   TAG-009 Embedded dimensions.
@@ -260,83 +260,18 @@ def evaluate(
         #
         # This rule emits no PASS, FAIL, REVIEW, or NOT_VERIFIED.
 
-        # TAG-006: Third Party ID.
-        expected_third_party_id = ""
-
-        if link.actual is not None:
-            expected_third_party_id = (
-                link.actual.third_party_id
-            )
-
-            if (
-                not expected_third_party_id
-                and link.actual.creatives
-            ):
-                creative_values = {
-                    creative.third_party_id
-                    for creative in link.actual.creatives
-                    if creative.third_party_id
-                }
-
-                if len(creative_values) == 1:
-                    expected_third_party_id = next(
-                        iter(creative_values)
-                    )
-
-        if not expected_third_party_id:
-            buffer.not_verified(
-                rule_id="TAG-006",
-                domain=Domain.ATTRIBUTION,
-                message=(
-                    "Innovid Third Party ID is not available "
-                    "to compare against the tag file."
-                ),
-                entity_type=EntityType.PLACEMENT,
-                placement_id=row.placement_id,
-                expected="Innovid Third Party ID",
-                actual=row.third_party_id,
-            )
-
-        elif not row.third_party_id:
-            buffer.fail(
-                rule_id="TAG-006",
-                domain=Domain.ATTRIBUTION,
-                message=(
-                    "The tag file doesn't contain a Third Party ID."
-                ),
-                entity_type=EntityType.PLACEMENT,
-                placement_id=row.placement_id,
-                expected=expected_third_party_id,
-                actual="",
-            )
-
-        elif (
-            expected_third_party_id
-            == row.third_party_id
-        ):
-            buffer.pass_(
-                rule_id="TAG-006",
-                domain=Domain.ATTRIBUTION,
-                message="Tag Third Party ID is correct.",
-                entity_type=EntityType.PLACEMENT,
-                placement_id=row.placement_id,
-                expected=expected_third_party_id,
-                actual=row.third_party_id,
-            )
-
-        else:
-            buffer.fail(
-                rule_id="TAG-006",
-                domain=Domain.ATTRIBUTION,
-                message="Tag Third Party ID doesn't match.",
-                entity_type=EntityType.PLACEMENT,
-                placement_id=row.placement_id,
-                expected=expected_third_party_id,
-                actual=row.third_party_id,
-                recommended_action=(
-                    "Regenerate the tags from the correct placement."
-                ),
-            )
+        # TAG-006: Third Party ID -- retirada.
+        #
+        # Camilo: "eso no lo tenemos que validar en los archivos de
+        # tags, solo que esten los placements correctos."
+        #
+        # El Third Party ID de un archivo de tags no es el CGEN ni
+        # tiene que cuadrar con nada: lo que se revisa de un archivo
+        # de tags es que traiga los placements de la solicitud y que
+        # cada fila lleve las columnas que le tocan. La regla marcaba
+        # en fallo archivos correctos -- seis FAIL y seis NOT_VERIFIED
+        # en una sola solicitud de Adobe -- y cada uno se llevaba por
+        # delante una revision que no existia.
 
         # TAG-010: the row must contain at least one tag.
 

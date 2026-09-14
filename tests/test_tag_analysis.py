@@ -292,6 +292,26 @@ def test_no_tag_files_at_all_is_an_empty_analysis():
     assert import_table(analysis) == []
 
 
+# ------------------------------------------------------------------
+# TAG-006 retirada
+# ------------------------------------------------------------------
+
+def test_the_tag_files_third_party_id_is_not_judged():
+    """
+    Camilo: "eso no lo tenemos que validar en los archivos de tags,
+    solo que esten los placements correctos."
+
+    El Third Party ID de un archivo de tags no es el CGEN ni tiene que
+    cuadrar con nada. La regla marcaba en fallo archivos correctos --
+    seis FAIL y seis NOT_VERIFIED en una sola solicitud de Adobe -- y
+    cada uno se llevaba por delante una revision inexistente.
+    """
+    source = Path(__file__).resolve().parents[1] / "rules" / "tags.py"
+    body = source.read_text(encoding="utf-8")
+    assert 'rule_id="TAG-006"' not in body
+    assert "retired" in body or "retirada" in body
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

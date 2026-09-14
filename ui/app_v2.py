@@ -3830,10 +3830,17 @@ if True:
             filter_columns = st.columns([2, 1, 1])
 
             with filter_columns[0]:
+                # "press Enter" en el propio rotulo.
+                #
+                # Streamlit solo aplica un text_input al pulsar Enter
+                # o al salir del campo, y lo dice en gris claro debajo
+                # -- que nadie ve. Se escribia el Placement ID, no
+                # pasaba nada, y la conclusion razonable era que el
+                # buscador no servia.
                 search_text = st.text_input(
-                    "Search Placement ID or name",
+                    "Search Placement ID or name -- press Enter",
                     placeholder=(
-                        "Type an ID or part of the name"
+                        "Type an ID or part of the name, then Enter"
                     ),
                 )
 
@@ -3887,6 +3894,15 @@ if True:
                 set(matched_by_id)
                 | set(expected_missing_by_id)
             )
+
+            # La lista entera de un vistazo, antes de los desplegables.
+            #
+            # Camilo: "no tengo la visual de todo entonces si o si me
+            # toca descargar el export". Ciento veintisiete cajas
+            # cerradas no se recorren: se ordenan y se buscan en una
+            # tabla, que ademas ordena por columna y se copia.
+            _overview_slot = st.container()
+            overview_rows: list[dict] = []
 
             visible_count = 0
 
@@ -3943,6 +3959,22 @@ if True:
                 tag_records = tags_by_placement.get(
                     placement_id,
                     [],
+                )
+
+                overview_rows.append(
+                    {
+                        "Status": status,
+                        "Placement ID": placement_id,
+                        "Placement Name": expected.name,
+                        "Innovid Name": (
+                            actual.name if actual else ""
+                        ),
+                        "Request": expected.request_type or "-",
+                        "Dimensions": expected.dims or "-",
+                        "Creatives": len(creative_links),
+                        "Tag Rows": len(tag_records),
+                        "In Innovid": "Yes" if actual else "No",
+                    }
                 )
 
                 placement_label = (
@@ -4741,6 +4773,23 @@ if True:
                                 ),
                             ),
                         )
+
+            with _overview_slot:
+                if overview_rows:
+                    st.dataframe(
+                        pd.DataFrame(overview_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(
+                            420,
+                            120 + len(overview_rows) * 35,
+                        ),
+                    )
+                    st.caption(
+                        f"{len(overview_rows)} placement(s). Click a "
+                        "column header to sort. The detail of each "
+                        "one is below."
+                    )
 
             if visible_count == 0:
                 st.warning(

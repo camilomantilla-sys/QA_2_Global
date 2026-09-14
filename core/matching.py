@@ -150,6 +150,10 @@ class ExpectedPlacement:
     # aparte de `url` para que la cadena de la TS siga mandando cuando
     # existe, y esto solo entre cuando no hay nada mas.
     inline_url: str = ""
+    # Si `cgen` y `inline_url` salieron de una fila de esta solicitud
+    # o de una vieja que quedo en gris mas arriba en la misma hoja.
+    cgen_in_scope: bool = False
+    inline_url_in_scope: bool = False
     visual_review: bool = False
     source: str = ""
     creatives: list[ExpectedCreative] = field(default_factory=list)
@@ -449,14 +453,30 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
         # el grupo o el cgen pueden venir en cualquiera de las filas
         if not ep.group_name and row.values.get("group_name"):
             ep.group_name = str(row.values.get("group_name"))
-        if not ep.cgen and row.values.get("cgen"):
+        # El CGEN del placement, de una fila que sea de ESTA solicitud.
+        #
+        # Un placement de Adobe ocupa varias filas de la TS -- una por
+        # creativo, cada una con su CGEN y su landing page -- y las de
+        # arriba suelen ser solicitudes viejas, en gris. Quedarse con
+        # la primera que trajera algo tomaba el CGEN de una fila que
+        # nadie pidio tocar.
+        if row.values.get("cgen") and (
+            not ep.cgen or (
+                row.intent != "SCOPE_EXCLUDED"
+                and not ep.cgen_in_scope
+            )
+        ):
             ep.cgen = str(row.values.get("cgen"))
+            ep.cgen_in_scope = row.intent != "SCOPE_EXCLUDED"
         if not ep.vendors and row.values.get("vendors"):
             ep.vendors = str(row.values.get("vendors"))
-        if not ep.inline_url:
+        if not ep.inline_url or (
+            row.intent != "SCOPE_EXCLUDED" and not ep.inline_url_in_scope
+        ):
             lp_ref = str(row.values.get("lp_ref") or "").strip()
             if lp_ref.lower().startswith(("http://", "https://")):
                 ep.inline_url = lp_ref
+                ep.inline_url_in_scope = row.intent != "SCOPE_EXCLUDED"
 
         # creativos declarados a nivel placement (Variante B)
         cname = str(row.values.get("creative_names") or "")
@@ -794,6 +814,114 @@ def _match_creatives(ep: ExpectedPlacement,
 
 # ------------------------------------------------------------------ orquestacion
 
+def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
+    """
+    Empareja los creativos de un placement y compara URL y atribucion.
+
+    Vive aparte de `match()` para poder probarla con un placement
+    armado a mano: aqui es donde se decide que se compara con que, y
+    esas decisiones son las que han hecho falta afinar caso a caso.
+    """
+    ep, ap = pm.expected, pm.actual
+
+    pm.creative_links, pm.actual_extra = _match_creatives(ep, ap)
+
+    # El pixel 1x1 de un site-served no es un creativo de mas: es
+    # como se trafica ese placement. Se saca de los extras y se
+    # guarda aparte, para que siga siendo visible sin reportar
+    # como hallazgo lo que la TS pidio tal cual.
+    pm.actual_trackers = [
+        c for c in pm.actual_extra if c.row_type == "TRACKER"
+    ]
+    if pm.actual_trackers:
+        pm.actual_extra = [
+            c for c in pm.actual_extra if c.row_type != "TRACKER"
+        ]
+
+    # Contar extras una sola vez por placement.
+    res.extra_running_total += len(pm.extra_running)
+    res.extra_stopped_total += len(pm.extra_stopped)
+
+    # --- URL y atribucion del PLACEMENT.
+    #
+    # Adobe Direct / Site-Served: la TS pone "N/A" en Creative
+    # Names, el creativo es el pixel generico de la cuenta, y todo
+    # lo que hay que revisar vive a nivel de placement -- la
+    # landing page en su propia columna, el CGEN en la suya, y del
+    # lado de Innovid el Clicktag_1 del Placement View y el
+    # Third_Party_ID de la fila del pixel. Sin esto esas dos
+    # comprobaciones no se hacian en ninguna solicitud de 1x1.
+    if not pm.creative_links:
+        placement_url = ap.clicktags[0] if ap.clicktags else ""
+
+        if ep.url or placement_url:
+            pm.url = compare_urls(ep.url, placement_url)
+            res.url_counts[pm.url.result] = (
+                res.url_counts.get(pm.url.result, 0) + 1
+            )
+
+        if ep.cgen:
+            pm.triangle = check_triangle(
+                ep.cgen,
+                _tracker_cgen(ap) or ap.third_party_id,
+                placement_url,
+            )
+            res.triangle_counts[pm.triangle.result] = (
+                res.triangle_counts.get(pm.triangle.result, 0) + 1
+            )
+
+    for cl in pm.creative_links:
+        res.creative_conf_counts[cl.confidence] = \
+            res.creative_conf_counts.get(cl.confidence, 0) + 1
+
+        # solo los VERDES deben tener URL y CGEN correctos.
+        # los rojos se van, no importa a donde apuntaban.
+        # Un creativo removido no tiene URL ni atribucion que
+        # revisar. Los de contexto (en blanco) si: se muestran para
+        # poder comparar, aunque no generen hallazgos.
+        if cl.expected.intent == RED:
+            continue
+
+        # Site-served 1x1 (Placement_Type=Pixel, row_type
+        # TRACKER): el creativo nombrado en la TS no aparece
+        # nunca, porque Innovid sirve el pixel generico de la
+        # cuenta -- pero esa fila SI trae el CGEN correcto de
+        # este placement en su Third_Party_ID.
+        tracker_cgen = _tracker_cgen(ap) if cl.actual is None else ""
+
+        # Un creativo que no esta en Innovid no tiene URL ni CGEN
+        # que comparar. CRE-001 ya dice que falta; anadir aqui un
+        # fallo de URL y otro de atribucion convertia UN problema
+        # en TRES, y los dos de mas quedaban redactados como si la
+        # URL y el CGEN estuvieran mal. Peor aun: el CGEN "de
+        # Innovid" salia siendo el Third_Party_ID del Placement
+        # View (P3JPFSN), que es otro campo y no un CGEN, asi que
+        # el mensaje comparaba dos cosas que no se comparan.
+        if cl.actual is None and not tracker_cgen:
+            continue
+
+        # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
+        actual_tags = cl.actual.clicktags if cl.actual else []
+        # en 1x1 el ClickTag vive a nivel placement
+        if not actual_tags and ap.clicktags:
+            actual_tags = ap.clicktags
+        actual_url = actual_tags[0] if actual_tags else ""
+
+        cl.url = compare_urls(cl.expected.url, actual_url)
+        res.url_counts[cl.url.result] = \
+            res.url_counts.get(cl.url.result, 0) + 1
+
+        # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
+        exp_cgen = cl.expected.cgen or ep.cgen
+        act_tpid = (
+            cl.actual.third_party_id if cl.actual else ""
+        ) or tracker_cgen
+
+        cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
+        res.triangle_counts[cl.triangle.result] = \
+            res.triangle_counts.get(cl.triangle.result, 0) + 1
+
+
 def match(ts, export_pc, export_pl=None) -> MatchResult:
     res = MatchResult()
 
@@ -863,98 +991,7 @@ def match(ts, export_pc, export_pl=None) -> MatchResult:
         pm.group_match, pm.group_trace = gm, gt
         res.group_counts[gm] = res.group_counts.get(gm, 0) + 1
 
-        pm.creative_links, pm.actual_extra = _match_creatives(ep, ap)
-
-        # El pixel 1x1 de un site-served no es un creativo de mas: es
-        # como se trafica ese placement. Se saca de los extras y se
-        # guarda aparte, para que siga siendo visible sin reportar
-        # como hallazgo lo que la TS pidio tal cual.
-        pm.actual_trackers = [
-            c for c in pm.actual_extra if c.row_type == "TRACKER"
-        ]
-        if pm.actual_trackers:
-            pm.actual_extra = [
-                c for c in pm.actual_extra if c.row_type != "TRACKER"
-            ]
-
-        # Contar extras una sola vez por placement.
-        res.extra_running_total += len(pm.extra_running)
-        res.extra_stopped_total += len(pm.extra_stopped)
-
-        # --- URL y atribucion del PLACEMENT.
-        #
-        # Adobe Direct / Site-Served: la TS pone "N/A" en Creative
-        # Names, el creativo es el pixel generico de la cuenta, y todo
-        # lo que hay que revisar vive a nivel de placement -- la
-        # landing page en su propia columna, el CGEN en la suya, y del
-        # lado de Innovid el Clicktag_1 del Placement View y el
-        # Third_Party_ID de la fila del pixel. Sin esto esas dos
-        # comprobaciones no se hacian en ninguna solicitud de 1x1.
-        if not pm.creative_links:
-            placement_url = ap.clicktags[0] if ap.clicktags else ""
-
-            if ep.url or placement_url:
-                pm.url = compare_urls(ep.url, placement_url)
-                res.url_counts[pm.url.result] = (
-                    res.url_counts.get(pm.url.result, 0) + 1
-                )
-
-            if ep.cgen:
-                pm.triangle = check_triangle(
-                    ep.cgen,
-                    _tracker_cgen(ap) or ap.third_party_id,
-                    placement_url,
-                )
-                res.triangle_counts[pm.triangle.result] = (
-                    res.triangle_counts.get(pm.triangle.result, 0) + 1
-                )
-
-        for cl in pm.creative_links:
-            res.creative_conf_counts[cl.confidence] = \
-                res.creative_conf_counts.get(cl.confidence, 0) + 1
-
-            # solo los VERDES deben tener URL y CGEN correctos.
-            # los rojos se van, no importa a donde apuntaban.
-            # Un creativo removido no tiene URL ni atribucion que
-            # revisar. Los de contexto (en blanco) si: se muestran para
-            # poder comparar, aunque no generen hallazgos.
-            if cl.expected.intent == RED:
-                continue
-
-            # ---- L6 URL: TS 'Landing Page Name' vs Clicktag_1 del creativo
-            actual_tags = cl.actual.clicktags if cl.actual else []
-            # en 1x1 el ClickTag vive a nivel placement
-            if not actual_tags and ap.clicktags:
-                actual_tags = ap.clicktags
-            actual_url = actual_tags[0] if actual_tags else ""
-
-            cl.url = compare_urls(cl.expected.url, actual_url)
-            res.url_counts[cl.url.result] = \
-                res.url_counts.get(cl.url.result, 0) + 1
-
-            # ---- L7 triangulo: TS.CGENS == Export.Third_Party_ID == sdid
-            exp_cgen = cl.expected.cgen or ep.cgen
-            act_tpid = cl.actual.third_party_id if cl.actual else ""
-            if not act_tpid:
-                # Site-served 1x1 (Placement_Type=Pixel, row_type
-                # TRACKER): the individual creative link fails by
-                # design -- Innovid's row is the account's generic
-                # 1x1.gif pixel, not a named creative -- but that
-                # pixel row still carries its own correct, per-
-                # placement Third_Party_ID (the real CGEN code). The
-                # Placement View's ap.third_party_id is a different
-                # field that stays constant across placements and
-                # must not be used as a stand-in for it: doing so
-                # produced a false EXPORT_MISMATCH review on every
-                # site-served placement.
-                trackers = [ac for ac in ap.creatives if ac.row_type == "TRACKER"]
-                if len(trackers) == 1 and trackers[0].third_party_id:
-                    act_tpid = trackers[0].third_party_id
-                else:
-                    act_tpid = ap.third_party_id
-            cl.triangle = check_triangle(exp_cgen, act_tpid, actual_url)
-            res.triangle_counts[cl.triangle.result] = \
-                res.triangle_counts.get(cl.triangle.result, 0) + 1
+        compare_placement(pm, res)
 
         res.matched.append(pm)
         res.confidence_counts[CONF_HIGH] = \
