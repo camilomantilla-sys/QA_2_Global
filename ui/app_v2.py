@@ -2945,6 +2945,19 @@ if True:
                     key="qa2_panel_note",
                 )
 
+                # Lo ultimo que se hizo, con su hora.
+                #
+                # Un clic durante una pasada que aun corre se pierde:
+                # Streamlit no lo atiende. Sin este rastro, "no
+                # registro el clic" y "lo registro y no paso nada" se
+                # ven igual desde fuera -- que es donde se fueron tres
+                # rondas de este arreglo.
+                _last_action = st.session_state.get(
+                    "qa2_review_last_action"
+                )
+                if _last_action:
+                    st.caption(f"Last action: {_last_action}")
+
                 _button_columns = st.columns([1, 1, 2])
 
                 if _button_columns[0].button(
@@ -3956,6 +3969,35 @@ if True:
             _overview_slot = st.container()
             overview_rows: list[dict] = []
 
+            # El detalle de cada placement, bajo peticion.
+            #
+            # Streamlit ejecuta el cuerpo de un desplegable este
+            # abierto o cerrado. Setenta y dos placements con sus
+            # tablas de creativos, fechas, rotacion y tags es la parte
+            # cara de la pasada -- y mientras una pasada no termina,
+            # el clic siguiente no se atiende: es lo que hacia que
+            # firmar no hiciera nada en las solicitudes grandes.
+            #
+            # La tabla de arriba siempre los trae todos. El detalle se
+            # dibuja solo, y por defecto, cuando son pocos.
+            DETAIL_LIMIT = 25
+
+            if "qa2_show_detail" not in st.session_state:
+                st.session_state["qa2_show_detail"] = (
+                    len(placement_ids) <= DETAIL_LIMIT
+                )
+
+            show_detail = st.checkbox(
+                "Show each placement's detail below",
+                key="qa2_show_detail",
+                help=(
+                    "Off by default on big requests: drawing every "
+                    "placement's creatives, dates and tags is what "
+                    "makes each click slow. Search above to narrow "
+                    "the list first."
+                ),
+            )
+
             visible_count = 0
 
             for placement_id in placement_ids:
@@ -4028,6 +4070,9 @@ if True:
                         "In Innovid": "Yes" if actual else "No",
                     }
                 )
+
+                if not show_detail:
+                    continue
 
                 placement_label = (
                     f"{STATUS_ICON.get(status, '')} "
