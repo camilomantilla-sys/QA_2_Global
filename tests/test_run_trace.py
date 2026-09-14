@@ -76,6 +76,55 @@ def test_the_log_is_not_committed():
     assert "logs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
 
 
+# ------------------------------------------------------------------
+# Lo que cuesta una pasada
+# ------------------------------------------------------------------
+
+APP = Path(__file__).resolve().parents[1] / "ui" / "app_v2.py"
+APP_SOURCE = APP.read_text(encoding="utf-8")
+
+
+def test_only_the_chosen_section_is_drawn():
+    """
+    st.tabs dibuja el cuerpo de TODAS las pestanas en cada pasada.
+
+    En una solicitud de 72 placements con Innovid conectado eso son
+    seis secciones enteras cada vez que se toca cualquier cosa --
+    setenta y dos desplegables con sus tablas de fechas y rotacion, la
+    lista de tags, la de DV. La pasada no terminaba, y mientras no
+    termina Streamlit no atiende el clic siguiente: se pulsaba firmar
+    y no pasaba nada, sin que llegara una sola pasada al servidor.
+    """
+    assert "st.tabs(" not in APP_SOURCE
+    assert "st.segmented_control(" in APP_SOURCE
+    for label in (
+        "Worked Placements", "Findings", "Rules Executed",
+        "Files & Extraction", "Tags", "DV Pinnacle Tags",
+    ):
+        assert f'if _section == "{label}":' in APP_SOURCE, label
+
+
+def test_every_section_says_when_it_starts():
+    # Para que el log diga cual es la cara, y no haya que adivinarlo.
+    assert APP_SOURCE.count('trace("section ') == 6
+
+
+def test_the_reports_are_not_rebuilt_on_every_pass():
+    # Cinco segundos por pasada en una solicitud grande, aunque nadie
+    # hubiera tocado el boton de descargar.
+    assert 'reuse("pdf"' in APP_SOURCE
+    assert 'reuse("excel"' in APP_SOURCE
+
+
+def test_signing_changes_what_the_reports_say():
+    # Y por eso la firma entra en la firma del estado: el informe
+    # tiene que reflejar lo que se acaba de aprobar.
+    body = APP_SOURCE[APP_SOURCE.index("_report_signature = ("):]
+    body = body[:body.index("trace(\"building the PDF\")")]
+    assert "scorecard.verdict" in body
+    assert "review_overrides" in body
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

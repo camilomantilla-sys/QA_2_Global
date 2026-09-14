@@ -434,6 +434,28 @@ def clear_signatures() -> None:
     trace("cleared every signature")
 
 
+def reuse(slot: str, signature, build):
+    """
+    Construye algo caro una sola vez por cada estado distinto.
+
+    El PDF y el Excel se armaban en CADA pasada del script -- cinco
+    segundos en una solicitud de 72 placements -- aunque nadie hubiera
+    tocado el boton de descargar. Mientras la pasada no termina,
+    Streamlit no atiende el clic siguiente, asi que ese coste salia
+    del bolsillo de quien intentaba firmar.
+
+    La firma si cambia la firma del estado, y entonces se reconstruye:
+    el informe tiene que reflejar lo que se acaba de aprobar.
+    """
+    store = st.session_state.setdefault("qa2_reuse", {})
+    hit = store.get(slot)
+    if hit is not None and hit[0] == signature:
+        return hit[1]
+    value = build()
+    store[slot] = (signature, value)
+    return value
+
+
 INNOVID_CACHE_SECONDS = 3600
 
 
@@ -2826,6 +2848,9 @@ if True:
         # el panel en la lista entera del QA -- 778 filas donde habia
         # 114 que revisar.
         trace("building the review panel")
+        # Vacio mientras no haya panel: sin hallazgos que revisar no
+        # hay nada firmado, y la firma del informe lo necesita igual.
+        review_overrides: dict = {}
         REVIEWABLE = ("REVIEW", "FAIL", "NOT_VERIFIED")
         review_findings = [
             finding for finding in findings_buffer.findings
@@ -3578,8 +3603,22 @@ if True:
                 (uploaded_image.name, uploaded_image.getvalue())
             )
 
+        # Lo que hace distinto a un informe de otro: el veredicto, el
+        # recuento por estado, lo firmado y los datos del registro.
+        _report_signature = (
+            scorecard.verdict,
+            tuple(sorted(scorecard.by_status.items())),
+            len(findings_buffer.findings),
+            tuple(sorted(review_overrides)),
+            record_campaign, record_request_type, record_wrike_id,
+            record_implemented_by, record_implementation_date,
+            record_qa2_by, record_qa2_date,
+            record_qa3_by, record_qa3_date, record_notes,
+            len(evidence_images),
+        )
+
         trace("building the PDF")
-        pdf_report_bytes = build_pdf_report(
+        pdf_report_bytes = reuse("pdf", _report_signature, lambda: build_pdf_report(
             ReportMeta(
                 verdict=scorecard.verdict,
                 verdict_label=VERDICT_LABELS.get(
@@ -3631,7 +3670,7 @@ if True:
             placements_df=pd.DataFrame(placements_rows_for_pdf),
             evidence_images=evidence_images,
             logo_path=logo_path(),
-        )
+        ))
 
         tag_coverage_rows_for_excel = [
             {
@@ -3700,7 +3739,7 @@ if True:
         dv_rows_for_excel = dv_table(dv_result)
 
         trace("building the Excel")
-        excel_report_bytes = build_excel_report(
+        excel_report_bytes = reuse("excel", _report_signature, lambda: build_excel_report(
             ReportMeta(
                 verdict=scorecard.verdict,
                 verdict_label=VERDICT_LABELS.get(
@@ -3765,7 +3804,7 @@ if True:
                 findings_buffer.findings,
                 innovid_reconciliation,
             ),
-        )
+        ))
 
         download_columns = st.columns(2)
 
@@ -3792,29 +3831,39 @@ if True:
             use_container_width=True,
         )
 
-        (
-            tab_workspace,
-            tab_attention,
-            tab_rules,
-            tab_files,
-            tab_tags,
-            tab_dv,
-        ) = st.tabs(
-            [
-                "Worked Placements",
-                "Findings",
-                "Rules Executed",
-                "Files & Extraction",
-                "Tags",
-                "DV Pinnacle Tags",
-            ]
-        )
+        # Una seccion a la vez, y solo esa se dibuja.
+        #
+        # Con st.tabs, Streamlit ejecuta el cuerpo de TODAS las
+        # pestanas en cada pasada, se mire la que se mire. En una
+        # solicitud de 72 placements con Innovid conectado eso son
+        # seis secciones enteras -- setenta y dos desplegables con sus
+        # tablas de fechas y rotacion, la lista de tags, la de DV --
+        # cada vez que se toca cualquier cosa. La pasada no terminaba,
+        # y mientras no termina, Streamlit no atiende el clic
+        # siguiente: se pulsaba firmar y no pasaba nada.
+        SECTIONS = [
+            "Worked Placements",
+            "Findings",
+            "Rules Executed",
+            "Files & Extraction",
+            "Tags",
+            "DV Pinnacle Tags",
+        ]
+
+        _section = st.segmented_control(
+            "Section",
+            options=SECTIONS,
+            default=SECTIONS[0],
+            key="qa2_section",
+            label_visibility="collapsed",
+        ) or SECTIONS[0]
 
         # ====================================================
         # TAB: Worked Placements
         # ====================================================
 
-        with tab_workspace:
+        if _section == "Worked Placements":
+            trace("section Worked Placements")
             st.subheader(
                 "Worked Placements in the Request"
             )
@@ -4808,7 +4857,8 @@ if True:
         # TAB: Findings
         # ====================================================
 
-        with tab_attention:
+        if _section == "Findings":
+            trace("section Findings")
             st.subheader(
                 "Findings That Require Attention"
             )
@@ -4938,7 +4988,8 @@ if True:
         # TAB: Rules Executed
         # ====================================================
 
-        with tab_rules:
+        if _section == "Rules Executed":
+            trace("section Rules Executed")
             st.subheader(
                 "Rule Execution Coverage"
             )
@@ -4964,7 +5015,8 @@ if True:
         # TAB: Files & Extraction
         # ====================================================
 
-        with tab_files:
+        if _section == "Files & Extraction":
+            trace("section Files & Extraction")
             st.subheader(
                 "Document Understanding"
             )
@@ -5046,7 +5098,8 @@ if True:
         # deja ver y copiar cualquier tag.
         # ====================================================
 
-        with tab_tags:
+        if _section == "Tags":
+            trace("section Tags")
             st.subheader(
                 "Tags"
             )
@@ -5297,7 +5350,8 @@ if True:
         # mitad de las filas.
         # ====================================================
 
-        with tab_dv:
+        if _section == "DV Pinnacle Tags":
+            trace("section DV Pinnacle Tags")
             st.subheader(
                 "DV Pinnacle Tags"
             )
