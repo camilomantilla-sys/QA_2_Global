@@ -125,6 +125,28 @@ def test_signing_changes_what_the_reports_say():
     assert "review_overrides" in body
 
 
+def test_the_placement_detail_is_optional():
+    """
+    Streamlit ejecuta el cuerpo de un desplegable este abierto o
+    cerrado. Setenta y dos placements con sus tablas de creativos,
+    fechas, rotacion y tags era lo caro de cada pasada -- y mientras
+    una pasada no termina, el clic siguiente no se atiende.
+
+    La tabla de arriba sigue trayendolos todos; lo que se apaga por
+    defecto en las solicitudes grandes es el detalle de cada uno.
+    """
+    assert 'key="qa2_show_detail"' in APP_SOURCE
+    assert "if not show_detail:" in APP_SOURCE
+    assert "DETAIL_LIMIT = 25" in APP_SOURCE
+
+
+def test_the_panel_says_what_it_did_last():
+    # Un clic durante una pasada que aun corre se pierde. Sin rastro,
+    # "no registro el clic" y "lo registro y no paso nada" se ven
+    # igual desde fuera.
+    assert 'st.caption(f"Last action: {_last_action}")' in APP_SOURCE
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):
