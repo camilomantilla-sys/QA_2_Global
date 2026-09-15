@@ -3713,7 +3713,40 @@ if True:
             _overview_slot = st.container()
             overview_rows: list[dict] = []
 
+            # Cuantos detalles se dibujan.
+            #
+            # El servidor termina; el que no puede es el navegador.
+            # Cada placement desplegado son decenas de elementos --
+            # tablas de creativos, fechas, rotacion, URLs, tags -- y
+            # cuarenta y cuatro de golpe dejan la pagina pintando para
+            # siempre: el indicador no para nunca y no se llega a
+            # nada, aunque el log diga SCRIPT RUN finished.
+            #
+            # La tabla de arriba SIEMPRE los trae todos. Esto solo
+            # limita cuantos se dibujan abiertos debajo.
+            DETAIL_CHOICES = {
+                "First 10": 10,
+                "First 25": 25,
+                "First 50": 50,
+                "All of them": None,
+            }
+
+            _detail_choice = st.selectbox(
+                "Draw the detail of",
+                options=list(DETAIL_CHOICES),
+                index=0,
+                key="qa2_detail_depth",
+                help=(
+                    "The table above always lists every placement. "
+                    "This is how many are drawn open below it -- "
+                    "search or filter first to bring the ones you "
+                    "care about into the window."
+                ),
+            )
+            detail_limit = DETAIL_CHOICES[_detail_choice]
+
             visible_count = 0
+            drawn_detail = 0
 
             for placement_id in placement_ids:
                 placement_match = matched_by_id.get(
@@ -3785,6 +3818,11 @@ if True:
                         "In Innovid": "Yes" if actual else "No",
                     }
                 )
+
+                if detail_limit is not None and drawn_detail >= detail_limit:
+                    continue
+
+                drawn_detail += 1
 
                 placement_label = (
                     f"{STATUS_ICON.get(status, '')} "
@@ -4608,6 +4646,11 @@ if True:
             else:
                 st.caption(
                     f"Visible placements: {visible_count}"
+                    + (
+                        f" -- detail drawn for {drawn_detail} of them"
+                        if drawn_detail < visible_count
+                        else ""
+                    )
                 )
 
         # ====================================================

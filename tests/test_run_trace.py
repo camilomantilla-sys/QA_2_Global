@@ -142,17 +142,29 @@ def test_signing_changes_what_the_reports_say():
     assert "review_overrides" in body
 
 
-def test_the_placement_detail_is_always_drawn():
+def test_how_many_details_are_drawn_is_bounded():
     """
-    Camilo lo pidio al derecho: "me parece mejor que se muestren todos
-    de una apenas corro el QA asi toque esperar un poquito mas".
+    El servidor termina; el que no puede es el navegador.
 
-    La casilla que lo apagaba en solicitudes grandes se fue. Lo que
-    sostiene el coste ahora es el orden: firmar esta al final, y para
-    llegar alli la pasada ya ha terminado.
+    Cada placement desplegado son decenas de elementos -- tablas de
+    creativos, fechas, rotacion, URLs, tags -- y cuarenta y cuatro de
+    golpe dejan la pagina pintando para siempre. Camilo: "nunca paro
+    el indicador y no veo la opcion de firmar", con un log que decia
+    SCRIPT RUN finished a los 53 segundos.
+
+    La tabla de arriba sigue trayendolos todos; lo acotado es cuantos
+    se dibujan abiertos debajo.
     """
-    assert "qa2_show_detail" not in APP_SOURCE
-    assert "if not show_detail:" not in APP_SOURCE
+    assert "DETAIL_CHOICES" in APP_SOURCE
+    assert 'key="qa2_detail_depth"' in APP_SOURCE
+    assert "drawn_detail >= detail_limit" in APP_SOURCE
+
+
+def test_the_default_is_a_window_the_browser_can_paint():
+    body = APP_SOURCE[APP_SOURCE.index("DETAIL_CHOICES = {"):]
+    body = body[:body.index("detail_limit = DETAIL_CHOICES")]
+    assert '"First 10": 10' in body
+    assert "index=0," in body
 
 
 def test_the_panel_says_what_it_did_last():
