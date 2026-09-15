@@ -65,6 +65,20 @@ SKIP_FILES = {
 SKIP_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".pyc", ".pyo", ".log", ".bak"}
 
 
+def _dist() -> Path:
+    """
+    Todo lo que se arma queda en dist/, y solo ahi.
+
+    Antes el zip de codigo salia al lado del proyecto y el paquete
+    completo dentro de dist/: dos sitios para lo mismo, y el que busca
+    "el zip para subir" tiene que acordarse de cual es cual. dist/ esta
+    en .gitignore, asi que nada de esto se commitea por accidente.
+    """
+    out = ROOT / "dist"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def _version() -> str:
     path = ROOT / "VERSION"
     if path.exists():
@@ -109,7 +123,7 @@ def app_files(root: Path = ROOT, skip: Path | None = None) -> list[Path]:
 
 def build(destination: Path | None = None) -> Path:
     version = _version()
-    target = destination or (ROOT.parent / f"QA2-{version}.zip")
+    target = destination or (_dist() / f"QA2-{version}.zip")
 
     included: list[Path] = []
     excluded: dict[str, int] = {}
@@ -173,13 +187,13 @@ def build_update(destination: Path | None = None) -> Path:
     una version vieja.
 
     Esto pesa lo que pesa el codigo. Se descomprime ENCIMA de la
-    carpeta que ya tienen, respondiendo que si a reemplazar: python\ y
-    browsers\ no estan en el zip, asi que no se tocan.
+    carpeta que ya tienen, respondiendo que si a reemplazar: el
+    interprete y el navegador no estan en el zip, asi que no se tocan.
 
     Cuando cambia requirements.txt o el lock, esto NO alcanza y hay que
     repartir el paquete completo otra vez.
     """
-    target = destination or (ROOT.parent / f"QA2-{_version()}-update.zip")
+    target = destination or (_dist() / f"QA2-{_version()}-update.zip")
     stem = f"QA2-{_version()}"
 
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:

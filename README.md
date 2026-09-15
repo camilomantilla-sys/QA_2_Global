@@ -10,6 +10,7 @@ NOT_VERIFIED).
 
 | Document | For whom |
 |---|---|
+| [`docs/COMANDOS.md`](docs/COMANDOS.md) | The copy-paste reference: which package to build for a given change, and how to publish a release |
 | [`docs/INSTALACION.md`](docs/INSTALACION.md) | Whoever is installing QA2 for the first time: download, first run, connecting Innovid, and what to do when something fails |
 | [`docs/GUIA_TECNICA.md`](docs/GUIA_TECNICA.md) | Whoever maintains QA2: every rule, the key functions of each file, and the traps that cost a debugging session |
 | [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) | IT / information-security review before rollout |
