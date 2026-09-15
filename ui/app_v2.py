@@ -3870,9 +3870,11 @@ if True:
             st.markdown(
                 """
                 <div class="section-note">
-                    Each row represents a placement in scope.
-                    Use the arrow to expand creatives,
-                    URLs, attribution, tags, and validations.
+                    One row per placement in the request. Click a
+                    row to open it: creatives, URLs, attribution,
+                    tags and validations. One at a time -- opening
+                    forty of them at once is what used to leave the
+                    page loading forever.
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -3952,45 +3954,20 @@ if True:
             # toca descargar el export". Ciento veintisiete cajas
             # cerradas no se recorren: se ordenan y se buscan en una
             # tabla, que ademas ordena por columna y se copia.
-            _overview_slot = st.container()
-            overview_rows: list[dict] = []
-
-            # Uno a la vez, el que se quiera mirar.
+            # La lista de siempre, con una diferencia.
             #
-            # Antes se dibujaban los 44 desplegados a la vez. Cada uno
-            # son decenas de elementos -- creativos, fechas, rotacion,
-            # URLs, tags -- y el navegador no termina nunca de
-            # pintarlos: el indicador se queda girando y no se llega a
-            # firmar. Camilo: "lo que no me gustaba era el desplegable
-            # de todos los placements trabajados".
+            # Camilo: "me gusta mas cuando podia desplegar todos los
+            # placements... ese panel de status, placement, placement
+            # name, es muy invasivo".
             #
-            # La tabla de arriba los trae todos. Aqui se elige cual se
-            # abre.
-            _detail_options = ["-- none --"] + [
-                f"{placement_id} · "
-                + (
-                    matched_by_id[placement_id].expected.name
-                    if placement_id in matched_by_id
-                    else expected_missing_by_id[placement_id].name
-                )[:80]
-                for placement_id in placement_ids
-            ]
-
-            _chosen_detail = st.selectbox(
-                "Open one placement",
-                options=_detail_options,
-                index=0,
-                key="qa2_open_placement",
-                help=(
-                    "The table above lists every placement. Pick one "
-                    "here to see its creatives, URLs, attribution, "
-                    "tags and validations."
-                ),
-            )
-            chosen_placement = (
-                _chosen_detail.split(" · ")[0]
-                if _chosen_detail and _chosen_detail != "-- none --"
-                else ""
+            # Asi que vuelve la lista, una fila por placement, con lo
+            # mismo que decia la etiqueta del desplegable. Lo que no
+            # vuelve es que las 44 traigan su contenido: eso son
+            # decenas de elementos cada una y el navegador no termina
+            # nunca de pintarlas. Cada fila es un boton; se abre la
+            # que se pulse, y solo esa se dibuja.
+            chosen_placement = str(
+                st.session_state.get("qa2_open_placement", "") or ""
             )
 
             visible_count = 0
@@ -4050,26 +4027,10 @@ if True:
                     [],
                 )
 
-                overview_rows.append(
-                    {
-                        "Status": status,
-                        "Placement ID": placement_id,
-                        "Placement Name": expected.name,
-                        "Innovid Name": (
-                            actual.name if actual else ""
-                        ),
-                        "Request": expected.request_type or "-",
-                        "Dimensions": expected.dims or "-",
-                        "Creatives": len(creative_links),
-                        "Tag Rows": len(tag_records),
-                        "In Innovid": "Yes" if actual else "No",
-                    }
-                )
-
-                if placement_id != chosen_placement:
-                    continue
+                _is_open = placement_id == chosen_placement
 
                 placement_label = (
+                    f"{'▾' if _is_open else '▸'} "
                     f"{STATUS_ICON.get(status, '')} "
                     f"{placement_id}  |  "
                     f"{expected.request_type}  |  "
@@ -4079,7 +4040,20 @@ if True:
                     f"{expected.name[:105]}"
                 )
 
-                with st.expander(placement_label):
+                if st.button(
+                    placement_label,
+                    key=f"qa2_row_{placement_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state["qa2_open_placement"] = (
+                        "" if _is_open else placement_id
+                    )
+                    st.rerun()
+
+                if not _is_open:
+                    continue
+
+                with st.container(border=True):
                     render_status_badge(status)
 
                     # ----------------------------------------
@@ -4865,22 +4839,6 @@ if True:
                                 ),
                             ),
                         )
-
-            with _overview_slot:
-                if overview_rows:
-                    st.dataframe(
-                        pd.DataFrame(overview_rows),
-                        use_container_width=True,
-                        hide_index=True,
-                        height=min(
-                            760,
-                            80 + len(overview_rows) * 35,
-                        ),
-                    )
-                    st.caption(
-                        f"{len(overview_rows)} placement(s), all of "
-                        "them. Click a column header to sort."
-                    )
 
             if visible_count == 0:
                 st.warning(

@@ -164,9 +164,19 @@ def test_only_one_placement_is_opened_at_a_time():
 
     La tabla los trae todos; el desplegable abre uno.
     """
-    assert 'key="qa2_open_placement"' in APP_SOURCE
-    assert "if placement_id != chosen_placement:" in APP_SOURCE
+    assert 'key=f"qa2_row_{placement_id}"' in APP_SOURCE
+    assert 'st.session_state["qa2_open_placement"]' in APP_SOURCE
+    assert "if not _is_open:" in APP_SOURCE
     assert "DETAIL_CHOICES" not in APP_SOURCE
+
+
+def test_the_list_is_back_and_the_table_is_gone():
+    # Camilo: "me gusta mas cuando podia desplegar todos los
+    # placements... ese panel de status, placement, placement name,
+    # es muy invasivo".
+    assert "overview_rows" not in APP_SOURCE
+    assert "_overview_slot" not in APP_SOURCE
+    assert 'f"{placement_id}  |  "' in APP_SOURCE
 
 
 def test_the_panel_says_what_it_did_last():
