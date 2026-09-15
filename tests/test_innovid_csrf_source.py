@@ -73,7 +73,7 @@ sess.write_text(json.dumps({"cookies": [
      "domain": "uam-login.mediaocean.com", "path": "/",
      "expires": -1, "httpOnly": False, "secure": False,
      "sameSite": "Lax"},
-], "origins": []}))
+], "origins": []}), encoding="utf-8")
 
 fails = []
 def check(label, got, want=True):

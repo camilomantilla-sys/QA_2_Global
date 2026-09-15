@@ -31,7 +31,8 @@ HOUR = 3600
 def _session(cookies: list[dict]) -> Path:
     tmp = Path(tempfile.mkdtemp())
     path = tmp / "innovid_session.json"
-    path.write_text(json.dumps({"cookies": cookies, "origins": []}))
+    path.write_text(json.dumps({"cookies": cookies, "origins": []}),
+                    encoding="utf-8")
     return path
 
 
@@ -73,7 +74,7 @@ def test_a_missing_file_is_unknown_not_valid():
 
 def test_an_unreadable_file_is_unknown_not_expired():
     tmp = Path(tempfile.mkdtemp()) / "broken.json"
-    tmp.write_text("not json at all")
+    tmp.write_text("not json at all", encoding="utf-8")
     assert session_expires_at(tmp) is None
     assert not session_has_expired(tmp)
 

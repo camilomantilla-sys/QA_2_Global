@@ -122,7 +122,7 @@ def test_the_bundle_would_refuse_to_ship_the_sign_in():
 
     fake = Path(tempfile.mkdtemp())
     (fake / "config").mkdir()
-    (fake / "config" / LOCAL_ONLY_FILES[0]).write_text("SECRET=1")
+    (fake / "config" / LOCAL_ONLY_FILES[0]).write_text("SECRET=1", encoding="utf-8")
     with pytest.raises(SystemExit):
         guard(fake)
 
@@ -133,7 +133,7 @@ def test_a_clean_bundle_passes_the_guard():
 
     fake = Path(tempfile.mkdtemp())
     (fake / "ui").mkdir()
-    (fake / "ui" / "app_v2.py").write_text("# app")
+    (fake / "ui" / "app_v2.py").write_text("# app", encoding="utf-8")
     guard(fake)  # no levanta
 
 
@@ -239,20 +239,20 @@ def test_applying_the_update_leaves_the_interpreter_alone():
     (install / "browsers").mkdir()
     (install / "config").mkdir()
     (install / "core").mkdir()
-    (install / "python" / "bin" / "python3").write_text("interpreter")
-    (install / "browsers" / "chromium").write_text("browser")
-    (install / "config" / "innovid_credentials.env").write_text("SECRET")
-    (install / "core" / "excel_report.py").write_text("old")
+    (install / "python" / "bin" / "python3").write_text("interpreter", encoding="utf-8")
+    (install / "browsers" / "chromium").write_text("browser", encoding="utf-8")
+    (install / "config" / "innovid_credentials.env").write_text("SECRET", encoding="utf-8")
+    (install / "core" / "excel_report.py").write_text("old", encoding="utf-8")
 
     target = Path(tempfile.mkdtemp()) / "update.zip"
     build_update(target)
     with zipfile.ZipFile(target) as zf:
         zf.extractall(install)
 
-    assert (install / "python" / "bin" / "python3").read_text() == "interpreter"
-    assert (install / "browsers" / "chromium").read_text() == "browser"
-    assert (install / "config" / "innovid_credentials.env").read_text() == "SECRET"
-    assert (install / "core" / "excel_report.py").read_text() != "old"
+    assert (install / "python" / "bin" / "python3").read_text(encoding="utf-8") == "interpreter"
+    assert (install / "browsers" / "chromium").read_text(encoding="utf-8") == "browser"
+    assert (install / "config" / "innovid_credentials.env").read_text(encoding="utf-8") == "SECRET"
+    assert (install / "core" / "excel_report.py").read_text(encoding="utf-8") != "old"
 
 
 def test_the_full_package_still_has_its_folder():

@@ -116,7 +116,54 @@ def test_every_browser_test_asks_for_one_first():
         assert "require_browser()" in text, path.name
 
 
+
+# ── el texto se lee y se escribe en UTF-8, siempre ───────────────────
+
+def test_nothing_reads_or_writes_text_without_saying_the_encoding():
+    """
+    `read_text()` sin encoding usa cp1252 en Windows y UTF-8 en Linux.
+    El mismo archivo, dos resultados. Asi fallo la 495:
+
+        UnicodeDecodeError: 'charmap' codec can't decode byte 0x9d
+        tests/test_innovid_cache_policy.py:118
+        source = (... / "ui" / "app_v2.py").read_text()
+
+    Los comentarios del codigo llevan acentos y comillas tipograficas,
+    asi que leer app_v2.py en cp1252 revienta. En Linux nunca paso.
+
+    Se revisan las dos llamadas de Path, que son las que tienen el
+    default traicionero. `open()` con el modo binario no aplica.
+    """
+    import re
+
+    offenders = []
+    pattern = re.compile(r"\.(read_text|write_text)\(")
+    for folder in ("tests", "core", "ui", "parsers", "rules", "scripts", "cli"):
+        base = ROOT / folder
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.py")):
+            if path.name == Path(__file__).name:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for match in pattern.finditer(text):
+                # La llamada puede ocupar varias lineas; se mira hasta
+                # el parentesis que la cierra.
+                tail, depth = "", 0
+                for char in text[match.end() - 1:]:
+                    tail += char
+                    depth += char == "("
+                    depth -= char == ")"
+                    if depth == 0:
+                        break
+                if "encoding=" not in tail:
+                    line = text[: match.start()].count("\n") + 1
+                    offenders.append(f"{path.relative_to(ROOT)}:{line}")
+    assert not offenders, offenders
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+

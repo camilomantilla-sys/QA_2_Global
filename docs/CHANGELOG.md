@@ -40,6 +40,20 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Windows lee el texto distinto que Linux
+
+`read_text()` sin `encoding` usa **cp1252 en Windows** y UTF-8 en
+Linux: el mismo archivo, dos resultados. Los comentarios del codigo
+llevan acentos y comillas tipograficas, asi que leer `app_v2.py` en
+cp1252 revienta:
+
+    UnicodeDecodeError: 'charmap' codec can't decode byte 0x9d
+
+Aqui nunca paso. Arreglado en los 23 sitios que lo hacian --no solo en
+el que fallo-- y `test_portable_tests.py` ahora falla si alguien vuelve
+a escribir un `read_text()` o un `write_text()` sin decir la
+codificacion.
+
 ### `pytest tests/` nunca habia corrido fuera de una maquina
 
 Camilo lo corrio en Windows y no fallaron unas pruebas: no corrio

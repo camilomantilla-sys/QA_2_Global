@@ -115,7 +115,9 @@ def test_errors_alone_never_decide():
 def test_the_app_still_uses_this_rule():
     # Guardia contra que la app se separe de este test sin que nada
     # lo diga.
-    source = (Path(__file__).resolve().parents[1] / "ui" / "app_v2.py").read_text()
+    source = (Path(__file__).resolve().parents[1] / "ui" / "app_v2.py").read_text(
+        encoding="utf-8"
+    )
     assert "if result.placements:" in source, (
         "la regla del cache cambio en la app y este test ya no la representa"
     )

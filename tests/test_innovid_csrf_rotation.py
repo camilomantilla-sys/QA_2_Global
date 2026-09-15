@@ -68,7 +68,7 @@ api.APP_ORIGIN = base; api.CM_BASE = f"{base}/cm/v1/ui"
 api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
 
 sess = Path(tempfile.mkdtemp()) / "s.json"
-sess.write_text(json.dumps({"cookies": [], "origins": []}))
+sess.write_text(json.dumps({"cookies": [], "origins": []}), encoding="utf-8")
 
 fails = []
 def check(label, got, want=True):

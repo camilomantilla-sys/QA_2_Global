@@ -57,7 +57,7 @@ api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
 
 # Un temporal, no la raiz del repo: un test no debe dejar
 # basura en el arbol de trabajo.
-sess = Path(tempfile.mkdtemp()) / "csrf.json"; sess.write_text(json.dumps({"cookies": [], "origins": []}))
+sess = Path(tempfile.mkdtemp()) / "csrf.json"; sess.write_text(json.dumps({"cookies": [], "origins": []}), encoding="utf-8")
 fails = []
 def check(label, got, want):
     if got != want: fails.append(label); print(f"  FAIL {label}: {got!r} != {want!r}")
