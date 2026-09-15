@@ -171,9 +171,13 @@ librerías. Para esos:
 python scripts/package_release.py --update
 ```
 
-Deja un zip de ~600 KB. Quien ya tiene QA2 lo descomprime **encima** de
-su carpeta y dice que sí a reemplazar. `python\` y `browsers\` no van
-dentro, así que no se tocan.
+Deja un zip de ~600 KB. Ese zip **no trae carpeta adentro**, a
+propósito: quien ya tiene QA2 lo abre, selecciona todo (`Ctrl+A`) y lo
+arrastra a su carpeta, diciendo que sí a reemplazar.
+
+`python\`, `browsers\`, `config\innovid_credentials.env` y `logs\` no
+van dentro, así que no se tocan — nadie pierde su sesión de Innovid al
+actualizar.
 
 Cuando cambia `requirements.txt` o el lock, eso no alcanza: hay que
 armar y repartir el paquete completo otra vez.
@@ -197,10 +201,13 @@ Un clon del repositorio con Python del sistema:
 ```
 git clone <repo> && cd QA_2_Global
 python -m venv .venv && .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 python -m playwright install chromium
 streamlit run ui/app_v2.py
 ```
+
+`requirements-dev.txt` es solo `pytest`, aparte a propósito: el paquete
+que recibe el equipo corre QA2, no las pruebas.
 
 `run_qa2.bat` sirve para las dos cosas: si encuentra `python\` usa el
 Python del paquete, y si no, el del sistema con su `.venv`.

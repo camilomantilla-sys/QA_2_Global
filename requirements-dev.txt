@@ -1,0 +1,7 @@
+# Lo que hace falta para trabajar en QA2, ademas de requirements.txt.
+#
+# Aparte a proposito: el paquete que recibe el equipo no lleva nada de
+# esto. Corre la aplicacion, no las pruebas.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest>=8.0.0

@@ -67,10 +67,23 @@ paquete instalado.
 ### Actualizar sin repartir 500 MB otra vez
 
 `python scripts/package_release.py --update` arma un zip de ~600 KB con
-el codigo y nada mas. Se descomprime ENCIMA de la carpeta instalada;
-`python\` y `browsers\` no van dentro, asi que no se tocan. Casi todos
-los cambios son de codigo, y volver a repartir el paquete entero por
-seis megas de Python es un impuesto que nadie paga dos veces.
+el codigo y nada mas. Casi todos los cambios son de codigo, y volver a
+repartir el paquete entero por seis megas de Python es un impuesto que
+nadie paga dos veces.
+
+Ese zip **no trae carpeta adentro**, a diferencia del completo: se abre,
+se selecciona todo y se arrastra a la carpeta de QA2. Con carpeta no se
+superponia con nada --la instalada se llama `QA2-1.0.0-windows` y el zip
+traia `QA2-1.0.0`-- asi que extraerlo dejaba una carpeta nueva al lado y
+la aplicacion sin actualizar, **sin dar ningun error**.
+
+El interprete, el navegador, las credenciales y los logs no van dentro
+del zip: nadie pierde su sesion de Innovid al actualizar.
+
+`pytest` paso a `requirements-dev.txt`. No estaba en ningun sitio, asi
+que `pytest tests/` fallaba en una copia recien clonada -- y no debe
+estar en `requirements.txt`, porque el paquete del equipo corre QA2, no
+las pruebas.
 
 Cuando cambia `requirements.txt` o el lock, esto no alcanza y hay que
 repartir el paquete completo.

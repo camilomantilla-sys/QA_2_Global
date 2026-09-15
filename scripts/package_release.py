@@ -194,11 +194,19 @@ def build_update(destination: Path | None = None) -> Path:
     repartir el paquete completo otra vez.
     """
     target = destination or (_dist() / f"QA2-{_version()}-update.zip")
-    stem = f"QA2-{_version()}"
 
+    # SIN carpeta raiz, a diferencia del zip completo.
+    #
+    # Este se descomprime DENTRO de una instalacion que ya existe. Con
+    # una carpeta raiz no se superpone con nada: la instalada se llama
+    # QA2-1.0.0-windows y el zip traia QA2-1.0.0, asi que extraerlo
+    # dejaba una carpeta nueva al lado y la aplicacion sin actualizar
+    # -- y sin ningun error, que es lo peor: parece que funciono.
+    #
+    # Plano, los archivos caen justo encima de los suyos.
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in app_files(skip=target):
-            zf.write(path, Path(stem) / path.relative_to(ROOT))
+            zf.write(path, path.relative_to(ROOT))
 
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     print(f"QA2 {_version()} -- update only")
@@ -206,9 +214,14 @@ def build_update(destination: Path | None = None) -> Path:
     print(f"  {target.stat().st_size / 1_048_576:.1f} MB")
     print(f"  sha256 {digest}")
     print()
-    print("  This carries the code and nothing else -- no interpreter,")
-    print("  no libraries, no browser. Whoever has QA2 already extracts")
-    print("  it OVER their folder and says yes to replacing files.")
+    print("  The code and nothing else -- no interpreter, no libraries,")
+    print("  no browser. There is no folder inside it on purpose, so the")
+    print("  files land straight on top of the ones already there:")
+    print()
+    print("    1. open the QA2 folder you already have")
+    print("    2. double-click this .zip to look inside it")
+    print("    3. select everything (Ctrl+A) and drag it into that folder")
+    print("    4. say yes to replacing")
     print()
     print("  If requirements.txt or the lock changed, this is not")
     print("  enough: build and hand out the full package instead.")

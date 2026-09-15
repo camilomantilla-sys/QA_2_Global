@@ -4,6 +4,19 @@ Para copiar y pegar. Todo sale en `dist\`.
 
 ---
 
+## Una sola vez, en tu máquina
+
+`pytest` no viene con la aplicación — el paquete que recibe el equipo
+corre QA2, no las pruebas. Instálalo una vez:
+
+```bat
+cd %USERPROFILE%\Downloads\QA_2_Global
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
+```
+
+---
+
 ## Actualizar (lo normal)
 
 Cambió el código — una regla, un arreglo, una columna. **No** cambió
@@ -12,15 +25,30 @@ Cambió el código — una regla, un arreglo, una columna. **No** cambió
 ```bat
 cd %USERPROFILE%\Downloads\QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
-pytest tests/
+.venv\Scripts\activate
+python -m pytest tests/
 python scripts/package_release.py --update
 ```
 
 Deja `dist\QA2-<versión>-update.zip`, unos 600 KB.
 
-**Cómo se instala:** quien ya tiene QA2 lo descomprime **encima** de su
-carpeta y dice que sí a reemplazar. `python\` y `browsers\` no van
-dentro del zip, así que no se tocan.
+**Cómo lo instala tu equipo** — este zip **no trae carpeta adentro**, a
+propósito, para que los archivos caigan justo encima de los suyos:
+
+1. Abrir la carpeta de QA2 que ya tienen
+2. Doble clic al .zip para ver adentro
+3. Seleccionar todo (`Ctrl+A`) y arrastrarlo a esa carpeta
+4. Decir que sí a reemplazar
+
+`python\`, `browsers\`, `config\innovid_credentials.env` y `logs\` no
+van dentro del zip, así que no se tocan: nadie pierde su sesión de
+Innovid al actualizar.
+
+> El zip completo **sí** trae una carpeta adentro (`QA2-1.0.0-windows`)
+> porque se extrae en un sitio nuevo. El de update no, porque se
+> extrae dentro de uno que ya existe. Si trajera carpeta, no se
+> superpondría con nada: dejaría una carpeta nueva al lado y la
+> aplicación sin actualizar, **sin dar ningún error**.
 
 ---
 
@@ -32,7 +60,8 @@ La primera vez, o cuando cambió `requirements.txt` o
 ```bat
 cd %USERPROFILE%\Downloads\QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
-pytest tests/
+.venv\Scripts\activate
+python -m pytest tests/
 python scripts/build_bundle.py
 ```
 
@@ -69,7 +98,7 @@ de la carpeta que tiene tu equipo.
 ## Antes de subir cualquiera de los dos
 
 ```bat
-pytest tests/
+python -m pytest tests/
 ```
 
 Y con el paquete completo, extráelo en **otra** carpeta y ábrelo como

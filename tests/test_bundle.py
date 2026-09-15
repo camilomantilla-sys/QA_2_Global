@@ -196,6 +196,90 @@ def test_removing_setuptools_also_removes_its_pth():
     assert "distutils-precedence.pth" in TRIM_PTH
 
 
+
+# ── el update se descomprime DENTRO de una instalacion ───────────────
+
+def test_the_update_zip_has_no_folder_inside_it():
+    """
+    El zip completo trae una carpeta porque se extrae en un sitio
+    nuevo. El de update NO, porque se extrae dentro de uno que ya
+    existe.
+
+    Con carpeta no se superponia con nada: la instalada se llama
+    QA2-1.0.0-windows y el zip traia QA2-1.0.0, asi que extraerlo
+    dejaba una carpeta nueva al lado y la aplicacion sin actualizar, y
+    sin dar ningun error -- que es la peor forma de fallar, porque
+    parece que funciono.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build_update
+
+    target = Path(tempfile.mkdtemp()) / "update.zip"
+    build_update(target)
+    names = zipfile.ZipFile(target).namelist()
+
+    assert "core/excel_report.py" in names
+    assert not [n for n in names if n.startswith("QA2-")]
+
+
+def test_applying_the_update_leaves_the_interpreter_alone():
+    """
+    Lo que de verdad importa al actualizar: nadie pierde su Python, su
+    navegador, ni su sesion de Innovid.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build_update
+
+    install = Path(tempfile.mkdtemp()) / "QA2-1.0.0-windows"
+    (install / "python" / "bin").mkdir(parents=True)
+    (install / "browsers").mkdir()
+    (install / "config").mkdir()
+    (install / "core").mkdir()
+    (install / "python" / "bin" / "python3").write_text("interpreter")
+    (install / "browsers" / "chromium").write_text("browser")
+    (install / "config" / "innovid_credentials.env").write_text("SECRET")
+    (install / "core" / "excel_report.py").write_text("old")
+
+    target = Path(tempfile.mkdtemp()) / "update.zip"
+    build_update(target)
+    with zipfile.ZipFile(target) as zf:
+        zf.extractall(install)
+
+    assert (install / "python" / "bin" / "python3").read_text() == "interpreter"
+    assert (install / "browsers" / "chromium").read_text() == "browser"
+    assert (install / "config" / "innovid_credentials.env").read_text() == "SECRET"
+    assert (install / "core" / "excel_report.py").read_text() != "old"
+
+
+def test_the_full_package_still_has_its_folder():
+    """El completo se extrae en un sitio nuevo: ahi la carpeta si va."""
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build
+
+    target = Path(tempfile.mkdtemp()) / "full.zip"
+    build(target)
+    names = zipfile.ZipFile(target).namelist()
+    assert all(n.startswith("QA2-") for n in names), names[:3]
+
+
+def test_pytest_is_a_development_dependency_not_a_shipped_one():
+    """
+    `pytest tests/` fallaba en una copia recien clonada: pytest no
+    esta en requirements.txt, y no debe estarlo -- el paquete del
+    equipo corre QA2, no las pruebas. Va en su propio archivo.
+    """
+    dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    shipped = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "pytest" in dev
+    assert "pytest" not in shipped.lower()
+
+
 if __name__ == "__main__":
     import pytest
 
