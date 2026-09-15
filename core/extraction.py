@@ -119,7 +119,8 @@ def _fill_rgb(cell_obj: Any) -> str | None:
 
 def read_sheet(path: Path, sheet_name: str,
                capture_fill: bool = True,
-               max_rows_cap: int = 200_000) -> tuple[SheetGrid, list[Anomaly]]:
+               max_rows_cap: int = 200_000,
+               skip_hidden: bool = True) -> tuple[SheetGrid, list[Anomaly]]:
     """
     Lee una hoja completa. Soporta .xlsx y .xlsm.
 
@@ -160,11 +161,18 @@ def read_sheet(path: Path, sheet_name: str,
     # ("client_geo_creativename_728x90" y compania), y leerlos mete en
     # el QA creativos que nadie pidio revisar. Es la regla que usa el
     # equipo: lo oculto no se lee.
+    #
+    # skip_hidden=False lee la hoja entera. Sirve para una sola cosa:
+    # resolver una referencia. Que grupo apunta a que landing page es
+    # estructura de la campana, no una solicitud, y cuando esa tabla
+    # esta oculta la cadena placement -> rotacion -> landing page se
+    # rompe y un swap de URL se queda sin validar. El color -- lo que
+    # de verdad se pidio -- se sigue leyendo solo de lo visible.
     hidden_rows = {
         index
         for index, dim in ws.row_dimensions.items()
         if getattr(dim, "hidden", False)
-    }
+    } if skip_hidden else set()
     if hidden_rows:
         anomalies.append(Anomaly(
             "EXT-HIDDEN-ROWS", "INFO",

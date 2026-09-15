@@ -444,11 +444,13 @@ def _repair_wpp_combined_rotation_header(
 
 def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
                  intent_fields: list[str], resolver: ColorResolver,
-                 primary_key: str) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]:
+                 primary_key: str,
+                 skip_hidden: bool = True) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]:
     res = TSSheetResult(sheet=sheet_name)
     region: list[tuple[str, str, Cell]] = []
 
-    grid, anomalies = read_sheet(path, sheet_name, capture_fill=True)
+    grid, anomalies = read_sheet(path, sheet_name, capture_fill=True,
+                                 skip_hidden=skip_hidden)
     res.anomalies += anomalies
     res.merged_applied = grid.merged_applied
     if any(a.severity == "FATAL" for a in res.anomalies):
@@ -611,6 +613,40 @@ def _build_groups(sr: TSSheetResult | None) -> dict[str, GroupScope]:
         elif row.intent == WHITE:
             g.white_creatives += 1
     return out
+
+def _merge_hidden_lp_refs(groups: dict[str, GroupScope],
+                          sr: TSSheetResult | None) -> None:
+    """
+    Anade al mapa grupo -> landing page las filas ocultas de rotaciones.
+
+    Una fila oculta no es parte de la solicitud, y esa regla no cambia:
+    nada de lo que aporta aqui cuenta como verde, rojo ni blanco. Lo
+    unico que se toma es a que landing page apunta cada grupo, que es
+    estructura de la campana y no algo que alguien pidio.
+
+    Hace falta porque la cadena de BlackRock es
+
+        placement -> creative rotation -> landing page -> URL
+
+    y en "TS_Q2-Q4 2026 Co Marketing" las 67 filas de Creative
+    Rotations estan ocultas. La pestana Landing Pages traia 33 pares
+    rojo/verde -- un swap de URL pedido sin ninguna duda -- y el
+    eslabon del medio no existia, asi que los 56 placements salian
+    NOT_WORKED y el QA no revisaba absolutamente nada.
+    """
+    if sr is None:
+        return
+    for row in sr.rows:
+        gname = norm_compare(str(row.values.get("group_name") or ""))
+        lp_ref = norm_compare(str(row.values.get("lp_url") or ""))
+        if not gname or not lp_ref:
+            continue
+        g = groups.get(gname)
+        if g is None:
+            g = GroupScope(group_name=str(row.values.get("group_name")))
+            groups[gname] = g
+        g.lp_names.add(lp_ref)
+
 
 def _build_lp_worked(sr: TSSheetResult | None) -> set[str]:
     """Landing pages con color -> se trabajo su URL."""
@@ -848,6 +884,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     res.anomalies += [a for a in res.placements.anomalies if a.severity == "FATAL"]
 
     # ---- Creative Rotations
+    rotations_all_rows: TSSheetResult | None = None
     if profile.rotations is not None:
         rot_sheet = resolve_sheet(in_scope, profile.rotations.sheet_aliases)
         if rot_sheet:
@@ -858,6 +895,18 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
             all_region += region
             res.anomalies += [a for a in res.rotations.anomalies
                               if a.severity == "FATAL"]
+
+            # Segunda lectura, solo si hay filas ocultas y solo para
+            # saber a que landing page apunta cada grupo. Ver
+            # _merge_hidden_lp_refs: la solicitud se sigue leyendo de
+            # lo visible; esto resuelve una referencia, no un color.
+            if any(a.code == "EXT-HIDDEN-ROWS"
+                   for a in res.rotations.anomalies):
+                rotations_all_rows, _ = _parse_sheet(
+                    path, rot_sheet, profile.rotations,
+                    profile.intent_fields.get("rotations", []),
+                    resolver, primary_key="creative_name",
+                    skip_hidden=False)
 
     # ---- Landing Pages (solo WPP)
     if profile.landing_pages_in_scope:
@@ -871,6 +920,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
 
     # ---- propagacion y scope
     res.groups = _build_groups(res.rotations)
+    _merge_hidden_lp_refs(res.groups, rotations_all_rows)
     res.lp_worked = _build_lp_worked(res.landing_pages)
 
     if res.placements:

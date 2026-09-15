@@ -40,6 +40,35 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Dos casos que se leian bien y no se validaban
+
+Los dos encontrados probando solicitudes nuevas dias antes del
+lanzamiento. Los dos con la misma forma: QA2 leia la Traffic Sheet
+correctamente y despues no comparaba nada.
+
+- **Swap de creativos de video sobre un decision set existente.** Los
+  tres creativos que Innovid si tenia asignados salian como "extra
+  creative": sin comparacion, sin fechas, sin rotacion y sin poder
+  confirmar que el placeholder que habia que desasignar se hubiera ido.
+  La causa: la columna "Dims or Duration" trae, para video, la duracion
+  ("15s"), y el filtro por dimension la comparaba contra 1920x1080. No
+  hacia match, y se llevaba por delante el grupo entero. Ese filtro
+  ahora solo opina cuando los dos lados son de verdad un ancho por alto.
+  En la TS del caso, 78 de 225 filas de rotacion declaran duracion.
+
+- **Swap de solo landing page con la pestana de rotaciones oculta.** La
+  cadena de BlackRock es placement → creative rotation → landing page →
+  URL, y el placement no nombra su landing page: dice "See Creative
+  Rotation Tab". Cuando esas filas estan ocultas -- las 67 lo estaban --
+  el eslabon del medio desaparecia y los 56 placements salian
+  NOT_WORKED pese a 33 pares rojo/verde en Landing Pages. Ahora de una
+  fila oculta se toma unicamente a que landing page apunta cada grupo,
+  que es estructura de la campana y no una solicitud. El color se sigue
+  leyendo solo de lo visible: una fila oculta no cuenta como verde, ni
+  como rojo, ni como blanco.
+  **Cambio de comportamiento:** un swap de solo URL en esa forma pasa de
+  no revisar nada a marcar sus placements como URL_SWAP.
+
 ### Validaciones nuevas
 
 - **`TAG-014` — la landing page dentro del click tag de 1x1.** Idea del

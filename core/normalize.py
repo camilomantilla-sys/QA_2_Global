@@ -102,20 +102,48 @@ def site_names_match(left: object, right: object) -> bool:
     return False
 
 
+_IS_DIMS = re.compile(r"^\d+x\d+$")
+
+
+def is_dimensions(value: object) -> bool:
+    """Si el valor normalizado es de verdad un ancho por alto."""
+    return bool(_IS_DIMS.match(norm_dims(value)))
+
+
 def dims_match(left: object, right: object) -> bool:
     """
     Compara dimensiones tolerando como se declara el video.
 
-    Un placement de video se escribe 0x0 en un lado y con su tamano real
-    (1920x1080, 640x480) en el otro; las dos formas significan lo mismo,
-    asi que 0x0 hace match con cualquier dimension. Sin esto el filtro
-    por dimension descartaba los creativos de video y terminaban
-    reportados como "extra creative in Innovid".
+    Este filtro existe por Adobe: un grupo trae los creativos de todos
+    los tamanos (8 conceptos x 5 tamanos), y un placement de 160x600
+    solo sirve los 8 de 160x600. Sin filtrar se esperan 40, matchean 8,
+    y salen 32 falsos "creativo faltante" por placement.
+
+    Solo puede opinar cuando los dos lados son de verdad un ancho por
+    alto. Un placement de video se escribe 0x0 en un lado y con su
+    tamano real (1920x1080, 640x480) en el otro: las dos formas
+    significan lo mismo, asi que 0x0 hace match con cualquiera.
+
+    Y la columna que la Traffic Sheet llama "Dims or Duration" a veces
+    trae, para video, la DURACION: "15s". Eso no es una dimension y no
+    se puede comparar contra 1920x1080 -- pero se comparaba, no daba
+    match, y el filtro descartaba los creativos del grupo entero. El
+    placement quedaba sin ningun creativo esperado y los tres que
+    Innovid si tenia salian como "extra creative", sin fechas, sin
+    rotacion y sin poder confirmar la desasignacion del placeholder.
+    Un swap de video sobre un decision set existente no se validaba.
+
+    Asi que cuando un lado no es un ancho por alto, este filtro se
+    calla: dejar pasar un creativo de mas es visible y comparable;
+    descartarlo lo vuelve invisible. Comparar la duracion es trabajo de
+    otra regla, no de un filtro por dimension.
     """
     a, b = norm_dims(left), norm_dims(right)
     if not a or not b:
         return True
     if a == b:
+        return True
+    if not (is_dimensions(a) and is_dimensions(b)):
         return True
     return "0x0" in (a, b)
 
