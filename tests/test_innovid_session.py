@@ -39,6 +39,13 @@ class H(BaseHTTPRequestHandler):
 srv = HTTPServer(("127.0.0.1", 0), H)
 base = f"http://127.0.0.1:{srv.server_port}"
 threading.Thread(target=srv.serve_forever, daemon=True).start()
+# These modules are scripts: everything below runs at import, so the
+# rebinding is on the real module and stays there. Under `pytest
+# tests/` that leaked -- a later module asked redact_url() about a
+# genuine api.flashtalking.net URL and got "" back, because by then
+# _API_HOST said 127.0.0.1. The originals are kept here and put back
+# once the fake server is down.
+_REAL_ENDPOINTS = (api.APP_ORIGIN, api.CM_BASE, api.DT_BASE, api._API_HOST)
 api.APP_ORIGIN = base; api.CM_BASE = f"{base}/cm/v1/ui"
 api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
 
@@ -79,6 +86,7 @@ except InnovidAuthError as exc:
 check("nothing was written", missing.exists(), False)
 
 srv.shutdown()
+(api.APP_ORIGIN, api.CM_BASE, api.DT_BASE, api._API_HOST) = _REAL_ENDPOINTS
 print()
 if fails: print(f"{len(fails)} FAILURE(S): {fails}"); sys.exit(1)
 print("Session-401 handling verified.")

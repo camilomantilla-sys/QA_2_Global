@@ -49,9 +49,13 @@ from core.tag_inventory import TagInventory, TagSourceRow
 # used, once evidence is found, to flag a vendor pixel that drifted.
 # ------------------------------------------------------------------
 
-ADOBE_VENDOR_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent / "config" / "vendor_pixels_adobe.json"
-)
+from core.paths import shared_config_path
+
+ADOBE_VENDOR_CONFIG_FILE = "vendor_pixels_adobe.json"
+
+
+def adobe_vendor_config_path(*, for_write: bool = False) -> Path:
+    return shared_config_path(ADOBE_VENDOR_CONFIG_FILE, for_write=for_write)
 
 
 def _default_adobe_vendor_rows() -> list[dict]:
@@ -63,7 +67,7 @@ def _default_adobe_vendor_rows() -> list[dict]:
 
 def load_adobe_vendor_rows() -> list[dict]:
     try:
-        with open(ADOBE_VENDOR_CONFIG_PATH, encoding="utf-8") as f:
+        with open(adobe_vendor_config_path(), encoding="utf-8") as f:
             rows = json.load(f)
         if isinstance(rows, list) and rows:
             return rows
@@ -73,8 +77,9 @@ def load_adobe_vendor_rows() -> list[dict]:
 
 
 def save_adobe_vendor_rows(rows: list[dict]) -> None:
-    ADOBE_VENDOR_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(ADOBE_VENDOR_CONFIG_PATH, "w", encoding="utf-8") as f:
+    path = adobe_vendor_config_path(for_write=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2, ensure_ascii=False)
         f.write("\n")
 

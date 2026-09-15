@@ -82,6 +82,7 @@ from core.innovid_reconciliation import (
 )
 from rules import innovid as innovid_rules
 from core.dv_omni_reconciliation import reconcile_dv_omni
+from core.release import qa2_version, release_notes
 from core.team_roster import (
     ACCOUNTS as TEAM_ACCOUNTS,
     load_roster,
@@ -378,7 +379,9 @@ def trace(stage: str) -> None:
     No falla nunca: un diagnostico que rompe la app no sirve.
     """
     try:
-        path = Path(__file__).resolve().parents[1] / "logs" / "qa_run.log"
+        from core.paths import output_dir
+
+        path = output_dir() / "qa_run.log"
         path.parent.mkdir(parents=True, exist_ok=True)
         # Que no crezca sin fin: lo que importa son las ultimas
         # pasadas, no las de la semana pasada.
@@ -2163,6 +2166,25 @@ with st.sidebar:
         st.caption(
             "Upload the Traffic Sheet and Placement-Creative View "
             "to enable \"Save session bundle\"."
+        )
+
+    # ── Help and updates ────────────────────────────────────
+    #
+    # The changelog lives next to the code, but nobody on the team
+    # reads a repository. It travels inside the zip they are already
+    # running, so the place they find out what changed is the app
+    # itself, which is the one place they are guaranteed to open.
+    st.divider()
+
+    with st.expander(f"What's new in QA2 {qa2_version()}"):
+        _notes = release_notes()
+        if _notes:
+            st.markdown(_notes)
+        else:
+            st.caption("docs/CHANGELOG.md isn't next to the app.")
+        st.caption(
+            "Full notes, the rule guide and the security note are in "
+            "the docs/ folder of the QA2 download."
         )
 
 

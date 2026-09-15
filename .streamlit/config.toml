@@ -9,5 +9,17 @@ font = "sans serif"
 [server]
 maxUploadSize = 500
 
+# QA2 is a desktop tool that happens to be drawn in a browser. Binding to
+# localhost means the port is reachable from this machine only: nobody
+# else on the corporate network can open someone's QA session, and there
+# is no listener exposed to it. Streamlit leaves this unset by default,
+# which listens on every interface -- so it is set here on purpose.
+address = "localhost"
+
+# Belt and braces; both are Streamlit defaults, pinned so an upgrade
+# can't quietly turn them off.
+enableCORS = true
+enableXsrfProtection = true
+
 [browser]
 gatherUsageStats = false

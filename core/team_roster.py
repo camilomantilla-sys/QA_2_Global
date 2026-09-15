@@ -15,9 +15,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-TEAM_ROSTER_PATH = (
-    Path(__file__).resolve().parents[1] / "config" / "team_roster.json"
-)
+from core.paths import shared_config_path
+
+TEAM_ROSTER_FILE = "team_roster.json"
+
+
+def roster_path(*, for_write: bool = False) -> Path:
+    return shared_config_path(TEAM_ROSTER_FILE, for_write=for_write)
 
 ACCOUNTS = ("Unilever", "Wendy's", "BlackRock", "Adobe", "Support")
 
@@ -30,10 +34,11 @@ def default_roster() -> dict[str, list[str]]:
 
 def load_roster() -> dict[str, list[str]]:
     roster = default_roster()
-    if not TEAM_ROSTER_PATH.exists():
+    path = roster_path()
+    if not path.exists():
         return roster
     try:
-        data = json.loads(TEAM_ROSTER_PATH.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             for account in ACCOUNTS:
                 names = data.get(account, [])
@@ -47,7 +52,8 @@ def load_roster() -> dict[str, list[str]]:
 
 
 def save_roster(roster: dict[str, list[str]]) -> None:
-    TEAM_ROSTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    path = roster_path(for_write=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     clean = {
         account: [
             str(n).strip()
@@ -56,7 +62,7 @@ def save_roster(roster: dict[str, list[str]]) -> None:
         ]
         for account in ACCOUNTS
     }
-    TEAM_ROSTER_PATH.write_text(
+    path.write_text(
         json.dumps(clean, indent=2), encoding="utf-8"
     )
 

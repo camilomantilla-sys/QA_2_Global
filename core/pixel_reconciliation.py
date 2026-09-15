@@ -245,7 +245,13 @@ _DEFAULT_VENDORS: tuple[Vendor, ...] = (
 # policy are structural, not a simple table, so they stay in code.
 # ------------------------------------------------------------------
 
-VENDOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "vendor_pixels.json"
+from core.paths import shared_config_path
+
+VENDOR_CONFIG_FILE = "vendor_pixels.json"
+
+
+def vendor_config_path(*, for_write: bool = False) -> Path:
+    return shared_config_path(VENDOR_CONFIG_FILE, for_write=for_write)
 
 _VENDOR_FIELDS = ("name", "ts_terms", "host_terms", "column", "formats", "note", "site_exceptions")
 
@@ -316,7 +322,7 @@ def load_vendor_rows() -> list[dict]:
     the file doesn't exist yet or fails to parse.
     """
     try:
-        with open(VENDOR_CONFIG_PATH, encoding="utf-8") as f:
+        with open(vendor_config_path(), encoding="utf-8") as f:
             rows = json.load(f)
         if isinstance(rows, list) and rows:
             return rows
@@ -327,8 +333,9 @@ def load_vendor_rows() -> list[dict]:
 
 def save_vendor_rows(rows: list[dict]) -> None:
     """Writes the vendor table back to config/vendor_pixels.json."""
-    VENDOR_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(VENDOR_CONFIG_PATH, "w", encoding="utf-8") as f:
+    path = vendor_config_path(for_write=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
