@@ -15,6 +15,27 @@ REM  Si no existe, es una copia del repositorio en la maquina de quien
 REM  desarrolla: se usa el Python del sistema y su .venv, como siempre.
 REM ------------------------------------------------------------------
 
+REM ------------------------------------------------------------------
+REM  Si QA2 ya esta corriendo, no se arranca otro.
+REM
+REM  Cerrar la ventana negra NO detiene el proceso, y la siguiente vez
+REM  Streamlit encuentra el puerto ocupado y se va al de al lado. Once
+REM  vueltas, once procesos vivos -- y con ellos abiertos Windows no
+REM  deja ni borrar la carpeta de QA2. Se abre el navegador al que ya
+REM  esta y listo.
+REM ------------------------------------------------------------------
+for /f "tokens=2 delims==" %%P in ('wmic process where "name='python.exe' and commandline like '%%app_v2%%'" get processid /value 2^>nul ^| find "="') do set QA2_RUNNING=%%P
+
+if defined QA2_RUNNING (
+    echo QA2 ya esta abierto. Abriendo tu navegador.
+    echo.
+    echo Para detenerlo del todo, usa "Stop QA2.vbs".
+    echo.
+    start "" http://localhost:8501
+    timeout /t 4 >nul
+    exit /b 0
+)
+
 if exist "python\python.exe" (
     set "QA2_PYTHON=%CD%\python\python.exe"
     set "PLAYWRIGHT_BROWSERS_PATH=%CD%\browsers"

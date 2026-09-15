@@ -340,8 +340,74 @@ def test_robocopy_success_is_not_zero():
     assert "GEQ 8" in bat
 
 
+
+# ── QA2 no se multiplica ─────────────────────────────────────────────
+#
+# Camilo llego a once python.exe vivos despues de un dia de pruebas, y
+# con ellos abiertos Windows no dejaba ni borrar la carpeta. La causa
+# eran dos cosas que se alimentaban:
+#
+#   - cerrar la ventana negra NO detiene el proceso, asi que el puerto
+#     8501 seguia ocupado y el siguiente arranque se iba al 8502;
+#   - "Stop QA2.vbs" mataba lo que escuchara en el 8501, que para
+#     entonces ya no era el suyo.
+#
+# Cada vuelta dejaba uno mas.
+
+STOP = (ROOT / "Stop QA2.vbs").read_text(encoding="utf-8")
+
+
+def test_stopping_qa2_does_not_depend_on_the_port():
+    """
+    El 8501 es donde arranca, no donde esta. Buscarlo por puerto es lo
+    que hacia que "Stop" no parara nada.
+
+    Se miran las lineas de codigo: el comentario de arriba explica el
+    bug y nombra el puerto a proposito.
+    """
+    code = [
+        line for line in STOP.splitlines()
+        if line.strip() and not line.strip().startswith("'")
+    ]
+    joined = "\n".join(code)
+    assert "8501" not in joined
+    assert "netstat" not in joined.lower()
+
+
+def test_stopping_qa2_finds_it_by_what_it_runs():
+    assert "app_v2" in STOP
+    assert "streamlit" in STOP
+    assert "Win32_Process" in STOP
+
+
+def test_stopping_qa2_leaves_other_python_alone():
+    """
+    Un `taskkill /IM python.exe` habria resuelto esto y matado de paso
+    cualquier otra cosa que la persona tuviera corriendo.
+    """
+    assert "taskkill" not in STOP.lower()
+
+
+def test_stopping_qa2_kills_every_instance_not_the_first():
+    assert "For Each" in STOP
+
+
+def test_the_launcher_refuses_to_start_a_second_one():
+    for name in ("run_qa2.bat", "run_qa2_silent.bat"):
+        bat = (ROOT / name).read_text(encoding="utf-8")
+        assert "QA2_RUNNING" in bat, name
+        assert "app_v2" in bat, name
+
+
+def test_the_second_launch_opens_the_one_already_running():
+    """Que no arranque otro no puede significar que no pase nada."""
+    bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
+    assert "start \"\" http://localhost:8501" in bat
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+
 

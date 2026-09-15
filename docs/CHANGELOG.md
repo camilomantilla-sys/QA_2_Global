@@ -40,6 +40,28 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### QA2 se estaba multiplicando
+
+Once `python.exe` vivos despues de un dia de pruebas, y con ellos
+abiertos Windows no dejaba ni borrar la carpeta de QA2 -- sus archivos
+estaban en uso. Dos cosas que se alimentaban:
+
+- **Cerrar la ventana negra no detiene el proceso.** Sigue vivo con el
+  puerto 8501 tomado, asi que el siguiente arranque se va al 8502.
+- **`Stop QA2.vbs` mataba lo que escuchara en el 8501**, que para
+  entonces ya no era el suyo.
+
+Cada vuelta dejaba uno mas.
+
+Ahora `Stop QA2.vbs` los busca por lo que ejecutan --los python que
+corren `app_v2`-- y no por donde escuchan, asi que los para todos
+corra en el puerto que corra, y dice cuantos eran. Otro Python que la
+persona tenga abierto no se toca: un `taskkill /IM python.exe` habria
+resuelto esto y matado de paso lo que hubiera al lado.
+
+Y los lanzadores ya no arrancan un segundo QA2: si encuentran uno
+corriendo, abren el navegador al que ya esta.
+
 ### La actualizacion se aplica sola
 
 El zip de update trae ahora **`ACTUALIZAR QA2.bat`** en la raiz. Se
