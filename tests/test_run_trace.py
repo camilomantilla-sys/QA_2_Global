@@ -106,24 +106,33 @@ def test_only_the_chosen_section_is_drawn():
 
 def test_every_section_says_when_it_starts():
     # Para que el log diga cual es la cara, y no haya que adivinarlo.
-    assert APP_SOURCE.count('trace("section ') == 7
+    assert APP_SOURCE.count('trace("section ') == 6
 
 
-def test_signing_is_a_section_of_its_own():
+def test_signing_lives_in_the_body():
     """
-    Al final de la pagina el orden era el correcto y el resultado no:
-    el boton de firmar era lo ultimo en dibujarse, asi que en una
-    solicitud de 44 placements con su detalle no aparecia hasta que
-    el navegador terminaba de pintarlo todo. Camilo: "ni termino de
-    cargar, ni me salio el boton para firma".
+    Camilo: "a mi me gustaba firmar en el panel central".
 
-    Como seccion se dibuja sola, y se sigue llegando a ella despues de
-    haber mirado el resto.
+    Estuvo al pie de la pagina y luego como seccion aparte, las dos
+    veces para esquivar un coste que no era suyo -- lo que dejaba la
+    pagina pintando para siempre eran los 44 placements desplegados a
+    la vez.
     """
-    assert '"QA2 Review",' in APP_SOURCE
-    assert 'if _section == "QA2 Review":' in APP_SOURCE
-    # y la ultima, que es el orden de trabajo
-    assert APP_SOURCE.index('"DV Pinnacle Tags",') < APP_SOURCE.index('"QA2 Review",')
+    assert 'if _section == "QA2 Review":' not in APP_SOURCE
+    assert 'key="qa2_panel_sign_all"' in APP_SOURCE
+    # y antes del veredicto, que se calcula con lo firmado
+    assert (
+        APP_SOURCE.index('key="qa2_panel_sign_all"')
+        < APP_SOURCE.index("scorecard = findings_buffer.scorecard()")
+    )
+
+
+def test_the_reports_can_be_downloaded_from_the_top():
+    # Camilo: "que el descargable del excel este arriba como antes".
+    assert (
+        APP_SOURCE.index("download_columns = st.columns(2)")
+        < APP_SOURCE.index("SECTIONS = [")
+    )
 
 
 def test_the_reports_are_not_rebuilt_on_every_pass():
@@ -142,29 +151,22 @@ def test_signing_changes_what_the_reports_say():
     assert "review_overrides" in body
 
 
-def test_how_many_details_are_drawn_is_bounded():
+def test_only_one_placement_is_opened_at_a_time():
     """
     El servidor termina; el que no puede es el navegador.
 
-    Cada placement desplegado son decenas de elementos -- tablas de
-    creativos, fechas, rotacion, URLs, tags -- y cuarenta y cuatro de
-    golpe dejan la pagina pintando para siempre. Camilo: "nunca paro
-    el indicador y no veo la opcion de firmar", con un log que decia
-    SCRIPT RUN finished a los 53 segundos.
+    Cada placement desplegado son decenas de elementos -- creativos,
+    fechas, rotacion, URLs, tags -- y cuarenta y cuatro de golpe dejan
+    la pagina pintando para siempre: el indicador no para y no se
+    llega a firmar, con un log que dice SCRIPT RUN finished a los 53
+    segundos. Camilo: "lo que no me gustaba era el desplegable de
+    todos los placements trabajados".
 
-    La tabla de arriba sigue trayendolos todos; lo acotado es cuantos
-    se dibujan abiertos debajo.
+    La tabla los trae todos; el desplegable abre uno.
     """
-    assert "DETAIL_CHOICES" in APP_SOURCE
-    assert 'key="qa2_detail_depth"' in APP_SOURCE
-    assert "drawn_detail >= detail_limit" in APP_SOURCE
-
-
-def test_the_default_is_a_window_the_browser_can_paint():
-    body = APP_SOURCE[APP_SOURCE.index("DETAIL_CHOICES = {"):]
-    body = body[:body.index("detail_limit = DETAIL_CHOICES")]
-    assert '"First 10": 10' in body
-    assert "index=0," in body
+    assert 'key="qa2_open_placement"' in APP_SOURCE
+    assert "if placement_id != chosen_placement:" in APP_SOURCE
+    assert "DETAIL_CHOICES" not in APP_SOURCE
 
 
 def test_the_panel_says_what_it_did_last():

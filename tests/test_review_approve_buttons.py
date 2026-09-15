@@ -45,11 +45,12 @@ def test_no_rerun_runs_before_the_sign_off_controls():
     el veredicto y los informes salgan con ella puesta.
     """
     controls = SOURCE.index('key="qa2_panel_sign_all"')
-    early = [
-        line.strip() for number, line in enumerate(SOURCE.splitlines())
-        if line.strip().startswith("st.rerun()")
-        and SOURCE.index(line) < controls
-    ]
+    early = []
+    offset = 0
+    for line in SOURCE.splitlines(keepends=True):
+        if line.strip().startswith("st.rerun()") and offset < controls:
+            early.append(line.strip())
+        offset += len(line)
     assert not early, early
 
 
