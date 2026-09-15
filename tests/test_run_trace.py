@@ -106,7 +106,24 @@ def test_only_the_chosen_section_is_drawn():
 
 def test_every_section_says_when_it_starts():
     # Para que el log diga cual es la cara, y no haya que adivinarlo.
-    assert APP_SOURCE.count('trace("section ') == 6
+    assert APP_SOURCE.count('trace("section ') == 7
+
+
+def test_signing_is_a_section_of_its_own():
+    """
+    Al final de la pagina el orden era el correcto y el resultado no:
+    el boton de firmar era lo ultimo en dibujarse, asi que en una
+    solicitud de 44 placements con su detalle no aparecia hasta que
+    el navegador terminaba de pintarlo todo. Camilo: "ni termino de
+    cargar, ni me salio el boton para firma".
+
+    Como seccion se dibuja sola, y se sigue llegando a ella despues de
+    haber mirado el resto.
+    """
+    assert '"QA2 Review",' in APP_SOURCE
+    assert 'if _section == "QA2 Review":' in APP_SOURCE
+    # y la ultima, que es el orden de trabajo
+    assert APP_SOURCE.index('"DV Pinnacle Tags",') < APP_SOURCE.index('"QA2 Review",')
 
 
 def test_the_reports_are_not_rebuilt_on_every_pass():
