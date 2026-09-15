@@ -162,6 +162,22 @@ python scripts/build_bundle.py --keep-folder   # deja dist\ para mirar adentro
   distinta, porque eso produce un paquete que arranca y falla al abrir
   el navegador.
 
+### Actualizaciones
+
+Casi todos los cambios son de código y no tocan ni el intérprete ni las
+librerías. Para esos:
+
+```
+python scripts/package_release.py --update
+```
+
+Deja un zip de ~600 KB. Quien ya tiene QA2 lo descomprime **encima** de
+su carpeta y dice que sí a reemplazar. `python\` y `browsers\` no van
+dentro, así que no se tocan.
+
+Cuando cambia `requirements.txt` o el lock, eso no alcanza: hay que
+armar y repartir el paquete completo otra vez.
+
 ### Antes de subirlo
 
 ```

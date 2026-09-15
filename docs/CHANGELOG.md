@@ -40,6 +40,41 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Firmar sin evidencia no es firmar
+
+Los dos encontrados abriendo el Excel de una corrida real, ya desde el
+paquete instalado.
+
+- **El tamano al que se sirve un creativo no se veia.** Las unicas
+  columnas de dimensiones eran las del PLACEMENT, iguales en todas sus
+  filas, asi que un creativo pedido a 728x90 y servido a 720x50 salia
+  con las mismas dos celdas que uno correcto. Debajo estaba la causa
+  real: `ActualCreative` ni siquiera leia la dimension --el export la
+  trae por fila y se descartaba--, asi que el dato no existia ni para
+  compararlo ni para mostrarlo. Camilo: "la idea es firmar pero que se
+  evidencie la diferencia". Ahora hay **TS Creative Dims / Innovid
+  Creative Dims**, y cuando la TS declara una duracion ("15s", video)
+  el lado de Innovid queda en blanco en vez de inventar un desacuerdo.
+- **El morado solo aparecia cuando dos columnas llenas no coincidian.**
+  Pero se firma mucho mas que eso: una rotacion que no se pudo comparar
+  deja la columna de Innovid vacia, y un NOT_VERIFIED firmado tiene los
+  dos lados iguales. En esos casos la firma quedaba solo en Notes, que
+  obliga a leer fila por fila --justo lo que un color evita. Ahora la
+  celda de **Status** lleva el morado siempre que la fila este firmada,
+  y un par a medio llenar tambien. Un par que de verdad coincide sigue
+  verde: lo firmado era otra cosa.
+
+### Actualizar sin repartir 500 MB otra vez
+
+`python scripts/package_release.py --update` arma un zip de ~600 KB con
+el codigo y nada mas. Se descomprime ENCIMA de la carpeta instalada;
+`python\` y `browsers\` no van dentro, asi que no se tocan. Casi todos
+los cambios son de codigo, y volver a repartir el paquete entero por
+seis megas de Python es un impuesto que nadie paga dos veces.
+
+Cuando cambia `requirements.txt` o el lock, esto no alcanza y hay que
+repartir el paquete completo.
+
 ### El paquete trae Python adentro
 
 Quien recibe QA2 **no instala nada**. Ni Python, ni permisos de

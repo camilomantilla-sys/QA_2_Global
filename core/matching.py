@@ -184,6 +184,16 @@ class ActualCreative:
     clicktags: list[str] = field(default_factory=list)
     export_row: int = 0
 
+    # La dimension de ESTE creativo, no la del placement.
+    #
+    # El export la trae por fila y no se estaba leyendo, asi que un
+    # creativo servido a un tamano distinto del que pidio la Traffic
+    # Sheet no tenia como salir a la luz: las unicas columnas de
+    # dimensiones del Excel son las del placement, iguales en todas
+    # sus filas. Camilo firmo un mismatch de 728x90 contra 720x50 y el
+    # Excel le mostro los dos lados identicos.
+    dims: str = ""
+
     @property
     def running(self) -> bool:
         """
@@ -678,6 +688,7 @@ def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
                 row_type=row.row_type,
                 clicktags=list(row.multi.get("clicktag", [])),
                 export_row=row.row,
+                dims=norm_dims(row.values.get("dimensions")),
             ))
 
     if export_pl is not None:

@@ -161,5 +161,57 @@ def build(destination: Path | None = None) -> Path:
     return target
 
 
+def build_update(destination: Path | None = None) -> Path:
+    """
+    El zip pequeno: solo el codigo, para actualizar un paquete que ya
+    esta instalado.
+
+    Casi todos los cambios son de codigo -- una regla, un arreglo, una
+    columna -- y no tocan ni el interprete ni las librerias. Volver a
+    armar y repartir 500 MB por seis megas de Python es un impuesto que
+    nadie va a pagar dos veces, y a la tercera el equipo se queda con
+    una version vieja.
+
+    Esto pesa lo que pesa el codigo. Se descomprime ENCIMA de la
+    carpeta que ya tienen, respondiendo que si a reemplazar: python\ y
+    browsers\ no estan en el zip, asi que no se tocan.
+
+    Cuando cambia requirements.txt o el lock, esto NO alcanza y hay que
+    repartir el paquete completo otra vez.
+    """
+    target = destination or (ROOT.parent / f"QA2-{_version()}-update.zip")
+    stem = f"QA2-{_version()}"
+
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for path in app_files(skip=target):
+            zf.write(path, Path(stem) / path.relative_to(ROOT))
+
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    print(f"QA2 {_version()} -- update only")
+    print(f"  {target}")
+    print(f"  {target.stat().st_size / 1_048_576:.1f} MB")
+    print(f"  sha256 {digest}")
+    print()
+    print("  This carries the code and nothing else -- no interpreter,")
+    print("  no libraries, no browser. Whoever has QA2 already extracts")
+    print("  it OVER their folder and says yes to replacing files.")
+    print()
+    print("  If requirements.txt or the lock changed, this is not")
+    print("  enough: build and hand out the full package instead.")
+    return target
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--update", action="store_true",
+        help="code only, to drop over an installed QA2",
+    )
+    args = parser.parse_args()
+    build_update() if args.update else build()
+
+
 if __name__ == "__main__":
-    build()
+    main()

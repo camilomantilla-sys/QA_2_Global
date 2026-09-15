@@ -126,7 +126,7 @@ def test_the_legend_explains_the_colours():
         str(cell.value or "")
         for row in ws.iter_rows() for cell in row
     )
-    assert "signed it off by hand" in text
+    assert "signed this off by hand" in text
     assert "still open" in text
 
 
@@ -163,3 +163,119 @@ if __name__ == "__main__":
 
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+# ── la firma se ve siempre, no solo cuando hay desacuerdo ────────────
+#
+# Camilo, abriendo el Excel de una corrida real: "el Excel me los
+# marcaba las firmas manuales pero solo en la columna de notas y no me
+# lo marcaba en morado".
+#
+# No era una regresion. El morado siempre estuvo atado a que DOS
+# columnas llenas no coincidieran, y se firma mucho mas que eso: una
+# rotacion que no se pudo comparar deja la columna de Innovid vacia, y
+# un NOT_VERIFIED firmado tiene los dos lados iguales. En esos casos la
+# firma quedaba solo en Notes -- hay que leer fila por fila para
+# encontrarla, que es justo lo que un color evita.
+
+SIGNED = "MANUALLY Approved by Camilo: fechas de prueba"
+
+
+def _qa_sheet_for(rows: list[dict]):
+    empty = pd.DataFrame()
+    payload = build_excel_report(_meta(), empty, empty, empty, qa_rows=rows)
+    return load_workbook(BytesIO(payload))["QA"]
+
+
+def _fill(ws, row: int, column: str) -> str:
+    header = {c.value: c.column for c in ws[1] if c.value}
+    cell = ws.cell(row=row, column=header[column])
+    return (cell.fill.start_color.rgb or "") if cell.fill else ""
+
+
+def _is(fill_rgb: str, fill: object) -> bool:
+    return fill_rgb.endswith(fill.start_color.rgb[-6:])
+
+
+def test_a_signed_row_is_marked_on_status_even_when_the_pair_is_empty():
+    """
+    El caso que fallaba. Una rotacion que Innovid no trae: no hay nada
+    contra que comparar, alguien firma, y la fila salia sin un solo
+    color.
+    """
+    ws = _qa_sheet_for([
+        _row(Status="PASS", Notes=SIGNED,
+             **{"TS Rotation": "EVEN", "Innovid Rotation": ""}),
+    ])
+    assert _is(_fill(ws, 2, "Status"), SIGNED_OFF_FILL)
+
+
+def test_a_signed_row_is_marked_on_status_even_when_both_sides_agree():
+    """Un NOT_VERIFIED firmado: los dos lados iguales, firma igual."""
+    ws = _qa_sheet_for([
+        _row(Status="PASS", Notes=SIGNED,
+             **{"TS Rotation": "EVEN", "Innovid Rotation": "EVEN"}),
+    ])
+    assert _is(_fill(ws, 2, "Status"), SIGNED_OFF_FILL)
+
+
+def test_a_pair_that_really_agrees_stays_green_on_a_signed_row():
+    """
+    Lo firmado era otra cosa. Pintar esto de morado diria que aqui
+    hubo una discrepancia que no existio.
+    """
+    ws = _qa_sheet_for([
+        _row(Status="PASS", Notes=SIGNED,
+             **{"TS Rotation": "EVEN", "Innovid Rotation": "EVEN"}),
+    ])
+    assert _is(_fill(ws, 2, "Innovid Rotation"), AGREE_FILL)
+
+
+def test_a_half_empty_pair_on_a_signed_row_is_purple():
+    """No se pudo comparar y una persona respondio por ello."""
+    ws = _qa_sheet_for([
+        _row(Status="PASS", Notes=SIGNED,
+             **{"TS Rotation": "EVEN", "Innovid Rotation": ""}),
+    ])
+    assert _is(_fill(ws, 2, "Innovid Rotation"), SIGNED_OFF_FILL)
+
+
+def test_a_half_empty_pair_without_a_signature_stays_uncoloured():
+    """Sin firma sigue sin color: no hay acuerdo ni desacuerdo."""
+    ws = _qa_sheet_for([
+        _row(Status="REVIEW",
+             **{"TS Rotation": "EVEN", "Innovid Rotation": ""}),
+    ])
+    assert not _is(_fill(ws, 2, "Innovid Rotation"), SIGNED_OFF_FILL)
+    assert not _is(_fill(ws, 2, "Innovid Rotation"), DISAGREE_FILL)
+
+
+def test_an_empty_pair_on_a_signed_row_is_still_left_alone():
+    """Las dos vacias no son una comparacion, firmadas o no."""
+    ws = _qa_sheet_for([
+        _row(Status="PASS", Notes=SIGNED,
+             **{"TS Rotation": "", "Innovid Rotation": ""}),
+    ])
+    assert not _is(_fill(ws, 2, "Innovid Rotation"), SIGNED_OFF_FILL)
+
+
+def test_an_unsigned_row_keeps_its_own_status_colour():
+    """La firma no puede repintar lo que sigue abierto."""
+    ws = _qa_sheet_for([
+        _row(Status="FAIL",
+             **{"TS Rotation": "EVEN", "Innovid Rotation": "70/30"}),
+    ])
+    assert not _is(_fill(ws, 2, "Status"), SIGNED_OFF_FILL)
+    assert _is(_fill(ws, 2, "Innovid Rotation"), DISAGREE_FILL)
+
+
+def test_the_legend_no_longer_claims_purple_means_a_mismatch():
+    """
+    Decia "They differ, and a reviewer signed it off", que ahora seria
+    mentira en la celda de Status.
+    """
+    ws = _qa_sheet_for([_row(Status="PASS", Notes=SIGNED)])
+    text = " ".join(
+        str(c.value) for row in ws.iter_rows() for c in row if c.value
+    )
+    assert "A reviewer signed this off by hand" in text

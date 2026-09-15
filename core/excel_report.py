@@ -340,16 +340,43 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
     # entre ambos.
     for offset, row in enumerate(qa_rows, start=2):
         signed_off = "MANUALLY" in str(row.get("Notes") or "")
+
+        # La firma va SIEMPRE en la celda de Status, pase lo que pase
+        # con las columnas pareadas.
+        #
+        # Antes el morado solo aparecia cuando dos columnas llenas no
+        # coincidian. Pero se firma mucho mas que eso: una rotacion que
+        # no se pudo comparar deja la columna de Innovid vacia, y un
+        # NOT_VERIFIED firmado tiene los dos lados iguales. En esos dos
+        # casos la firma quedaba solo en Notes -- hay que leer fila por
+        # fila para encontrarla, que es justo lo que un color evita.
+        # Camilo: "el Excel me los marcaba las firmas manuales pero
+        # solo en la columna de notas y no me lo marcaba en morado".
+        if signed_off:
+            ws.cell(row=offset, column=index["Status"]).fill = SIGNED_OFF_FILL
+
         for left, right in PAIRS:
             left_value = str(row.get(left) or "").strip()
             right_value = str(row.get(right) or "").strip()
 
             if not left_value or not right_value:
                 # Falta un lado: no hay acuerdo ni desacuerdo, hay una
-                # comparacion que no se pudo hacer. Sin color.
+                # comparacion que no se pudo hacer. Sin color -- salvo
+                # que se haya firmado, y entonces es precisamente el
+                # caso que el morado describe: no se pudo comprobar y
+                # una persona respondio por ello.
+                if signed_off and (left_value or right_value):
+                    for column in (left, right):
+                        ws.cell(
+                            row=offset, column=index[column]
+                        ).fill = SIGNED_OFF_FILL
                 continue
 
             if cells_agree(left_value, right_value):
+                # Coinciden de verdad: verde, aunque la fila lleve
+                # firma. Lo firmado era otra cosa, y pintar esto de
+                # morado diria que aqui hubo una discrepancia que no
+                # existio. La celda de Status ya lleva la firma.
                 fill = AGREE_FILL
             elif signed_off:
                 # La fila es un creativo, y la nota dice que alguien
@@ -383,8 +410,9 @@ def _colour_legend(ws, row: int) -> None:
         (AGREE_FILL, "Traffic Sheet and Innovid agree"),
         (DISAGREE_FILL, "They differ, and it is still open"),
         (SIGNED_OFF_FILL,
-         "They differ, and a reviewer signed it off by hand "
-         "-- see Notes for who and why"),
+         "A reviewer signed this off by hand -- on Status, whatever "
+         "the row shows; on a pair, where that is what was signed. "
+         "See Notes for who and why"),
     )
     for offset, (fill, text) in enumerate(entries, start=1):
         swatch = ws.cell(row=row + offset, column=1, value="")

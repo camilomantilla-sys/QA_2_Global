@@ -19,7 +19,7 @@ import re
 
 from core.matching import norm_creative
 from core.colors import RED
-from core.normalize import norm_compare, normalize_weights
+from core.normalize import is_dimensions, norm_compare, normalize_weights
 
 # Las columnas, en orden. Cada par (TS, Innovid) se pinta de verde
 # cuando los dos lados coinciden.
@@ -33,6 +33,7 @@ COLUMNS = [
     "TS Dimensions", "Innovid Dimensions",
     "TS Creative ID", "Innovid Creative ID",
     "TS Creative Name", "Innovid Creative Name",
+    "TS Creative Dims", "Innovid Creative Dims",
     "TS Creative Dates", "Innovid Creative Dates",
     "TS Rotation", "Innovid Rotation",
     "TS URL", "Innovid URL",
@@ -57,6 +58,7 @@ PAIRS = [
     ("TS Dimensions", "Innovid Dimensions"),
     ("TS Creative ID", "Innovid Creative ID"),
     ("TS Creative Name", "Innovid Creative Name"),
+    ("TS Creative Dims", "Innovid Creative Dims"),
     ("TS Creative Dates", "Innovid Creative Dates"),
     ("TS Rotation", "Innovid Rotation"),
     ("CGEN TS (Adobe)", "CGEN Innovid (Adobe)"),
@@ -246,6 +248,27 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                 "Innovid Creative Name": _text(
                     (creative_actual.name or creative_actual.filename)
                     if creative_actual else ""
+                ),
+                # La dimension de ESTE creativo, que no es la del
+                # placement.
+                #
+                # "TS Dimensions" e "Innovid Dimensions" son del
+                # placement y salen iguales en todas sus filas, asi que
+                # un creativo servido a otro tamano se veia identico a
+                # uno correcto. Firmar eso no dejaba evidencia de que
+                # se firmo. Camilo: "la idea es firmar pero que se
+                # evidencie la diferencia".
+                #
+                # La Traffic Sheet escribe aqui la DURACION cuando es
+                # video ("15s"), que no se puede comparar contra
+                # 1920x1080: en ese caso se deja el lado de Innovid en
+                # blanco en vez de fabricar un desacuerdo que no
+                # existe.
+                "TS Creative Dims": _text(cl.expected.dims),
+                "Innovid Creative Dims": _text(
+                    creative_actual.dims
+                    if creative_actual and is_dimensions(cl.expected.dims)
+                    else ""
                 ),
                 "TS Creative Dates": _span(cl.expected.start, cl.expected.end),
                 "Innovid Creative Dates": (
