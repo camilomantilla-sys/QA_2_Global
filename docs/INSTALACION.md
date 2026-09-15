@@ -113,6 +113,33 @@ session"* y va directo a revisar y firmar.
 | Innovid pide iniciar sesión cada vez | Borra `config\innovid_session.json`. |
 | Se queda cargando y no aparece el botón de firma | Manda `logs\qa_run.log`. |
 
+### Cómo desinstalar (y por qué Windows no deja)
+
+QA2 se desinstala borrando su carpeta. No toca el registro ni el PATH.
+
+Pero el Explorador suele negarse, y no es que haya algo abierto: la
+carpeta lleva Chromium dentro, y sus rutas pasan de los 260 caracteres
+que Windows aguanta. Falla justo al borrar.
+
+Desde Git Bash, en la carpeta que contiene la de QA2:
+
+```bash
+mkdir -p vacia
+cmd //c "robocopy vacia QA2-1.0.0-windows /MIR" > /dev/null
+rmdir vacia QA2-1.0.0-windows
+```
+
+`robocopy` sincroniza una carpeta vacía encima —eso vacía el árbol sin
+toparse con el límite— y `rmdir` quita el cascarón.
+
+Si aun así no deja, quedó un proceso suelto. `Launch QA2 (Silent).vbs`
+no abre ninguna ventana que cerrar, así que:
+
+```bash
+tasklist | grep -i python        # ver si hay alguno
+taskkill //F //IM python.exe     # cerrarlo
+```
+
 **Cuando algo falle, manda `logs\qa_run.log`.** Guarda la hora de cada
 etapa de la corrida y es la diferencia entre adivinar y saber. No lleva
 datos de cliente: solo marcas de tiempo y nombres de etapa.
