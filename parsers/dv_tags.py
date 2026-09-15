@@ -8,7 +8,7 @@ a Display or Video column depending on format.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -53,6 +53,8 @@ class DVTagRow:
     placement_name: str = ""
     display_tag: str = ""
     video_tag: str = ""
+    #: De que archivo salio. Vacio cuando solo se cargo uno.
+    source: str = ""
 
     @property
     def has_tag(self) -> bool:
@@ -65,6 +67,9 @@ class DVTagsResult:
     sheet: str = ""
     rows: list[DVTagRow] = field(default_factory=list)
     anomalies: list[Anomaly] = field(default_factory=list)
+    #: Los archivos que se leyeron, en orden. Uno normalmente; varios
+    #: cuando la campana tiene mas de un partner (ver merge_dv_results).
+    sources: list[str] = field(default_factory=list)
 
     @property
     def fatal(self) -> bool:
@@ -76,7 +81,7 @@ class DVTagsResult:
 
 
 def parse_dv_tags(path: Path) -> DVTagsResult:
-    result = DVTagsResult(path=str(path))
+    result = DVTagsResult(path=str(path), sources=[Path(path).name])
 
     wb = load_workbook(path, data_only=True, keep_vba=False, read_only=True)
     sheet_name = resolve_sheet(wb.sheetnames, DV_SPEC.sheet_aliases)
@@ -157,3 +162,48 @@ def parse_dv_tags(path: Path) -> DVTagsResult:
         )
 
     return result
+
+
+def merge_dv_results(results: list[DVTagsResult]) -> DVTagsResult | None:
+    """
+    Varios archivos de DV Pinnacle leidos como uno solo.
+
+    Una campana puede tener mas de un partner -- Bloomberg y The New
+    York Times en la misma solicitud de BlackRock -- y DV entrega un
+    archivo por cada uno. El uploader aceptaba uno, asi que del segundo
+    partner no se validaba nada: sus placements salian como si no les
+    hubieran entregado tag.
+
+    Cada fila recuerda de que archivo vino, para que un hallazgo se
+    pueda rastrear hasta el archivo que lo trajo. Un placement repetido
+    en dos archivos se queda con la primera fila que traiga tag: es el
+    mismo placement, y que aparezca dos veces no es un hallazgo.
+    """
+    live = [r for r in results if r is not None]
+    if not live:
+        return None
+    if len(live) == 1:
+        return live[0]
+
+    merged = DVTagsResult(
+        path=" | ".join(r.path for r in live),
+        sheet=next((r.sheet for r in live if r.sheet), ""),
+    )
+
+    by_id: dict[str, DVTagRow] = {}
+    for result in live:
+        name = (result.sources or [Path(result.path).name])[0]
+        merged.sources.append(name)
+        merged.anomalies.extend(result.anomalies)
+        for row in result.rows:
+            tagged = replace(row, source=name)
+            seen = by_id.get(row.placement_id) if row.placement_id else None
+            if seen is None:
+                if row.placement_id:
+                    by_id[row.placement_id] = tagged
+                merged.rows.append(tagged)
+            elif not seen.has_tag and tagged.has_tag:
+                merged.rows[merged.rows.index(seen)] = tagged
+                by_id[row.placement_id] = tagged
+
+    return merged

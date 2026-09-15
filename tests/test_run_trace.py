@@ -41,8 +41,22 @@ def test_every_stage_of_a_run_is_traced():
         assert f'trace("{stage}")' in SOURCE or f'trace(f"{stage}' in SOURCE, stage
 
 
+def _where(stage: str) -> int:
+    """
+    Donde se traza una etapa, escrita como cadena o como f-string.
+
+    "SCRIPT RUN starts" lleva el build detras desde que se quito de la
+    barra lateral, asi que buscar la cadena cerrada no la encontraba.
+    """
+    for form in (f'"{stage}"', f'f"{stage}'):
+        at = SOURCE.find(form)
+        if at != -1:
+            return at
+    raise AssertionError(f"la etapa {stage!r} no se traza")
+
+
 def test_the_stages_are_traced_in_order():
-    at = [SOURCE.index(f'"{stage}"') for stage in STAGES]
+    at = [_where(stage) for stage in STAGES]
     assert at == sorted(at), "las etapas no van en el orden de la pasada"
 
 

@@ -40,6 +40,22 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Interfaz
+
+- **Los tags de DV Pinnacle aceptan varios archivos.** Una campana puede
+  tener mas de un partner y DV entrega un archivo por cada uno; el
+  uploader aceptaba uno solo. En la solicitud de BlackRock eran dos
+  --Bloomberg (18 placements) y The New York Times (6)-- y subiendo solo
+  el primero los 6 del segundo salian FAIL "requires DV but has no row
+  in the DV Pinnacle file". Seis hallazgos falsos sobre trabajo bien
+  hecho. Ahora se leen todos como uno, y cada fila recuerda de que
+  archivo vino.
+- **Se quito el sello del build de la barra lateral.** Al equipo no le
+  dice nada. La version sigue yendo a `qa_run.log`, que es donde hace
+  falta cuando alguien reporta un problema.
+- **Guia de instalacion** paso a paso ([`INSTALACION.md`](INSTALACION.md)):
+  descarga, arranque, conexion con Innovid y que hacer si algo falla.
+
 ### Dos casos que se leian bien y no se validaban
 
 Los dos encontrados probando solicitudes nuevas dias antes del

@@ -10,6 +10,7 @@ NOT_VERIFIED).
 
 | Document | For whom |
 |---|---|
+| [`docs/INSTALACION.md`](docs/INSTALACION.md) | Whoever is installing QA2 for the first time: download, first run, connecting Innovid, and what to do when something fails |
 | [`docs/GUIA_TECNICA.md`](docs/GUIA_TECNICA.md) | Whoever maintains QA2: every rule, the key functions of each file, and the traps that cost a debugging session |
 | [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) | IT / information-security review before rollout |
 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | The whole team: what changed in each release. Also shown inside the app, under **What's new** in the sidebar |

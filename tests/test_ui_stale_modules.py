@@ -93,7 +93,15 @@ try:
         print("with the loaded code matching disk")
         check("the app booted", "Run QA" in before)
         check("no restart warning", "Restart QA" in before, False)
-        check("build is shown", "QA build" in before)
+        # El build ya NO se dibuja: se quito antes del lanzamiento
+        # porque al equipo no le dice nada. Sigue haciendo falta para
+        # diagnosticar, asi que ahora va al log -- y esto comprueba
+        # las dos mitades de esa decision.
+        check("build is not shown", "QA build" in before, False)
+        log = Path(__file__).resolve().parents[1] / "logs" / "qa_run.log"
+        check("build is in the log",
+              "build " in (log.read_text(encoding="utf-8", errors="replace")
+                           if log.exists() else ""))
         # El testigo del clic y el contador de pasadas: sin ellos no
         # se puede distinguir "el clic no llego" de "llego y no hizo
         # nada", que costo una semana.

@@ -116,7 +116,7 @@ from core.normalize import (
 from core.tag_matching import match_tags
 from core.pdf_report import ReportMeta, build_pdf_report
 from core.excel_report import build_excel_report
-from parsers.dv_tags import parse_dv_tags
+from parsers.dv_tags import merge_dv_results, parse_dv_tags
 from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
 from parsers.ts_parser import detect_profile, parse_ts
@@ -1624,13 +1624,35 @@ with st.sidebar:
                     except KeyError:
                         return None
 
-                for _slot in ("ts", "pc", "pl", "dv"):
+                for _slot in ("ts", "pc", "pl"):
                     _name = _manifest_files.get(_slot)
                     if not _name:
                         continue
                     _data = _read_bundle_file(f"files/{_slot}/{_name}")
                     if _data is not None:
                         _restored[_slot] = _RestoredUpload(_name, _data)
+
+                # DV pasó a ser una lista -- una campaña puede tener
+                # varios partners. Un bundle viejo guardaba un solo
+                # nombre suelto, y se sigue leyendo.
+                _dv_manifest = _manifest_files.get("dv")
+                if isinstance(_dv_manifest, str):
+                    _dv_manifest = [
+                        {"name": _dv_manifest, "stored_as": _dv_manifest}
+                    ]
+                _restored_dv = []
+                for _entry in _dv_manifest or []:
+                    _stored_as = _entry.get("stored_as")
+                    _orig_name = _entry.get("name")
+                    if not _stored_as or not _orig_name:
+                        continue
+                    _data = _read_bundle_file(f"files/dv/{_stored_as}")
+                    if _data is not None:
+                        _restored_dv.append(
+                            _RestoredUpload(_orig_name, _data)
+                        )
+                if _restored_dv:
+                    _restored["dv"] = _restored_dv
 
                 _restored_tags = []
                 for _entry in _manifest_files.get("tags", []):
@@ -1790,18 +1812,24 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # Varios: una campana puede tener mas de un partner y DV entrega
+    # un archivo por cada uno. Con uno solo, del segundo partner no se
+    # validaba nada.
     uploaded_dv = st.file_uploader(
         "6. Upload DV Pinnacle Tags",
         type=["xlsx", "xlsm", "xls"],
-        accept_multiple_files=False,
+        accept_multiple_files=True,
         key="qa2_dv",
-    ) or _restored.get("dv")
+    )
+    if not uploaded_dv and _restored.get("dv"):
+        uploaded_dv = _restored["dv"]
 
     st.markdown(
         """
         <div class="upload-help">
             Optional. Only needed for placements whose "Vendors /
-            Pixels" value mentions DV (DoubleVerify).
+            Pixels" value mentions DV (DoubleVerify). Upload one file
+            per partner if the campaign has more than one.
         </div>
         """,
         unsafe_allow_html=True,
@@ -1831,14 +1859,6 @@ with st.sidebar:
             "nothing to type."
         )
 
-        # La rama y el build, sin la ruta de la carpeta: ocupaba tres
-        # lineas y solo hizo falta el dia que habia dos copias del
-        # repositorio en la misma maquina.
-        _root, _branch = running_checkout()
-        st.caption(
-            f"QA build: `{running_version()}` on `{_branch}`"
-        )
-
         # Fuera del try gigante de la seccion de resultados, y antes
         # que ella: si un clic llego al servidor, esto lo dice pase
         # lo que pase mas abajo. Sin este testigo, "el boton no hace
@@ -1852,7 +1872,12 @@ with st.sidebar:
         # Python. Si sube y aun asi no se firma nada, el problema es
         # mio y esta despues del clic.
         trace("-" * 40)
-        trace("SCRIPT RUN starts")
+        # El build ya no se dibuja -- al equipo no le dice nada y
+        # ocupaba sitio. Al log si: cuando alguien manda un
+        # qa_run.log, lo primero que hace falta saber es que
+        # version estaba corriendo.
+        trace(f"SCRIPT RUN starts (build {running_version()} "
+              f"on {running_checkout()[1]})")
         _runs = int(st.session_state.get("qa2_script_runs", 0)) + 1
         st.session_state["qa2_script_runs"] = _runs
 
@@ -2107,12 +2132,20 @@ with st.sidebar:
                 )
                 _files_manifest["pl"] = _pl_name
 
-            if uploaded_dv is not None:
-                _dv_name = Path(uploaded_dv.name).name
+            _dv_entries = []
+            for _index, _dv_file in enumerate(uploaded_dv or [], start=1):
+                _stored_as = f"{_index}_{Path(_dv_file.name).name}"
                 _zf.writestr(
-                    f"files/dv/{_dv_name}", uploaded_dv.getbuffer()
+                    f"files/dv/{_stored_as}", _dv_file.getbuffer()
                 )
-                _files_manifest["dv"] = _dv_name
+                _dv_entries.append(
+                    {
+                        "name": Path(_dv_file.name).name,
+                        "stored_as": _stored_as,
+                    }
+                )
+            if _dv_entries:
+                _files_manifest["dv"] = _dv_entries
 
             _tag_entries = []
             for _index, _tag_file in enumerate(uploaded_tags or [], start=1):
@@ -2336,13 +2369,14 @@ if True:
 
         dv_result = None
 
-        if uploaded_dv is not None:
+        if uploaded_dv:
             with st.spinner(
-                "Reading DV Pinnacle Tags..."
+                f"Reading {len(uploaded_dv)} DV Pinnacle file(s)..."
             ):
-                dv_result = cached_parse_dv_tags(
-                    uploaded_dv.getvalue(), uploaded_dv.name
-                )
+                dv_result = merge_dv_results([
+                    cached_parse_dv_tags(_f.getvalue(), _f.name)
+                    for _f in uploaded_dv
+                ])
 
         # ----------------------------------------------------
         # Tag analysis
@@ -2432,23 +2466,28 @@ if True:
             )
 
         if dv_result is not None:
-            file_rows.append(
-                {
-                    "File": uploaded_dv.name,
-                    "Expected Type": "DV Pinnacle Tags",
-                    "Detected Type": (
-                        f"DV Pinnacle | sheet {dv_result.sheet}"
-                        if dv_result.sheet
-                        else "Not Recognized"
-                    ),
-                    "Status": (
-                        "FATAL"
-                        if result_is_fatal(dv_result)
-                        else "OK"
-                    ),
-                    "Records": len(dv_result.rows),
-                }
-            )
+            for _dv_name in (dv_result.sources or ["DV Pinnacle Tags"]):
+                _dv_rows = [
+                    r for r in dv_result.rows
+                    if not r.source or r.source == _dv_name
+                ]
+                file_rows.append(
+                    {
+                        "File": _dv_name,
+                        "Expected Type": "DV Pinnacle Tags",
+                        "Detected Type": (
+                            f"DV Pinnacle | sheet {dv_result.sheet}"
+                            if dv_result.sheet
+                            else "Not Recognized"
+                        ),
+                        "Status": (
+                            "FATAL"
+                            if result_is_fatal(dv_result)
+                            else "OK"
+                        ),
+                        "Records": len(_dv_rows),
+                    }
+                )
 
         files_dataframe = pd.DataFrame(file_rows)
 
@@ -5455,10 +5494,11 @@ if True:
                 )
 
                 if dv_result is not None and dv_result.sheet:
+                    _dv_names = ", ".join(dv_result.sources)
                     st.caption(
                         f"Read from sheet \"{dv_result.sheet}\" of "
-                        f"{uploaded_dv.name}"
-                        if uploaded_dv is not None
+                        f"{_dv_names}"
+                        if _dv_names
                         else f"Read from sheet \"{dv_result.sheet}\""
                     )
 
