@@ -1,6 +1,12 @@
 # QA2 — Comandos
 
-Para copiar y pegar. Todo sale en `dist\`.
+Para copiar y pegar. Todo sale en `dist/`.
+
+> **Estos comandos son para Git Bash** (la ventana que dice `MINGW64`),
+> que es donde se clona el repositorio. Ahí `%USERPROFILE%` no existe
+> y las rutas van con `/`, no con `\`. Si abres la carpeta desde
+> Explorador con *clic derecho → Git Bash Here*, ya estás en el sitio
+> y no hace falta ningún `cd`.
 
 ---
 
@@ -9,9 +15,9 @@ Para copiar y pegar. Todo sale en `dist\`.
 `pytest` no viene con la aplicación — el paquete que recibe el equipo
 corre QA2, no las pruebas. Instálalo una vez:
 
-```bat
-cd %USERPROFILE%\Downloads\QA_2_Global
-.venv\Scripts\activate
+```bash
+cd ~/Downloads/QA_2_Global
+source .venv/Scripts/activate
 pip install -r requirements-dev.txt
 ```
 
@@ -22,13 +28,19 @@ pip install -r requirements-dev.txt
 Cambió el código — una regla, un arreglo, una columna. **No** cambió
 `requirements.txt` ni el lock.
 
-```bat
-cd %USERPROFILE%\Downloads\QA_2_Global
+```bash
+cd ~/Downloads/QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
-.venv\Scripts\activate
+source .venv/Scripts/activate
 python -m pytest tests/
 python scripts/package_release.py --update
 ```
+
+> Mira lo que imprime `git pull`. Si dice **`Already up to date`** ya
+> tienes lo último. Si dice `Updating <algo>..<algo>`, fíjate en que el
+> segundo sea el commit que esperabas: armar el zip antes de haber
+> traído el cambio deja un zip viejo con nombre nuevo, y no hay forma
+> de notarlo mirando el archivo.
 
 Deja `dist\QA2-<versión>-update.zip`, unos 600 KB.
 
@@ -57,10 +69,10 @@ Innovid al actualizar.
 La primera vez, o cuando cambió `requirements.txt` o
 `requirements-lock-windows.txt`.
 
-```bat
-cd %USERPROFILE%\Downloads\QA_2_Global
+```bash
+cd ~/Downloads/QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
-.venv\Scripts\activate
+source .venv/Scripts/activate
 python -m pytest tests/
 python scripts/build_bundle.py
 ```
@@ -74,17 +86,17 @@ mete Chromium.
 
 Variantes:
 
-```bat
-python scripts/build_bundle.py --no-innovid    ::  ~300 MB menos, sin Chromium
-python scripts/build_bundle.py --keep-folder   ::  deja dist\ sin borrar, para mirar adentro
+```bash
+python scripts/build_bundle.py --no-innovid    #  ~300 MB menos, sin Chromium
+python scripts/build_bundle.py --keep-folder   #  deja dist/ sin borrar, para mirar adentro
 ```
 
 ---
 
 ## ¿Cuál de los dos?
 
-```bat
-git diff --name-only <lo-que-ya-repartiste>..HEAD | findstr requirements
+```bash
+git diff --name-only <lo-que-ya-repartiste>..HEAD | grep requirements
 ```
 
 - **No sale nada** → `--update` (600 KB)
@@ -97,7 +109,7 @@ de la carpeta que tiene tu equipo.
 
 ## Antes de subir cualquiera de los dos
 
-```bat
+```bash
 python -m pytest tests/
 ```
 
@@ -111,7 +123,7 @@ repartir arranca.
 
 Para alguien que ya tiene Python y quiere el proyecto, no el paquete:
 
-```bat
+```bash
 python scripts/package_release.py
 ```
 
@@ -119,19 +131,19 @@ python scripts/package_release.py
 
 ## Publicar una versión
 
-```bat
-::  1. subir el numero
+```bash
+#  1. subir el numero
 echo 1.1.0 > VERSION
 
-::  2. anotar que cambio, arriba del todo
-notepad docs\CHANGELOG.md
+#  2. anotar que cambio, arriba del todo
+notepad docs/CHANGELOG.md
 
-::  3. commit y push
+#  3. commit y push
 git add -A
 git commit -m "Version 1.1.0"
 git push -u origin claude/tag-url-validation-5adcd4
 
-::  4. armar y repartir
+#  4. armar y repartir
 python scripts/package_release.py --update
 ```
 
@@ -144,6 +156,6 @@ equipo se entera.
 
 ## Si algo sale mal en la máquina de alguien
 
-Pídele `logs\qa_run.log`. Guarda la hora de cada etapa y dice hasta
+Pídele `logs/qa_run.log`. Guarda la hora de cada etapa y dice hasta
 dónde llegó la corrida, incluida la versión que estaba corriendo. No
 lleva datos de cliente.
