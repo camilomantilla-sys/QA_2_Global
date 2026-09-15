@@ -125,19 +125,17 @@ def test_signing_changes_what_the_reports_say():
     assert "review_overrides" in body
 
 
-def test_the_placement_detail_is_optional():
+def test_the_placement_detail_is_always_drawn():
     """
-    Streamlit ejecuta el cuerpo de un desplegable este abierto o
-    cerrado. Setenta y dos placements con sus tablas de creativos,
-    fechas, rotacion y tags era lo caro de cada pasada -- y mientras
-    una pasada no termina, el clic siguiente no se atiende.
+    Camilo lo pidio al derecho: "me parece mejor que se muestren todos
+    de una apenas corro el QA asi toque esperar un poquito mas".
 
-    La tabla de arriba sigue trayendolos todos; lo que se apaga por
-    defecto en las solicitudes grandes es el detalle de cada uno.
+    La casilla que lo apagaba en solicitudes grandes se fue. Lo que
+    sostiene el coste ahora es el orden: firmar esta al final, y para
+    llegar alli la pasada ya ha terminado.
     """
-    assert 'key="qa2_show_detail"' in APP_SOURCE
-    assert "if not show_detail:" in APP_SOURCE
-    assert "DETAIL_LIMIT = 25" in APP_SOURCE
+    assert "qa2_show_detail" not in APP_SOURCE
+    assert "if not show_detail:" not in APP_SOURCE
 
 
 def test_the_panel_says_what_it_did_last():

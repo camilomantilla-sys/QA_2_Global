@@ -29,26 +29,28 @@ SOURCE = APP.read_text(encoding="utf-8")
 RESULTS_TRY = SOURCE.index("\nif True:\n    try:")
 
 
-def test_the_results_section_never_asks_for_another_pass():
+def test_no_rerun_runs_before_the_sign_off_controls():
     """
-    Un st.rerun() aqui se come el clic que lo provoco.
+    Un st.rerun() por ENCIMA de los botones se come el clic.
 
-    La barra lateral se dibuja antes de que exista un solo hallazgo,
-    asi que para poner el numero en el rotulo de su boton pedia una
-    pasada mas desde la seccion de resultados. Esa pasada DESCARTA la
-    que esta corriendo -- y con ella el boton de firmar, que se evalua
-    doscientas lineas mas abajo. Se pulsaba firmar, el script volvia a
-    empezar, y en la pasada nueva el boton ya devolvia False: nada
-    firmado, sin error y sin rastro.
+    Asi era antes: la barra lateral pedia una pasada mas para saber
+    cuantos hallazgos habia, desde cientos de lineas por encima del
+    boton de firmar. Esa pasada descarta la que esta corriendo -- y en
+    la siguiente el boton ya devuelve False, porque el clic esta
+    gastado. Nada firmado, sin error y sin rastro. Camilo, sobre tres
+    solicitudes distintas: "no me deja aprobarlos el boton de firma".
 
-    Camilo, sobre tres solicitudes distintas: "no me deja aprobarlos
-    el boton de firma".
+    Debajo de los botones es otra cosa: alli el clic ya se atendio y
+    la firma ya esta guardada, y la pasada nueva solo sirve para que
+    el veredicto y los informes salgan con ella puesta.
     """
-    called = [
-        line.strip() for line in SOURCE.splitlines()
+    controls = SOURCE.index('key="qa2_panel_sign_all"')
+    early = [
+        line.strip() for number, line in enumerate(SOURCE.splitlines())
         if line.strip().startswith("st.rerun()")
+        and SOURCE.index(line) < controls
     ]
-    assert not called, called
+    assert not early, early
 
 
 def test_there_is_one_place_to_sign_and_it_is_the_panel():

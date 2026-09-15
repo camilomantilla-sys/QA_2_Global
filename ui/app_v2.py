@@ -2847,310 +2847,64 @@ if True:
         # Un PASS no se firma: ya esta bien, y meterlo aqui convertia
         # el panel en la lista entera del QA -- 778 filas donde habia
         # 114 que revisar.
+        # Lo firmado, antes de que nadie mire nada.
+        #
+        # El panel de QA2 Review se dibuja ABAJO, despues de los
+        # placements: primero se miran, luego se firma. Pero el
+        # veredicto, las metricas y los dos informes de arriba tienen
+        # que salir ya con las firmas puestas, asi que lo que se
+        # aprobo -- que vive en session_state, no en el panel -- se
+        # lee y se aplica aqui.
         trace("building the review panel")
-        # Vacio mientras no haya panel: sin hallazgos que revisar no
-        # hay nada firmado, y la firma del informe lo necesita igual.
-        review_overrides: dict = {}
         REVIEWABLE = ("REVIEW", "FAIL", "NOT_VERIFIED")
         review_findings = [
             finding for finding in findings_buffer.findings
             if finding.status.value in REVIEWABLE
         ]
 
-        # Lo que ya se aprobo vive en session_state y no en el editor:
-        # un lote toca decenas de filas a la vez, y el data_editor solo
-        # relee su contenido cuando cambia su key. Sin esto, aprobar en
-        # bloque no se veia hasta tocar otra cosa.
-        #
-        # Se lee ANTES del expander porque su titulo tiene que decir
-        # cuantos quedan. Contando solo review_findings, el titulo
-        # seguia diciendo "(25)" despues de aprobar los 25 -- la
-        # aprobacion funcionaba y parecia que no, que es peor que si
-        # fallara.
         _review_state: dict = st.session_state.setdefault(
             "qa2_review_state", {}
         )
 
-        # El numero, para el rotulo de la barra lateral. Sin pedir
-        # otra pasada: un st.rerun() aqui descarta la pasada en curso
-        # -- y con ella el clic que la habia provocado, porque el
-        # boton de firmar se evalua doscientas lineas mas abajo. Se
-        # pulsaba firmar y no se firmaba nada, sin error y sin rastro.
-        # La barra lateral puede ir una pasada por detras; los
-        # controles que importan estan aqui al lado.
         st.session_state["qa2_review_pending"] = len(review_findings)
 
-        if review_findings:
-            with st.expander(
-                f"📝 QA2 Review ({len(review_findings)})",
-                expanded=True,
-            ):
-                # El resumen se reserva aqui y se rellena al final,
-                # cuando ya se sabe que quedo aprobado.
-                #
-                # Antes se pintaba primero y se forzaba un st.rerun()
-                # para que cuadrara. Ese rerun vuelve a correr el
-                # script entero -- con Innovid conectado, la mitad de
-                # la app -- asi que pulsar el boton parecia no hacer
-                # nada durante un buen rato. Un hueco reservado da el
-                # mismo numero sin volver a empezar.
-                _summary_slot = st.empty()
+        # Aprobaciones que ya no encuentran su hallazgo.
+        #
+        # finding_id es un hash de la regla, el placement, el creativo
+        # y los valores comparados. Si el QA se vuelve a correr con
+        # datos distintos -- Innovid respondio otra cosa, o cambiaron
+        # las reglas -- los ids cambian y lo firmado antes deja de
+        # casar con nada. Callarlo se ve exactamente como que el boton
+        # no funciona, asi que se cuenta aqui y el panel lo dice.
+        _live = {finding.finding_id for finding in review_findings}
+        _orphans = [key for key in _review_state if key not in _live]
+        for key in _orphans:
+            _review_state.pop(key, None)
+        st.session_state["qa2_review_orphans"] = len(_orphans)
 
-                st.caption(
-                    "QA2 is mandatory: the second-pass reviewer goes "
-                    "through what's below and signs off what is "
-                    "acceptable. Everything at once, one group at a "
-                    "time, or tick the rows in the table one by one. "
-                    "Whatever you approve counts as PASS from here "
-                    "down: the "
-                    "verdict, the tabs, the PDF and the Excel.\n\n"
-                    "Failures are in this list too, and signing one "
-                    "off does not hide it: the report and the Excel "
-                    "say \"MANUALLY Approved by ...\" so nobody "
-                    "later mistakes it for a check that passed on its "
-                    "own. The observation is optional, but it is the "
-                    "only place the reason survives."
-                )
+        # Marcado es firmado, con razon o sin ella.
+        review_overrides = {
+            finding.finding_id: {
+                "approved": True,
+                "note": str(
+                    _review_state[finding.finding_id].get("note") or ""
+                ).strip(),
+            }
+            for finding in review_findings
+            if _review_state.get(finding.finding_id, {}).get("approved")
+        }
 
-                _review_nonce = st.session_state.setdefault(
-                    "qa2_review_nonce", 0
-                )
-                _approved_before = sum(
-                    1 for finding in review_findings
-                    if _review_state.get(
-                        finding.finding_id, {}
-                    ).get("approved")
-                )
-
-                # La tabla es para mirar y, si se quiere, firmar fila
-                # por fila; los botones de arriba hacen el lote.
-                _pending = len(review_findings) - _approved_before
-
-                # Firmar, aqui, donde esta la tabla.
-                #
-                # Estos controles vivian en la barra lateral, que se
-                # dibuja ANTES de que exista un solo hallazgo: para
-                # poner el numero en el rotulo hacia falta volver a
-                # correr el script entero desde aqui abajo. Y ese
-                # st.rerun() descarta la pasada en curso -- con el
-                # clic dentro. Se pulsaba firmar, el script volvia a
-                # empezar, y en la pasada nueva el boton ya devolvia
-                # False: nada firmado, sin error y sin rastro.
-                #
-                # Aqui el numero ya se sabe: se pulsa y queda firmado
-                # en la misma pasada.
-                _panel_note = st.text_input(
-                    "Observation (optional)",
-                    placeholder="Why this is acceptable",
-                    key="qa2_panel_note",
-                )
-
-                # Lo ultimo que se hizo, con su hora.
-                #
-                # Un clic durante una pasada que aun corre se pierde:
-                # Streamlit no lo atiende. Sin este rastro, "no
-                # registro el clic" y "lo registro y no paso nada" se
-                # ven igual desde fuera -- que es donde se fueron tres
-                # rondas de este arreglo.
-                _last_action = st.session_state.get(
-                    "qa2_review_last_action"
-                )
-                if _last_action:
-                    st.caption(f"Last action: {_last_action}")
-
-                _button_columns = st.columns([1, 1, 2])
-
-                if _button_columns[0].button(
-                    f"Sign off all {len(review_findings)}",
-                    key="qa2_panel_sign_all",
-                    use_container_width=True,
-                ):
-                    sign_findings(review_findings, _panel_note)
-
-                if _button_columns[1].button(
-                    "Clear signatures",
-                    key="qa2_panel_clear",
-                    use_container_width=True,
-                ):
-                    clear_signatures()
-
-                _panel_groups = bulk_groups(review_findings)
-
-                if len(_panel_groups) > 1:
-                    _chosen = _button_columns[2].multiselect(
-                        "Or sign off only these groups",
-                        options=list(_panel_groups),
-                        key="qa2_panel_groups",
-                    )
-                    if _chosen and _button_columns[2].button(
-                        f"Sign off the {len(_chosen)} chosen group(s)",
-                        key="qa2_panel_sign_groups",
-                        use_container_width=True,
-                    ):
-                        sign_findings(
-                            [
-                                finding for name in _chosen
-                                for finding in _panel_groups.get(name, [])
-                            ],
-                            _panel_note,
-                        )
-
-                st.divider()
-
-                # La key del editor sale de session_state, que
-                # _sign() acaba de subir: asi la tabla se dibuja ya
-                # con lo firmado, sin volver a correr el script.
-                _editor_key = (
-                    f"qa2_review_approval_"
-                    f"{st.session_state['qa2_review_nonce']}"
-                )
-
-                st.data_editor(
-                    pd.DataFrame(
-                        [
-                            {
-                                "Approve": bool(
-                                    _review_state.get(
-                                        finding.finding_id, {}
-                                    ).get("approved")
-                                ),
-                                "Status": finding.status.value,
-                                "Rule": finding.rule_id,
-                                "Placement ID": finding.placement_id,
-                                "Creative ID": finding.creative_id,
-                                "Finding": finding.message,
-                                "Observation": str(
-                                    _review_state.get(
-                                        finding.finding_id, {}
-                                    ).get("note", "")
-                                ),
-                            }
-                            for finding in review_findings
-                        ]
-                    ),
-                    use_container_width=True,
-                    hide_index=True,
-                    disabled=[
-                        "Status", "Rule", "Placement ID", "Creative ID",
-                        "Finding",
-                    ],
-                    key=_editor_key,
-                )
-
-                # _review_state es la unica verdad. El editor solo
-                # aporta lo que la persona acaba de tocar: Streamlit
-                # lo guarda como deltas en "edited_rows". Leer la
-                # tabla entera borraba lo que el boton acababa de
-                # firmar, porque la tabla va un render por detras.
-                _editor_state = st.session_state.get(_editor_key)
-                _edits = {}
-                if isinstance(_editor_state, dict):
-                    _edits = _editor_state.get("edited_rows") or {}
-
-                for _row_index, _changes in _edits.items():
-                    try:
-                        finding = review_findings[int(_row_index)]
-                    except (ValueError, IndexError):
-                        continue
-
-                    entry = dict(_review_state.get(finding.finding_id, {}))
-
-                    if _changes.get("Approve") is False:
-                        _review_state.pop(finding.finding_id, None)
-                        continue
-                    if _changes.get("Approve") is True:
-                        entry["approved"] = True
-                    if "Observation" in _changes:
-                        entry["note"] = str(_changes["Observation"] or "")
-
-                    if entry.get("approved"):
-                        entry.setdefault("note", "")
-                        _review_state[finding.finding_id] = entry
-
-                # Marcado es firmado, con razon o sin ella.
-                review_overrides = {
-                    finding.finding_id: {
-                        "approved": True,
-                        "note": str(
-                            _review_state[finding.finding_id].get("note")
-                            or ""
-                        ).strip(),
-                    }
-                    for finding in review_findings
-                    if _review_state.get(finding.finding_id, {}).get(
-                        "approved"
-                    )
-                }
-
-                # Aprobaciones que ya no encuentran su hallazgo.
-                #
-                # finding_id es un hash de la regla, el placement, el
-                # creativo y los valores comparados. Si el QA se
-                # vuelve a correr con datos distintos -- Innovid
-                # respondio otra cosa, o cambiaron las reglas -- los
-                # ids cambian y lo firmado antes deja de casar con
-                # nada. Callarlo se ve exactamente como que el boton
-                # no funciona.
-                _live = {finding.finding_id for finding in review_findings}
-                _orphans = [key for key in _review_state if key not in _live]
-                if _orphans:
-                    for key in _orphans:
-                        _review_state.pop(key, None)
-                    st.warning(
-                        f"{len(_orphans)} approval(s) from an earlier "
-                        "run no longer match anything in this one -- "
-                        "the QA was re-run over different data, so "
-                        "they were dropped. Sign off again below."
-                    )
-
-                _signed = len(review_overrides)
-                _left = len(review_findings) - _signed
-
-                if _signed:
-                    _summary_slot.success(
-                        f"{_signed} of {len(review_findings)} approved "
-                        "and counted as PASS. "
-                        + (
-                            f"{_left} still to review."
-                            if _left
-                            else "Nothing left to review here."
-                        )
-                    )
-                else:
-                    _summary_slot.info(
-                        f"{len(review_findings)} to review. Nothing "
-                        "approved yet."
-                    )
-
-                _no_reason = [
-                    finding for finding in review_findings
-                    if finding.status.value == "FAIL"
-                    and finding.finding_id in review_overrides
-                    and not review_overrides[finding.finding_id]["note"]
-                ]
-                if _no_reason:
-                    st.caption(
-                        f"{len(_no_reason)} failure(s) signed off with "
-                        "no observation. They count as PASS and the "
-                        "report says they were approved by hand -- "
-                        "but whoever reads it later won't know why."
-                    )
-
-                if review_overrides:
-                    findings_buffer._items = apply_review_overrides(
-                        findings_buffer.findings,
-                        review_overrides,
-                        approved_by=record_qa2_by,
-                    )
-                    findings_buffer._seen = {
-                        finding.finding_id
-                        for finding in findings_buffer._items
-                    }
-        else:
-            st.caption(
-                "📝 QA2 Review: no REVIEW items on this run, so "
-                "there's nothing to approve here."
+        if review_overrides:
+            findings_buffer._items = apply_review_overrides(
+                findings_buffer.findings,
+                review_overrides,
+                approved_by=record_qa2_by,
             )
+            findings_buffer._seen = {
+                finding.finding_id
+                for finding in findings_buffer._items
+            }
+
 
         scorecard = findings_buffer.scorecard()
 
@@ -3819,31 +3573,6 @@ if True:
             ),
         ))
 
-        download_columns = st.columns(2)
-
-        download_columns[0].download_button(
-            "Download PDF Report",
-            data=pdf_report_bytes,
-            file_name=(
-                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-            ),
-            mime="application/pdf",
-            use_container_width=True,
-        )
-
-        download_columns[1].download_button(
-            "Download Excel Report",
-            data=excel_report_bytes,
-            file_name=(
-                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-            ),
-            mime=(
-                "application/vnd.openxmlformats-officedocument"
-                ".spreadsheetml.sheet"
-            ),
-            use_container_width=True,
-        )
-
         # Una seccion a la vez, y solo esa se dibuja.
         #
         # Con st.tabs, Streamlit ejecuta el cuerpo de TODAS las
@@ -3969,35 +3698,6 @@ if True:
             _overview_slot = st.container()
             overview_rows: list[dict] = []
 
-            # El detalle de cada placement, bajo peticion.
-            #
-            # Streamlit ejecuta el cuerpo de un desplegable este
-            # abierto o cerrado. Setenta y dos placements con sus
-            # tablas de creativos, fechas, rotacion y tags es la parte
-            # cara de la pasada -- y mientras una pasada no termina,
-            # el clic siguiente no se atiende: es lo que hacia que
-            # firmar no hiciera nada en las solicitudes grandes.
-            #
-            # La tabla de arriba siempre los trae todos. El detalle se
-            # dibuja solo, y por defecto, cuando son pocos.
-            DETAIL_LIMIT = 25
-
-            if "qa2_show_detail" not in st.session_state:
-                st.session_state["qa2_show_detail"] = (
-                    len(placement_ids) <= DETAIL_LIMIT
-                )
-
-            show_detail = st.checkbox(
-                "Show each placement's detail below",
-                key="qa2_show_detail",
-                help=(
-                    "Off by default on big requests: drawing every "
-                    "placement's creatives, dates and tags is what "
-                    "makes each click slow. Search above to narrow "
-                    "the list first."
-                ),
-            )
-
             visible_count = 0
 
             for placement_id in placement_ids:
@@ -4070,9 +3770,6 @@ if True:
                         "In Innovid": "Yes" if actual else "No",
                     }
                 )
-
-                if not show_detail:
-                    continue
 
                 placement_label = (
                     f"{STATUS_ICON.get(status, '')} "
@@ -5453,6 +5150,257 @@ if True:
                     "The same table is in the Excel report, on the "
                     "DV Pinnacle Tags sheet."
                 )
+
+
+        # ====================================================
+        # QA2 Review -- firmar, cuando ya se ha mirado todo
+        # ====================================================
+        #
+        # Camilo: "uno ve los placements, los posibles mismatches y
+        # luego si se firma... lo ultimo que se pueda hacer antes de
+        # descargar el excel sea firmar o clear".
+        #
+        # Ademas de ser el orden de trabajo, es el orden seguro.
+        # Streamlit dibuja de arriba abajo y no atiende un clic
+        # mientras la pasada sigue corriendo: con el panel arriba se
+        # podia pulsar firmar sobre una pagina a medio construir, y
+        # ese clic se perdia sin dejar rastro. Aqui abajo, si se
+        # llega es porque la pasada ya termino.
+
+        st.divider()
+
+        if not review_findings:
+            st.caption(
+                "📝 QA2 Review: no REVIEW items on this run, so "
+                "there's nothing to approve here."
+            )
+        else:
+            with st.expander(
+                f"📝 QA2 Review ({len(review_findings)})",
+                expanded=True,
+            ):
+                _signed = len(review_overrides)
+                _left = len(review_findings) - _signed
+
+                if _signed:
+                    st.success(
+                        f"{_signed} of {len(review_findings)} approved "
+                        "and counted as PASS. "
+                        + (
+                            f"{_left} still to review."
+                            if _left
+                            else "Nothing left to review here."
+                        )
+                    )
+                else:
+                    st.info(
+                        f"{len(review_findings)} to review. Nothing "
+                        "approved yet."
+                    )
+
+                _orphans = int(
+                    st.session_state.get("qa2_review_orphans", 0)
+                )
+                if _orphans:
+                    st.warning(
+                        f"{_orphans} approval(s) from an earlier run no "
+                        "longer match anything in this one -- the QA "
+                        "was re-run over different data, so they were "
+                        "dropped. Sign off again below."
+                    )
+
+                st.caption(
+                    "QA2 is mandatory: the second-pass reviewer goes "
+                    "through what's below and signs off what is "
+                    "acceptable. Everything at once, one group at a "
+                    "time, or tick the rows in the table one by one. "
+                    "Whatever you approve counts as PASS: the "
+                    "verdict, the sections, the PDF and the Excel.\n\n"
+                    "Failures are in this list too, and signing one "
+                    "off does not hide it: the report and the Excel "
+                    "say \"MANUALLY Approved by ...\" so nobody "
+                    "later mistakes it for a check that passed on its "
+                    "own. The observation is optional, but it is the "
+                    "only place the reason survives."
+                )
+
+                # Lo ultimo que se hizo, con su hora. Un clic tragado
+                # por una pasada en curso y un clic que no hizo nada
+                # se ven igual desde fuera.
+                _last_action = st.session_state.get(
+                    "qa2_review_last_action"
+                )
+                if _last_action:
+                    st.caption(f"Last action: {_last_action}")
+
+                _panel_note = st.text_input(
+                    "Observation (optional)",
+                    placeholder="Why this is acceptable",
+                    key="qa2_panel_note",
+                )
+
+                _button_columns = st.columns([1, 1, 2])
+
+                # El st.rerun() de aqui es seguro y el de antes no lo
+                # era: este corre DESPUES de que el boton se haya
+                # evaluado y la firma este guardada en session_state.
+                # El de antes corria cientos de lineas por encima de
+                # los botones, asi que descartaba la pasada con el
+                # clic dentro.
+                if _button_columns[0].button(
+                    f"Sign off all {len(review_findings)}",
+                    key="qa2_panel_sign_all",
+                    use_container_width=True,
+                ):
+                    sign_findings(review_findings, _panel_note)
+                    st.rerun()
+
+                if _button_columns[1].button(
+                    "Clear signatures",
+                    key="qa2_panel_clear",
+                    use_container_width=True,
+                ):
+                    clear_signatures()
+                    st.rerun()
+
+                _panel_groups = bulk_groups(review_findings)
+
+                if len(_panel_groups) > 1:
+                    _chosen = _button_columns[2].multiselect(
+                        "Or sign off only these groups",
+                        options=list(_panel_groups),
+                        key="qa2_panel_groups",
+                    )
+                    if _chosen and _button_columns[2].button(
+                        f"Sign off the {len(_chosen)} chosen group(s)",
+                        key="qa2_panel_sign_groups",
+                        use_container_width=True,
+                    ):
+                        sign_findings(
+                            [
+                                finding for name in _chosen
+                                for finding in _panel_groups.get(name, [])
+                            ],
+                            _panel_note,
+                        )
+                        st.rerun()
+
+                st.divider()
+
+                _editor_key = (
+                    f"qa2_review_approval_"
+                    f"{st.session_state.get('qa2_review_nonce', 0)}"
+                )
+
+                st.data_editor(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Approve": bool(
+                                    _review_state.get(
+                                        finding.finding_id, {}
+                                    ).get("approved")
+                                ),
+                                "Status": finding.status.value,
+                                "Rule": finding.rule_id,
+                                "Placement ID": finding.placement_id,
+                                "Creative ID": finding.creative_id,
+                                "Finding": finding.message,
+                                "Observation": str(
+                                    _review_state.get(
+                                        finding.finding_id, {}
+                                    ).get("note", "")
+                                ),
+                            }
+                            for finding in review_findings
+                        ]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=[
+                        "Status", "Rule", "Placement ID", "Creative ID",
+                        "Finding",
+                    ],
+                    key=_editor_key,
+                )
+
+                # _review_state es la unica verdad. El editor solo
+                # aporta lo que la persona acaba de tocar: Streamlit
+                # lo guarda como deltas en "edited_rows".
+                _editor_state = st.session_state.get(_editor_key)
+                _edits = {}
+                if isinstance(_editor_state, dict):
+                    _edits = _editor_state.get("edited_rows") or {}
+
+                _touched = False
+
+                for _row_index, _changes in _edits.items():
+                    try:
+                        finding = review_findings[int(_row_index)]
+                    except (ValueError, IndexError):
+                        continue
+
+                    entry = dict(_review_state.get(finding.finding_id, {}))
+
+                    if _changes.get("Approve") is False:
+                        if _review_state.pop(finding.finding_id, None):
+                            _touched = True
+                        continue
+                    if _changes.get("Approve") is True:
+                        entry["approved"] = True
+                    if "Observation" in _changes:
+                        entry["note"] = str(_changes["Observation"] or "")
+
+                    if entry.get("approved"):
+                        entry.setdefault("note", "")
+                        if _review_state.get(finding.finding_id) != entry:
+                            _review_state[finding.finding_id] = entry
+                            _touched = True
+
+                # Una fila marcada a mano tambien tiene que mover el
+                # veredicto y los informes, que se calculan arriba.
+                if _touched:
+                    st.rerun()
+
+                _no_reason = [
+                    finding for finding in review_findings
+                    if finding.status.value == "FAIL"
+                    and finding.finding_id in review_overrides
+                    and not review_overrides[finding.finding_id]["note"]
+                ]
+                if _no_reason:
+                    st.caption(
+                        f"{len(_no_reason)} failure(s) signed off with "
+                        "no observation. They count as PASS and the "
+                        "report says they were approved by hand -- "
+                        "but whoever reads it later won't know why."
+                    )
+
+
+        download_columns = st.columns(2)
+
+        download_columns[0].download_button(
+            "Download PDF Report",
+            data=pdf_report_bytes,
+            file_name=(
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+        download_columns[1].download_button(
+            "Download Excel Report",
+            data=excel_report_bytes,
+            file_name=(
+                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            ),
+            mime=(
+                "application/vnd.openxmlformats-officedocument"
+                ".spreadsheetml.sheet"
+            ),
+            use_container_width=True,
+        )
 
         trace("SCRIPT RUN finished")
 
