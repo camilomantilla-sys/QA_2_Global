@@ -13,6 +13,7 @@ Initial validations:
   TAG-009 Embedded dimensions.
   TAG-010 Empty tag.
   TAG-011 Duplicate placement within the file.
+  TAG-014 Landing page carried inside a 1x1 click tag.
 """
 from __future__ import annotations
 
@@ -273,6 +274,8 @@ def evaluate(
         # en una sola solicitud de Adobe -- y cada uno se llevaba por
         # delante una revision que no existia.
 
+        _landing_page_in_click_tag(link, buffer)
+
         # TAG-010: the row must contain at least one tag.
 
         if row.tag_count == 0:
@@ -398,3 +401,101 @@ def evaluate(
                         ),
                         reason=tag_source,
                     )
+
+
+# ------------------------------------------------------------------
+# TAG-014: la landing page va dentro del click tag de un 1x1
+# ------------------------------------------------------------------
+
+
+def _clicked_url(raw: str) -> str:
+    """
+    A donde manda un click tag de 1x1.
+
+    Flashtalking lo cierra con `&url=<landing page>` y la landing page
+    ocupa el resto de la cadena -- con sus propios `?` y `&` dentro,
+    asi que no se puede leer como un parametro cualquiera: es la cola.
+
+        .../click/8/328665;11103057;6403794;211;0/?gdpr=${GDPR}
+        &us_privacy=${US_PRIVACY}&force_transparent=true
+        &url=https://www.martinsfoods.com/?999=SplashPage&997=...
+
+    `Update_Clicktag1` usa el mismo parametro para otra cosa --
+    `&url=45754586`, un identificador -- asi que solo cuenta cuando lo
+    que hay detras es de verdad una URL. Eso deja fuera esa columna
+    sola, sin tener que nombrarla.
+    """
+    text = str(raw or "").strip()
+    if "&url=" not in text:
+        return ""
+    tail = text.rsplit("&url=", 1)[1].strip()
+    return tail if tail.lower().startswith(("http://", "https://")) else ""
+
+
+def _landing_page_in_click_tag(link, buffer: FindingsBuffer) -> None:
+    """
+    TAG-014 -- el tag dice a donde va el click, y la TS tambien.
+
+    Idea del equipo de Camilo: "en el static clicktag para 1x1 siempre
+    va a estar la lp que viene en la ts". Es la unica comprobacion que
+    mira el DESTINO dentro del archivo entregado: las demas miran
+    campaign id, placement id y dimensiones. Y es independiente de los
+    exports de Innovid -- valida el artefacto que se manda al sitio.
+    """
+    from core.urls import URL_MATCH, compare_urls
+
+    row = link.tag_row
+    expected = getattr(link, "expected", None)
+    expected_url = str(getattr(expected, "url", "") or "").strip()
+
+    for tag in row.tags:
+        actual_url = _clicked_url(tag.raw)
+        if not actual_url:
+            continue
+
+        common = {
+            "rule_id": "TAG-014",
+            "domain": Domain.URL,
+            "entity_type": EntityType.PLACEMENT,
+            "placement_id": row.placement_id,
+            "expected": expected_url,
+            "actual": actual_url,
+        }
+
+        if not expected_url:
+            # Sin landing page declarada no hay nada contra que
+            # comparar. Se dice cual lleva el tag, que es lo unico
+            # que se sabe.
+            buffer.not_verified(
+                message=(
+                    f"The {tag.column_name} tag clicks through to a "
+                    "landing page, but the Traffic Sheet declares "
+                    "none for this placement."
+                ),
+                **common,
+            )
+            continue
+
+        comparison = compare_urls(expected_url, actual_url)
+
+        if comparison.result == URL_MATCH:
+            buffer.pass_(
+                message=(
+                    f"The {tag.column_name} tag clicks through to the "
+                    "landing page the Traffic Sheet asks for."
+                ),
+                **common,
+            )
+        else:
+            buffer.fail(
+                message=(
+                    f"The {tag.column_name} tag clicks through to "
+                    "another landing page."
+                ),
+                reason=comparison.note,
+                recommended_action=(
+                    "Regenerate the tag from the placement with the "
+                    "landing page the Traffic Sheet declares."
+                ),
+                **common,
+            )

@@ -164,7 +164,7 @@ def test_only_one_placement_is_opened_at_a_time():
 
     La tabla los trae todos; el desplegable abre uno.
     """
-    assert 'key=f"qa2_row_{placement_id}"' in APP_SOURCE
+    assert 'f"qa2_row_{placement_id}"' in APP_SOURCE
     assert 'st.session_state["qa2_open_placement"]' in APP_SOURCE
     assert "if not _is_open:" in APP_SOURCE
     assert "DETAIL_CHOICES" not in APP_SOURCE

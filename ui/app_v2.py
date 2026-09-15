@@ -1223,6 +1223,47 @@ st.markdown(
             color: var(--wpp-indigo-dark);
         }
 
+        /* La lista de placements.
+           Cada fila es un boton, para poder abrir una sola: sin esto
+           salen como cajas centradas y separadas, que es todo lo
+           contrario de una lista. */
+        [class*="st-key-qa2_row"] button {
+            justify-content: flex-start;
+            text-align: left;
+            border: 1px solid #E3E7F3;
+            border-radius: 7px;
+            padding: 5px 12px;
+            min-height: 0;
+            font-size: 0.85rem;
+            font-weight: 400;
+            color: var(--wpp-indigo-dark);
+            background: #FFFFFF;
+            box-shadow: none;
+        }
+        [class*="st-key-qa2_row"] button p {
+            font-size: 0.85rem;
+            font-weight: 400;
+            letter-spacing: 0.1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        [class*="st-key-qa2_row"] button:hover {
+            border-color: var(--wpp-indigo);
+            background: #F4F6FE;
+            color: var(--wpp-indigo);
+        }
+        [class*="st-key-qa2_row"] {
+            margin-bottom: -9px;
+        }
+        /* La fila abierta, marcada. */
+        [class*="st-key-qa2_rowopen"] button {
+            border-color: var(--wpp-indigo);
+            border-left: 4px solid var(--wpp-indigo);
+            background: #F4F6FE;
+            font-weight: 600;
+        }
+
         .section-note {
             background: #EDF0FF;
             border-left: 5px solid var(--wpp-indigo);
@@ -4037,12 +4078,23 @@ if True:
                     f"{expected.dims or '-'}  |  "
                     f"{len(creative_links)} creative(s)  |  "
                     f"{len(tag_records)} tag row(s)  |  "
-                    f"{expected.name[:105]}"
+                    # Recortado para que la fila quepa en una linea:
+                    # dos lineas por placement convierten la lista en
+                    # un muro.
+                    + (
+                        expected.name[:72] + "…"
+                        if len(expected.name) > 73
+                        else expected.name
+                    )
                 )
 
                 if st.button(
                     placement_label,
-                    key=f"qa2_row_{placement_id}",
+                    key=(
+                        f"qa2_rowopen_{placement_id}"
+                        if _is_open
+                        else f"qa2_row_{placement_id}"
+                    ),
                     use_container_width=True,
                 ):
                     st.session_state["qa2_open_placement"] = (
