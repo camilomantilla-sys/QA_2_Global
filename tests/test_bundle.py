@@ -280,7 +280,68 @@ def test_pytest_is_a_development_dependency_not_a_shipped_one():
     assert "pytest" not in shipped.lower()
 
 
+
+# ── el que aplica la actualizacion ───────────────────────────────────
+
+def test_the_update_carries_something_that_applies_it():
+    """
+    "Abre el zip y arrastra el contenido" no es lo que hace la gente.
+    Le dan a Extraer todo, que crea una carpeta con el nombre del zip,
+    y la actualizacion se queda ahi sin aplicarse -- sin ningun error,
+    porque la carpeta existe y los archivos estan. Paso en la primera
+    entrega real.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build_update
+
+    target = Path(tempfile.mkdtemp()) / "update.zip"
+    build_update(target)
+    assert "ACTUALIZAR QA2.bat" in zipfile.ZipFile(target).namelist()
+
+
+def test_the_applier_refuses_to_copy_over_a_running_qa2():
+    """Con QA2 abierto, Windows no deja reemplazar sus archivos."""
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "tasklist" in bat
+    assert "python.exe" in bat
+
+
+def test_the_applier_checks_it_found_qa2_before_copying():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "ui\\app_v2.py" in bat
+
+
+def test_the_applier_never_touches_what_must_survive():
+    """
+    El interprete, el navegador y la sesion de Innovid no estan en el
+    zip, asi que copiar encima no puede tocarlos -- y el .bat lo dice
+    antes de preguntar, que es lo que hace que alguien se atreva.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    for kept in ("python\\", "browsers\\", "config\\", "logs\\"):
+        assert kept in bat, kept
+
+
+def test_the_applier_asks_before_doing_anything():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "set /p CONFIRM" in bat
+    assert "Cancelado" in bat
+
+
+def test_robocopy_success_is_not_zero():
+    """
+    robocopy devuelve 0-7 cuando fue bien y 8+ cuando fallo, al reves
+    que todo lo demas. Tratarlo como un comando normal daria el update
+    por fallido siempre que copiara algo.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "GEQ 8" in bat
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+

@@ -40,6 +40,20 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### La actualizacion se aplica sola
+
+El zip de update trae ahora **`ACTUALIZAR QA2.bat`** en la raiz. Se
+extrae donde sea, se hace doble clic, y el resto lo hace el .bat: busca
+la carpeta de QA2, avisa si esta abierta (con QA2 corriendo Windows no
+deja reemplazar sus archivos), dice que va a tocar y que no, y pregunta
+antes.
+
+Las instrucciones eran "abre el zip y arrastra el contenido", y eso no
+es lo que hace la gente: le dan a Extraer todo, que crea una carpeta
+con el nombre del zip, y la actualizacion se queda ahi sin aplicarse.
+**Sin dar ningun error** -- la carpeta existe, los archivos estan, y
+QA2 sigue con la version vieja. Paso en la primera entrega real.
+
 ### Windows lee el texto distinto que Linux
 
 `read_text()` sin `encoding` usa **cp1252 en Windows** y UTF-8 en

@@ -54,23 +54,21 @@ python scripts/package_release.py --update
 
 Deja `dist\QA2-<versión>-update.zip`, unos 600 KB.
 
-**Cómo lo instala tu equipo** — este zip **no trae carpeta adentro**, a
-propósito, para que los archivos caigan justo encima de los suyos:
+**Lo que le dices a tu equipo** — tres pasos:
 
-1. Abrir la carpeta de QA2 que ya tienen
-2. Doble clic al .zip para ver adentro
-3. Seleccionar todo (`Ctrl+A`) y arrastrarlo a esa carpeta
-4. Decir que sí a reemplazar
+1. Extraer el .zip donde sea (*Extraer todo* está bien)
+2. Cerrar QA2 si lo tienen abierto
+3. Doble clic a **`ACTUALIZAR QA2.bat`** que viene dentro
 
-`python\`, `browsers\`, `config\innovid_credentials.env` y `logs\` no
-van dentro del zip, así que no se tocan: nadie pierde su sesión de
-Innovid al actualizar.
+Ese .bat busca su carpeta de QA2, le dice qué va a reemplazar, pregunta
+antes, y deja intactos `python\`, `browsers\`, `config\` y `logs\` —
+nadie pierde su sesión de Innovid al actualizar.
 
-> El zip completo **sí** trae una carpeta adentro (`QA2-1.0.0-windows`)
-> porque se extrae en un sitio nuevo. El de update no, porque se
-> extrae dentro de uno que ya existe. Si trajera carpeta, no se
-> superpondría con nada: dejaría una carpeta nueva al lado y la
-> aplicación sin actualizar, **sin dar ningún error**.
+> Antes las instrucciones eran "abre el zip y arrastra el contenido", y
+> eso no es lo que hace la gente: le dan a *Extraer todo*, que crea una
+> carpeta con el nombre del zip, y la actualización se queda ahí sin
+> aplicarse — **sin dar ningún error**, porque la carpeta existe y los
+> archivos están. Pasó en la primera entrega real.
 
 ---
 

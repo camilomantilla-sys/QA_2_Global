@@ -208,6 +208,18 @@ def build_update(destination: Path | None = None) -> Path:
         for path in app_files(skip=target):
             zf.write(path, path.relative_to(ROOT))
 
+        # El que aplica la actualizacion, en la raiz del zip.
+        #
+        # "Abre el zip y arrastra el contenido" no es lo que hace la
+        # gente: le dan a Extraer todo, que crea una carpeta con el
+        # nombre del zip, y la actualizacion se queda ahi sin
+        # aplicarse. Sin ningun error: la carpeta existe, los archivos
+        # estan, y QA2 sigue con la version vieja. Paso en la primera
+        # entrega real.
+        applier = ROOT / "scripts" / "update_template.bat"
+        if applier.exists():
+            zf.write(applier, "ACTUALIZAR QA2.bat")
+
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     print(f"QA2 {_version()} -- update only")
     print(f"  {target}")
@@ -215,13 +227,14 @@ def build_update(destination: Path | None = None) -> Path:
     print(f"  sha256 {digest}")
     print()
     print("  The code and nothing else -- no interpreter, no libraries,")
-    print("  no browser. There is no folder inside it on purpose, so the")
-    print("  files land straight on top of the ones already there:")
+    print("  no browser. Tell the team just this:")
     print()
-    print("    1. open the QA2 folder you already have")
-    print("    2. double-click this .zip to look inside it")
-    print("    3. select everything (Ctrl+A) and drag it into that folder")
-    print("    4. say yes to replacing")
+    print("    1. extract the .zip wherever (Extract All is fine)")
+    print("    2. close QA2 if it is open")
+    print('    3. double-click "ACTUALIZAR QA2.bat" inside')
+    print()
+    print("  It finds their QA2, shows what it will replace, asks, and")
+    print("  leaves python\\, browsers\\, config\\ and logs\\ alone.")
     print()
     print("  If requirements.txt or the lock changed, this is not")
     print("  enough: build and hand out the full package instead.")
