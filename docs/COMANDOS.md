@@ -17,9 +17,14 @@ corre QA2, no las pruebas. Instálalo una vez:
 
 ```bash
 cd ~/Downloads/QA_2_Global
+git pull origin claude/tag-url-validation-5adcd4
 source .venv/Scripts/activate
 pip install -r requirements-dev.txt
 ```
+
+> El `git pull` va **antes** a propósito: `requirements-dev.txt` llegó
+> en un commit, así que instalarlo sin haberlo traído falla con
+> *"Could not open requirements file"*.
 
 ---
 
@@ -33,8 +38,13 @@ cd ~/Downloads/QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
 source .venv/Scripts/activate
 python -m pytest tests/
+rm -rf dist
 python scripts/package_release.py --update
 ```
+
+> `rm -rf dist` antes de armar: si no, un zip de una corrida anterior
+> se queda ahí al lado del nuevo y a la hora de subirlo hay dos, con
+> nombres parecidos y sin forma de saber cuál es cuál.
 
 > Mira lo que imprime `git pull`. Si dice **`Already up to date`** ya
 > tienes lo último. Si dice `Updating <algo>..<algo>`, fíjate en que el
