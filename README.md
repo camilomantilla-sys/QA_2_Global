@@ -40,15 +40,36 @@ shared drive is exactly where they must not go. See
 
 ## Distributing QA2 to the team
 
+**The team installs nothing** — no Python, no admin rights, nothing
+from IT. The package carries its own interpreter, so they extract the
+zip and double-click `run_qa2.bat`.
+
+Build it once per release, on a Windows machine:
+
+```bash
+python scripts/build_bundle.py
+```
+
+It downloads a portable Python (python-build-standalone, the same one
+`uv` uses), installs the libraries into it, adds Playwright's Chromium,
+copies the project and zips the lot — about 500 MB, and a few minutes.
+It refuses to finish if a credential file made it in.
+
+The first build writes `requirements-lock-<platform>.txt`. **Commit
+it**: `requirements.txt` says `pandas>=2.2.0`, which is right for
+development and wrong for a release — without the lock, rebuilding in
+two months ships versions nobody tested.
+
+For a code-only zip (no interpreter, for someone who already has
+Python) there is still:
+
 ```bash
 python scripts/package_release.py
 ```
 
-Builds `QA2-<version>.zip` next to the project and prints a SHA-256.
-It leaves out the sign-in, every spreadsheet, the Git history and the
-virtual environment, and refuses to finish if a credential file made it
-in. Upload the zip to the team's SharePoint library and send the link;
-whoever receives it unzips it and double-clicks `run_qa2.bat`.
+Full instructions, including what to do when a corporate proxy blocks
+the Chromium download, are in
+[`docs/INSTALACION.md`](docs/INSTALACION.md).
 
 Bump `VERSION` and add an entry to `docs/CHANGELOG.md` before packaging —
 the app reads both, so the team sees what changed without opening a

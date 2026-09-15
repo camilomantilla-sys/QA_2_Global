@@ -84,3 +84,4 @@ logs/
 tests/fixtures/ts/*.xlsx
 tests/fixtures/ts/*.xlsm
 tests/fixtures/ts/*.xls
+dist/

@@ -40,6 +40,34 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El paquete trae Python adentro
+
+Quien recibe QA2 **no instala nada**. Ni Python, ni permisos de
+administrador, ni pedirle nada a IT: se extrae el zip y se hace doble
+clic. Era el bloqueador real del lanzamiento --"yo no voy a poner a
+descargar python a 30 personas"-- y en una maquina corporativa
+probablemente ni podrian.
+
+- `scripts/build_bundle.py` arma el paquete: descarga un Python
+  portable (python-build-standalone, el mismo que usa uv), le instala
+  las librerias, le mete el Chromium de Playwright y comprime todo. Se
+  hace una vez por version, en una maquina Windows.
+- `run_qa2.bat` usa el Python del paquete si esta, y el del sistema con
+  su `.venv` si no. El mismo archivo sirve para el equipo y para quien
+  desarrolla.
+- **Las versiones quedan fijadas** en `requirements-lock-<plataforma>.txt`.
+  `requirements.txt` dice `pandas>=2.2.0`, que esta bien para
+  desarrollar y mal para un paquete: sin el lock, armarlo dos meses
+  despues trae otras versiones y el equipo corre algo que nunca paso
+  las pruebas, en silencio.
+- El Chromium local se reutiliza **solo si es la revision exacta** que
+  pide el Playwright del paquete. Una distinta produce un paquete que
+  arranca y falla al abrir el navegador -- el peor momento para
+  enterarse. Si no se puede descargar (proxy corporativo), el paquete
+  se arma igual y lo dice.
+- [`INSTALACION.md`](INSTALACION.md) reescrita: para el equipo, para
+  quien arma el paquete, y para quien desarrolla.
+
 ### Interfaz
 
 - **Los tags de DV Pinnacle aceptan varios archivos.** Una campana puede

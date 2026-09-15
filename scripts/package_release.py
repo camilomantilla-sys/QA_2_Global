@@ -41,6 +41,13 @@ SKIP_DIRS = {
     "logs",
     "backups",
     "node_modules",
+    # Donde build_bundle.py deja lo que arma. Sin esta linea el paquete
+    # se copia a si mismo: 157 archivos pasaron a 12.630 y el zip a
+    # 1,3 GB.
+    "dist",
+    # El Python y el navegador que trae un paquete ya armado, por si
+    # alguien empaqueta desde una carpeta que ya los tiene.
+    "browsers",
 }
 
 # Individual files never packaged, matched on the file name.
@@ -80,6 +87,24 @@ def _reason(path: Path) -> str:
     if path.name.startswith("~$"):
         return "Excel lock file"
     return ""
+
+
+def app_files(root: Path = ROOT, skip: Path | None = None) -> list[Path]:
+    """
+    Los archivos del proyecto que si viajan, y por que se quedan los
+    demas. Lo usa tanto el zip de codigo como el paquete autocontenido,
+    que no puede tener reglas propias sobre que es un secreto.
+    """
+    included: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        if skip is not None and path.resolve() == skip.resolve():
+            continue
+        if _reason(path):
+            continue
+        included.append(path)
+    return included
 
 
 def build(destination: Path | None = None) -> Path:
