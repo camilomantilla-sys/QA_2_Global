@@ -6,7 +6,8 @@ porque la cache le devolvia el intento fallido durante quince minutos,
 mucho despues de que el bug estuviera arreglado.
 """
 import sys, types
-sys.path.insert(0, "/home/user/QA_2_Global")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Un st minimo: solo session_state, que es lo que usa la funcion.
 class FakeState(dict):
@@ -65,5 +66,6 @@ cached_fetch_innovid("328634", ("99999",))
 check("a different placement set refetches", calls["n"], 4)
 
 print()
-if fails: print(f"{len(fails)} FAILURE(S): {fails}"); sys.exit(1)
+if fails:
+    raise AssertionError(f"{len(fails)} FAILURE(S): {fails}")
 print("Cache behaviour verified.")

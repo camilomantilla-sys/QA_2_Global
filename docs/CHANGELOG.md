@@ -40,6 +40,36 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### `pytest tests/` nunca habia corrido fuera de una maquina
+
+Camilo lo corrio en Windows y no fallaron unas pruebas: no corrio
+NINGUNA de las 488.
+
+    Failed to launch chromium because executable doesn't exist at
+    \opt\pw-browsers\chromium-1194\chrome-linux\chrome
+    INTERNALERROR> SystemExit: 1
+
+Dos fallos encadenados. Seis archivos de prueba traian la ruta del
+navegador del contenedor donde se escribio el codigo, copiada de uno a
+otro; en Windows no existe. Y esos archivos son scripts que terminaban
+en `sys.exit(1)`: bajo pytest, un SystemExit durante la RECOLECCION no
+es un fallo, es un INTERNALERROR que descarta la corrida entera.
+
+El paso que protege lo que se le entrega al equipo solo funcionaba en
+la maquina donde esa ruta existia, y salia verde, que es la peor forma
+de estar roto.
+
+- Ya no se le dice a Playwright donde esta el navegador: lo sabe, y
+  honra `PLAYWRIGHT_BROWSERS_PATH`. Sin navegador instalado, esos
+  archivos se saltan con el motivo y el comando para instalarlo.
+- `sys.exit(1)` pasa a `AssertionError`, que pytest reporta como lo que
+  es y deja correr al resto.
+- Las rutas absolutas del repositorio y `.venv/bin` (que en Windows es
+  `.venv/Scripts`) tambien estaban fijas. Arregladas.
+- `tests/test_portable_tests.py` mira el texto de los demas archivos y
+  falla si vuelve a aparecer cualquiera de las cuatro cosas. Es barato:
+  no lanza nada.
+
 ### Firmar sin evidencia no es firmar
 
 Los dos encontrados abriendo el Excel de una corrida real, ya desde el

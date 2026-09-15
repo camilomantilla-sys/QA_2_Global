@@ -10,12 +10,11 @@ Mandar el primero produce exactamente "Invalid CSRF Token".
 import json, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-sys.path.insert(0, "/home/user/QA_2_Global")
-from playwright.sync_api._generated import BrowserType  # noqa: E402
-_real = BrowserType.launch
-BrowserType.launch = lambda self, **kw: _real(self, **{
-    **kw, "args": ["--no-sandbox"],
-    "executable_path": "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"})
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _browser import fail, patch_launch, require_browser  # noqa: E402
+
+require_browser()
+patch_launch()
 import core.innovid_api as api  # noqa: E402
 from core.innovid_api import _csrf_from_cookies, fetch_campaign  # noqa: E402
 
@@ -98,5 +97,4 @@ with sync_playwright() as p:
 srv.shutdown()
 (api.APP_ORIGIN, api.CM_BASE, api.DT_BASE, api._API_HOST) = _REAL_ENDPOINTS
 print()
-if fails: print(f"{len(fails)} FAILURE(S): {fails}"); sys.exit(1)
-print("CSRF source verified.")
+fail(fails, "CSRF source")

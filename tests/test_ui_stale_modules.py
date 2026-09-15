@@ -16,9 +16,21 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _browser import LAUNCH_ARGS, fail, require_browser  # noqa: E402
+
+require_browser()
+
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "core" / "innovid_api.py"
-PYTHON = ROOT / ".venv" / "bin" / "python"
+
+# .venv/bin en Linux y macOS, .venv/Scripts en Windows. Estaba fijo a
+# bin/python, asi que en Windows el subproceso nunca arrancaba.
+_VENV_BIN = ROOT / ".venv" / ("Scripts" if sys.platform == "win32" else "bin")
+PYTHON = _VENV_BIN / ("python.exe" if sys.platform == "win32" else "python")
+if not PYTHON.exists():
+    PYTHON = Path(sys.executable)
 
 
 def _free_port() -> int:
@@ -78,14 +90,10 @@ app = f"http://127.0.0.1:{port}"
 
 try:
     if not _wait_for(app):
-        print("FAILURE: la app no arranco")
-        sys.exit(1)
+        raise AssertionError("the app did not start")
 
     with sync_playwright() as p:
-        b = p.chromium.launch(
-            args=["--no-sandbox"],
-            executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-        )
+        b = p.chromium.launch(args=LAUNCH_ARGS)
         page = b.new_page(viewport={"width": 1400, "height": 1000})
         page.goto(app, wait_until="domcontentloaded")
 
@@ -126,7 +134,4 @@ finally:
         server.kill()
 
 print()
-if fails:
-    print(f"{len(fails)} FAILURE(S): {fails}")
-    sys.exit(1)
-print("Stale-code warning verified.")
+fail(fails, "Stale-code warning")
