@@ -651,8 +651,9 @@ def test_the_launcher_opens_the_browser_since_streamlit_will_not():
 def test_the_launcher_pins_the_port():
     """Si Streamlit se mueve de puerto, la URL que abrimos no sirve."""
     assert "start_qa2.py 8501" in MAIN_BAT
+    assert "start_qa2.py\" 8501" in (ROOT / "QA2.bat").read_text(encoding="utf-8")
     starter = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
-    assert '"--server.port", port' in starter
+    assert '"--server.port", str(port)' in starter
 
 
 def test_the_pid_is_written_by_the_process_that_serves():

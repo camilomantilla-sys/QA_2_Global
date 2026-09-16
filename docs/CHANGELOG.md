@@ -40,6 +40,30 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### QA2 se abre con doble clic y sin ventana
+
+    "yo no quiero que mi amiga tenga que abrir ninguna terminal ni
+     nada solo abrir la app"
+
+**`QA2.bat`** es ahora el unico archivo que el equipo necesita. Arranca
+con `pythonw.exe` --que viene dentro del paquete y corre sin consola--
+y no deja ninguna ventana. El navegador lo abre QA2 cuando el servidor
+responde de verdad, no al lanzarlo: una pestana en blanco apuntando a
+un servidor que todavia no existe no la arregla nadie.
+
+Arrancar sin ventana tiene un precio, y es el que hundio al lanzador
+`.vbs`: sin consola, un fallo no se ve por ningun lado. Aqui un hilo
+vigila el puerto, y si el servidor no responde lo dice en un cuadro de
+dialogo --con ctypes, no con Windows Script Host, que esta bloqueado--
+y apunta a `logs/qa2_startup.log`, donde queda escrito todo lo que
+Streamlit imprimio.
+
+Abrir QA2 dos veces ya no arranca un segundo: abre el navegador al que
+ya esta corriendo.
+
+`run_qa2.bat` se queda como la version **con** ventana, para cuando hay
+que ver que pasa.
+
 ### Fuera los .vbs: la directiva de IT los bloquea
 
 La companera de Camilo abrio el lanzador y le salio:

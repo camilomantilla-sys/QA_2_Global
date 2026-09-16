@@ -4,6 +4,11 @@ setlocal
 cd /d "%~dp0"
 
 REM ------------------------------------------------------------------
+REM  La version CON ventana, para ver que pasa mientras arranca.
+REM  Para el dia a dia se usa QA2.bat, que no deja ninguna.
+REM ------------------------------------------------------------------
+
+REM ------------------------------------------------------------------
 REM  Dos formas de arrancar, y la carpeta dice cual.
 REM
 REM  Si existe python\python.exe, este es el paquete que se le entrega

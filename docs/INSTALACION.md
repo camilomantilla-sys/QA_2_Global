@@ -33,16 +33,23 @@ ni pedirle nada a IT. El paquete trae todo dentro.
 
 ### 2. Abrir
 
-Doble clic en **`run_qa2.bat`**.
+Doble clic en **`QA2.bat`**.
 
-Tu navegador se abre solo en `http://localhost:8501`. La primera vez
-tarda unos segundos; no hay instalación que esperar.
+No deja ninguna ventana. Tu navegador se abre solo en
+`http://localhost:8501` en unos segundos — no hay nada que instalar ni
+que esperar.
 
-**Deja abierta la ventana negra mientras trabajas.** Es QA2 corriendo;
-si la cierras, se detiene.
+Para cerrarlo, doble clic en **`Stop QA2.bat`**.
 
-Para detenerlo, cierra esa ventana o haz doble clic en
-**`Stop QA2.bat`**.
+| Archivo | Para qué |
+|---|---|
+| **`QA2.bat`** | Abrir QA2. Es el único que necesitas |
+| `Stop QA2.bat` | Cerrarlo |
+| `run_qa2.bat` | Abrirlo **con** ventana, para ver qué pasa si algo falla |
+
+> Si QA2 no levanta, te sale un aviso diciéndolo y dónde quedó escrito
+> el error (`logs\qa2_startup.log`). Si necesitas ver más, abre
+> `run_qa2.bat`: ese deja la ventana con todo lo que Streamlit imprime.
 
 > Había también unos lanzadores `.vbs`. Se quitaron: la directiva de
 > seguridad de WPP bloquea Windows Script Host —*"This script is
