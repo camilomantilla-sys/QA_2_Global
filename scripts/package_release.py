@@ -59,6 +59,17 @@ SKIP_FILES = {
     "Thumbs.db",
 }
 
+# Cosas de desarrollo que no le sirven a quien recibe QA2.
+#
+# No estorbaban, pero la raiz de la carpeta tenia trece archivos donde
+# tres importan, y el dia que alguien abrio el lanzador equivocado dejo
+# claro que eso no es inofensivo: cuanto menos haya, menos hay que
+# elegir. El codigo sigue entero; se van los artefactos del build.
+SKIP_DEV_FILES = {
+    ".gitignore",
+    "requirements-dev.txt",
+}
+
 # Suffixes never packaged. Spreadsheets are client data by default: the
 # only ones in the tree are test fixtures and whatever someone left
 # lying around, and neither belongs in a file that gets shared.
@@ -96,6 +107,10 @@ def _reason(path: Path) -> str:
         return f"{sorted(skipped)[0]}/"
     if path.name in SKIP_FILES:
         return "sign-in or local secret"
+    if path.name in SKIP_DEV_FILES:
+        return "development only"
+    if path.name.startswith("requirements-lock-"):
+        return "build lock"
     if path.suffix.lower() in SKIP_SUFFIXES:
         return f"*{path.suffix.lower()}"
     if path.name.startswith("~$"):
