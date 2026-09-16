@@ -40,6 +40,31 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El inicio de sesion de Innovid no decia cuando fallaba
+
+Camilo, probando el paquete descargado de SharePoint: "nunca se me abre
+la pestana para iniciar sesion". Y la app, tan tranquila:
+
+    A browser window is opening. Sign in, open a campaign...
+
+Ese texto era fijo. El boton lanzaba el proceso y lo anunciaba sin
+mirar si seguia vivo, asi que cuando moria al instante --lo que pasa si
+el paquete se armo sin Chromium-- se quedaba esperando una ventana que
+no iba a llegar nunca. Sin error, sin log, sin nada.
+
+Ahora se espera unos segundos: un navegador que va a abrirse se abre en
+ese tiempo, y un fallo tambien ocurre en ese tiempo. Si el proceso
+murio, se dice por que y se puede ver lo que imprimio.
+
+El motivo se escribe segun a quien va dirigido: a quien recibio un zip
+sin navegador se le dice que pida un paquete completo --y que **el
+resto de QA2 funciona igual**-- y no un `pip install` que no puede
+ejecutar; a quien tiene una copia de desarrollo se le da el comando.
+
+Y el navegador del paquete se le pasa a Playwright explicitamente en
+vez de confiar en heredarlo del lanzador: quien arrancara QA2 de otra
+forma se quedaba sin navegador, otra vez sin explicacion.
+
 ### QA2 se estaba multiplicando
 
 Once `python.exe` vivos despues de un dia de pruebas, y con ellos

@@ -82,6 +82,7 @@ from core.innovid_reconciliation import (
 )
 from rules import innovid as innovid_rules
 from core.dv_omni_reconciliation import reconcile_dv_omni
+from core.innovid_login import start_innovid_login
 from core.release import qa2_version, release_notes
 from core.team_roster import (
     ACCOUNTS as TEAM_ACCOUNTS,
@@ -1937,15 +1938,27 @@ with st.sidebar:
                 "it -- the session is saved for next time."
             ),
         ):
-            subprocess.Popen(
-                [sys.executable, "check_innovid_connection.py", "--login"],
-                cwd=str(PROJECT_ROOT),
-            )
-            st.info(
-                "A browser window is opening. Sign in, open a "
-                "campaign so Innovid finishes loading, then close the "
-                "window and press R here to refresh."
-            )
+            _login_outcome = start_innovid_login()
+
+            if _login_outcome.ok:
+                st.info(
+                    "A browser window is opening. Sign in, open a "
+                    "campaign so Innovid finishes loading, then close "
+                    "the window and press R here to refresh."
+                )
+            else:
+                # Lo que faltaba: decirlo.
+                #
+                # Esto era un Popen y un st.info fijo, asi que cuando
+                # el proceso moria al instante -- sin navegador dentro
+                # del paquete, casi siempre -- la app anunciaba una
+                # ventana que no se iba a abrir nunca. Camilo:
+                # "nunca se me abre la pestana para iniciar sesion",
+                # sin un solo mensaje que lo explicara.
+                st.error(_login_outcome.message)
+                if _login_outcome.detail:
+                    with st.expander("What the sign-in printed"):
+                        st.code(_login_outcome.detail)
 
         check_innovid = st.checkbox(
             "Check this request against Innovid",
