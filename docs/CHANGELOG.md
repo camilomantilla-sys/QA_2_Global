@@ -40,6 +40,28 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El lanzador silencioso esperaba para siempre
+
+Una companera de Camilo abrio `Launch QA2 (Silent).vbs` en el paquete,
+le salio **"Setting up QA2 for the first time"** y espero diez minutos
+a un navegador que no iba a abrirse nunca.
+
+Dos cosas, las dos del mismo tipo:
+
+- **El mensaje miraba si existe `.venv`**, que es cosa de una copia de
+  desarrollo. El paquete tiene `python\` con su interprete dentro y no
+  instala nada. Le anunciaba un minuto de espera que no existia.
+- **Corria el .bat oculto y no volvia a mirar.** Sin ventana, cualquier
+  fallo es silencioso: el que no tiene Python salia con un codigo de
+  error que nadie iba a leer jamas.
+
+Ahora reconoce el paquete y no anuncia instalacion ninguna; espera a
+que el servidor responda de verdad antes de abrir el navegador; y si no
+responde, lo dice y sugiere abrir `run_qa2.bat`, que si deja ventana.
+
+El .bat ya no abre el navegador --lo abre el .vbs, que es quien sabe si
+arranco-- y deja escrito el motivo cuando muere.
+
 ### El inicio de sesion de Innovid no decia cuando fallaba
 
 Camilo, probando el paquete descargado de SharePoint: "nunca se me abre

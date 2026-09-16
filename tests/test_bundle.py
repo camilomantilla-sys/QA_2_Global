@@ -405,9 +405,81 @@ def test_the_second_launch_opens_the_one_already_running():
     assert "start \"\" http://localhost:8501" in bat
 
 
+
+# ── el lanzador silencioso ───────────────────────────────────────────
+#
+# Una companera de Camilo abrio "Launch QA2 (Silent).vbs" en el
+# paquete, le salio "Setting up QA2 for the first time" y espero diez
+# minutos a un navegador que no iba a abrirse nunca.
+#
+# Dos cosas: el mensaje miraba si existe .venv, que es cosa de una
+# copia de desarrollo -- el paquete tiene python\ y no instala nada --
+# y el lanzador corria el .bat oculto sin volver a mirar. Sin ventana,
+# todo fallo es silencioso.
+
+VBS = (ROOT / "Launch QA2 (Silent).vbs").read_text(encoding="utf-8")
+SILENT_BAT = (ROOT / "run_qa2_silent.bat").read_text(encoding="utf-8")
+
+
+def test_the_silent_launcher_knows_what_a_package_is():
+    r"""python\python.exe, no .venv."""
+    assert "python\\python.exe" in VBS
+
+
+def test_a_package_is_not_told_it_is_being_set_up():
+    """No hay nada que instalar: anunciarlo es prometer una espera."""
+    at_package = VBS.index("esPaquete = ")
+    at_message = VBS.index("Preparando QA2 por primera vez")
+    assert at_package < at_message
+    assert "If Not esPaquete And Not fso.FolderExists" in VBS
+
+
+def test_the_silent_launcher_waits_and_checks():
+    """Lo que faltaba: mirar si arranco."""
+    assert "MSXML2.XMLHTTP" in VBS
+    assert "arrancado" in VBS
+
+
+def test_it_opens_the_browser_only_once_it_answers():
+    at_check = VBS.index("If arrancado Then")
+    at_open = VBS.index("shell.Run url")
+    assert at_check < at_open
+
+
+def test_the_bat_no_longer_opens_the_browser_itself():
+    """Lo abre el .vbs, que es quien sabe si el servidor respondio."""
+    assert "--server.headless true" in SILENT_BAT
+    assert "--server.port 8501" in SILENT_BAT
+
+
+def test_a_silent_failure_leaves_something_to_read():
+    assert "qa2_launch_error.txt" in SILENT_BAT
+    assert "NO_PYTHON" in SILENT_BAT
+    assert "qa2_launch_error.txt" in VBS
+
+
+def test_the_stale_error_file_is_cleared_first():
+    """Si no, un fallo de ayer se reporta como el de hoy."""
+    at_del = SILENT_BAT.index('del "%TEMP%\\qa2_launch_error.txt"')
+    at_write = SILENT_BAT.index("echo NO_PYTHON")
+    assert at_del < at_write
+
+
+def test_every_failure_says_something():
+    """Ningun camino puede terminar sin explicacion."""
+    assert 'If motivo = "" Then' in VBS
+    assert "no respondio" in VBS
+
+
+def test_it_points_at_the_launcher_that_shows_errors():
+    """run_qa2.bat deja ventana; este no. Hay que decirlo."""
+    assert "run_qa2.bat" in VBS
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+
 
 

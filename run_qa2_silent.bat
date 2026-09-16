@@ -6,6 +6,8 @@ setlocal
 
 cd /d "%~dp0"
 
+del "%TEMP%\qa2_launch_error.txt" 2>nul
+
 REM ------------------------------------------------------------------
 REM  Si QA2 ya esta corriendo, no se arranca otro.
 REM
@@ -28,10 +30,16 @@ if exist "python\python.exe" (
     goto :run
 )
 
+REM Una copia de desarrollo: hace falta Python del sistema. Si no
+REM esta, se deja escrito por que -- no hay ventana donde verlo, y el
+REM .vbs lee este archivo para poder decirlo.
 if not exist ".venv" (
     py -3 -m venv .venv 2>nul
     if errorlevel 1 python -m venv .venv
-    if errorlevel 1 exit /b 1
+    if errorlevel 1 (
+        echo NO_PYTHON > "%TEMP%\qa2_launch_error.txt"
+        exit /b 1
+    )
 )
 
 call .venv\Scripts\activate.bat
@@ -42,4 +50,8 @@ python -m pip install --quiet -r requirements.txt
 set "QA2_PYTHON=python"
 
 :run
-"%QA2_PYTHON%" -m streamlit run ui\app_v2.py --server.headless false
+REM Puerto fijo y sin abrir el navegador aqui: lo abre el .vbs cuando
+REM confirma que el servidor responde. Asi hay un sitio donde saber si
+REM arranco o no, que es justo lo que faltaba.
+"%QA2_PYTHON%" -m streamlit run ui\app_v2.py --server.headless true --server.port 8501
+echo STREAMLIT_EXITED %errorlevel% > "%TEMP%\qa2_launch_error.txt"
