@@ -27,7 +27,7 @@ tasklist /fi "imagename eq python.exe" 2>nul | find /i "python.exe" >nul
 if not errorlevel 1 (
     echo   QA2 parece estar abierto.
     echo.
-    echo   Cierra la ventana negra de QA2 ^(o usa "Stop QA2.vbs"^) y
+    echo   Cierra la ventana negra de QA2 ^(o usa "Stop QA2.bat"^) y
     echo   vuelve a ejecutar este archivo. Con QA2 abierto, Windows no
     echo   deja reemplazar sus archivos.
     echo.

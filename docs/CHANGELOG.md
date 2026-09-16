@@ -40,6 +40,37 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Fuera los .vbs: la directiva de IT los bloquea
+
+La companera de Camilo abrio el lanzador y le salio:
+
+    This script is blocked by IT policy
+    Codigo: 800A802E
+
+Windows Script Host esta bloqueado por directiva corporativa. No es su
+maquina: es politica de WPP, y le habria pasado a buena parte de los
+treinta. Los `.vbs` estaban muertos como forma de arrancar QA2.
+
+Se quitaron los tres --`Launch QA2 (Silent).vbs`, `Stop QA2.vbs` y
+`run_qa2_silent.bat`, que solo existia para el primero-- y queda
+`run_qa2.bat` para abrir y **`Stop QA2.bat`** para cerrar. Los `.bat`
+no los bloquea nadie.
+
+Encontrar QA2 para pararlo era el problema de fondo, y ya van tres
+formas fallidas: por puerto (se mueve al de al lado si el 8501 esta
+ocupado), con `wmic` (Windows 11 ya no lo trae) y desde un `.vbs` (esta
+directiva). Ahora **la app deja su PID escrito** en `logs/qa2.pid` y los
+`.bat` lo leen con `tasklist` y `taskkill`, que son parte de Windows
+desde siempre.
+
+Lo anota `scripts/start_qa2.py`, que arranca Streamlit en el mismo
+proceso: asi el PID escrito es exactamente el que hay que matar.
+Ponerlo dentro de `app_v2.py` no bastaba --ese codigo corre en la
+primera sesion, o sea cuando alguien abre la pagina-- y hasta entonces
+el servidor estaba arriba sin que nadie pudiera encontrarlo. Y quien
+lee ese PID comprueba siempre que siga siendo un python, porque un
+numero viejo puede haberlo reutilizado Windows para otra cosa.
+
 ### Streamlit pedia un correo y se quedaba bloqueado
 
 La causa de verdad, y habria afectado a los treinta la primera vez que

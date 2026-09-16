@@ -83,6 +83,7 @@ from core.innovid_reconciliation import (
 from rules import innovid as innovid_rules
 from core.dv_omni_reconciliation import reconcile_dv_omni
 from core.innovid_login import start_innovid_login
+from core.pidfile import write_pid
 from core.release import qa2_version, release_notes
 from core.team_roster import (
     ACCOUNTS as TEAM_ACCOUNTS,
@@ -1872,6 +1873,11 @@ with st.sidebar:
         # clic no salio del navegador y no hay nada que arreglar en
         # Python. Si sube y aun asi no se firma nada, el problema es
         # mio y esta despues del clic.
+        # Dejar el PID escrito para que "Stop QA2.bat" sepa a quien
+        # parar. Sin esto habria que buscarlo por puerto (se mueve) o
+        # con wmic (Windows 11 ya no lo trae).
+        write_pid()
+
         trace("-" * 40)
         # El build ya no se dibuja -- al equipo no le dice nada y
         # ocupaba sitio. Al log si: cuando alguien manda un

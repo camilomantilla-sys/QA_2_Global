@@ -30,7 +30,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 ROOT = Path(__file__).resolve().parents[1]
 BAT = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
-SILENT = (ROOT / "run_qa2_silent.bat").read_text(encoding="utf-8")
 
 
 # ── el lanzador ──────────────────────────────────────────────────────
@@ -43,7 +42,6 @@ def test_the_launcher_prefers_the_bundled_python():
 def test_the_launcher_points_playwright_at_the_bundled_browser():
     """Sin esto busca en la carpeta del usuario, donde no hay nada."""
     assert "PLAYWRIGHT_BROWSERS_PATH=%CD%\\browsers" in BAT
-    assert "PLAYWRIGHT_BROWSERS_PATH=%CD%\\browsers" in SILENT
 
 
 def test_the_launcher_still_works_for_a_development_copy():
@@ -65,16 +63,6 @@ def test_the_bundle_never_runs_pip():
 def test_someone_who_did_not_extract_the_zip_is_told_so():
     """El error que parece que el programa esta roto."""
     assert "Extract All" in BAT
-
-
-def test_the_silent_launcher_has_no_pause():
-    """No hay ventana donde verlo, asi que esperaria para siempre."""
-    commands = [
-        line.strip().lower()
-        for line in SILENT.splitlines()
-        if not line.strip().upper().startswith("REM")
-    ]
-    assert "pause" not in commands
 
 
 # ── que revisiones del navegador se copian ───────────────────────────
@@ -341,139 +329,292 @@ def test_robocopy_success_is_not_zero():
 
 
 
-# ── QA2 no se multiplica ─────────────────────────────────────────────
+# ── QA2 no se multiplica, y se le puede parar ────────────────────────
 #
 # Camilo llego a once python.exe vivos despues de un dia de pruebas, y
-# con ellos abiertos Windows no dejaba ni borrar la carpeta. La causa
-# eran dos cosas que se alimentaban:
+# con ellos abiertos Windows no dejaba ni borrar la carpeta.
 #
-#   - cerrar la ventana negra NO detiene el proceso, asi que el puerto
-#     8501 seguia ocupado y el siguiente arranque se iba al 8502;
-#   - "Stop QA2.vbs" mataba lo que escuchara en el 8501, que para
-#     entonces ya no era el suyo.
+# Encontrar QA2 fue el problema de verdad. Por puerto fallaba en cuanto
+# arrancaba en otro; con wmic no sirve, que Windows 11 ya no lo trae; y
+# desde un .vbs se topa con la directiva de IT de WPP que bloquea
+# Windows Script Host -- "This script is blocked by IT policy", que es
+# donde se quedo su companera.
 #
-# Cada vuelta dejaba uno mas.
+# Ahora la app deja su PID escrito y los .bat lo leen con tasklist y
+# taskkill, que son parte de Windows y no los bloquea nadie.
 
-STOP = (ROOT / "Stop QA2.vbs").read_text(encoding="utf-8")
+STOP = (ROOT / "Stop QA2.bat").read_text(encoding="utf-8")
+
+
+def test_nothing_is_launched_or_stopped_with_a_script_host():
+    """
+    Los .vbs estan bloqueados por directiva en las maquinas del
+    equipo. No pueden volver.
+    """
+    assert not list(ROOT.glob("*.vbs"))
 
 
 def test_stopping_qa2_does_not_depend_on_the_port():
-    """
-    El 8501 es donde arranca, no donde esta. Buscarlo por puerto es lo
-    que hacia que "Stop" no parara nada.
-
-    Se miran las lineas de codigo: el comentario de arriba explica el
-    bug y nombra el puerto a proposito.
-    """
+    """El 8501 es donde arranca, no donde esta."""
     code = [
         line for line in STOP.splitlines()
-        if line.strip() and not line.strip().startswith("'")
+        if line.strip() and not line.strip().upper().startswith("REM")
     ]
-    joined = "\n".join(code)
-    assert "8501" not in joined
-    assert "netstat" not in joined.lower()
+    assert "8501" not in "\n".join(code)
 
 
-def test_stopping_qa2_finds_it_by_what_it_runs():
-    assert "app_v2" in STOP
-    assert "streamlit" in STOP
-    assert "Win32_Process" in STOP
+def test_nothing_depends_on_wmic():
+    """Microsoft lo quito de Windows 11."""
+    for name in ("run_qa2.bat", "Stop QA2.bat"):
+        bat = (ROOT / name).read_text(encoding="utf-8")
+        code = [
+            line for line in bat.splitlines()
+            if line.strip() and not line.strip().upper().startswith("REM")
+        ]
+        assert "wmic" not in "\n".join(code).lower(), name
 
 
-def test_stopping_qa2_leaves_other_python_alone():
+def test_the_app_writes_down_its_pid():
+    app = (ROOT / "ui" / "app_v2.py").read_text(encoding="utf-8")
+    assert "write_pid()" in app
+
+
+def test_stopping_qa2_checks_the_pid_is_still_python():
     """
-    Un `taskkill /IM python.exe` habria resuelto esto y matado de paso
-    cualquier otra cosa que la persona tuviera corriendo.
+    Un PID viejo puede estar reutilizado por otra cosa. Matarlo a
+    ciegas seria matar lo que Windows le haya dado ese numero.
     """
-    assert "taskkill" not in STOP.lower()
+    assert "IMAGENAME eq python.exe" in STOP
+    assert "tasklist" in STOP
 
 
-def test_stopping_qa2_kills_every_instance_not_the_first():
-    assert "For Each" in STOP
+def test_the_running_check_does_the_same():
+    bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
+    assert "IMAGENAME eq python.exe" in bat
+
+
+def test_a_stale_pid_file_is_cleared():
+    assert 'del "logs\\qa2.pid"' in STOP
+
+
+def test_the_pid_file_stays_next_to_the_app():
+    """
+    Si siguiera a QA2_OUTPUT_DIR, los .bat no sabrian donde buscarlo
+    y dos personas escribirian su PID en el mismo archivo.
+    """
+    source = (ROOT / "core" / "pidfile.py").read_text(encoding="utf-8")
+    assert "parents[1]" in source
+    assert "output_dir" not in source
+
+
+# ── el que aplica la actualizacion ───────────────────────────────────
+
+def test_the_update_carries_something_that_applies_it():
+    """
+    "Abre el zip y arrastra el contenido" no es lo que hace la gente.
+    Le dan a Extraer todo, que crea una carpeta con el nombre del zip,
+    y la actualizacion se queda ahi sin aplicarse -- sin ningun error,
+    porque la carpeta existe y los archivos estan. Paso en la primera
+    entrega real.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build_update
+
+    target = Path(tempfile.mkdtemp()) / "update.zip"
+    build_update(target)
+    assert "ACTUALIZAR QA2.bat" in zipfile.ZipFile(target).namelist()
+
+
+def test_the_applier_refuses_to_copy_over_a_running_qa2():
+    """Con QA2 abierto, Windows no deja reemplazar sus archivos."""
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "tasklist" in bat
+    assert "python.exe" in bat
+
+
+def test_the_applier_checks_it_found_qa2_before_copying():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "ui\\app_v2.py" in bat
+
+
+def test_the_applier_never_touches_what_must_survive():
+    """
+    El interprete, el navegador y la sesion de Innovid no estan en el
+    zip, asi que copiar encima no puede tocarlos -- y el .bat lo dice
+    antes de preguntar, que es lo que hace que alguien se atreva.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    for kept in ("python\\", "browsers\\", "config\\", "logs\\"):
+        assert kept in bat, kept
+
+
+def test_the_applier_asks_before_doing_anything():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "set /p CONFIRM" in bat
+    assert "Cancelado" in bat
+
+
+def test_robocopy_success_is_not_zero():
+    """
+    robocopy devuelve 0-7 cuando fue bien y 8+ cuando fallo, al reves
+    que todo lo demas. Tratarlo como un comando normal daria el update
+    por fallido siempre que copiara algo.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "GEQ 8" in bat
+
+
+
+# ── QA2 no se multiplica, y se le puede parar ────────────────────────
+#
+# Camilo llego a once python.exe vivos despues de un dia de pruebas, y
+# con ellos abiertos Windows no dejaba ni borrar la carpeta.
+#
+# Encontrar QA2 fue el problema de verdad. Por puerto fallaba en cuanto
+# arrancaba en otro; con wmic no sirve, que Windows 11 ya no lo trae; y
+# desde un .vbs se topa con la directiva de IT de WPP que bloquea
+# Windows Script Host -- "This script is blocked by IT policy", que es
+# donde se quedo su companera.
+#
+# Ahora la app deja su PID escrito y los .bat lo leen con tasklist y
+# taskkill, que son parte de Windows y no los bloquea nadie.
+
+STOP = (ROOT / "Stop QA2.bat").read_text(encoding="utf-8")
+
+
+def test_nothing_is_launched_or_stopped_with_a_script_host():
+    """
+    Los .vbs estan bloqueados por directiva en las maquinas del
+    equipo. No pueden volver.
+    """
+    assert not list(ROOT.glob("*.vbs"))
+
+
+def test_stopping_qa2_does_not_depend_on_the_port():
+    """El 8501 es donde arranca, no donde esta."""
+    code = [
+        line for line in STOP.splitlines()
+        if line.strip() and not line.strip().upper().startswith("REM")
+    ]
+    assert "8501" not in "\n".join(code)
+
+
+def test_nothing_depends_on_wmic():
+    """Microsoft lo quito de Windows 11."""
+    for name in ("run_qa2.bat", "Stop QA2.bat"):
+        bat = (ROOT / name).read_text(encoding="utf-8")
+        code = [
+            line for line in bat.splitlines()
+            if line.strip() and not line.strip().upper().startswith("REM")
+        ]
+        assert "wmic" not in "\n".join(code).lower(), name
+
+
+def test_the_app_writes_down_its_pid():
+    app = (ROOT / "ui" / "app_v2.py").read_text(encoding="utf-8")
+    assert "write_pid()" in app
+
+
+def test_stopping_qa2_checks_the_pid_is_still_python():
+    """
+    Un PID viejo puede estar reutilizado por otra cosa. Matarlo a
+    ciegas seria matar lo que Windows le haya dado ese numero.
+    """
+    assert "IMAGENAME eq python.exe" in STOP
+    assert "tasklist" in STOP
+
+
+def test_the_running_check_does_the_same():
+    bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
+    assert "IMAGENAME eq python.exe" in bat
+
+
+def test_a_stale_pid_file_is_cleared():
+    assert 'del "logs\\qa2.pid"' in STOP
+
+
+def test_the_pid_file_stays_next_to_the_app():
+    """
+    Si siguiera a QA2_OUTPUT_DIR, los .bat no sabrian donde buscarlo
+    y dos personas escribirian su PID en el mismo archivo.
+    """
+    source = (ROOT / "core" / "pidfile.py").read_text(encoding="utf-8")
+    assert "parents[1]" in source
+    assert "output_dir" not in source
+
+
+# ── el que aplica la actualizacion ───────────────────────────────────
+
+def test_the_update_carries_something_that_applies_it():
+    """
+    "Abre el zip y arrastra el contenido" no es lo que hace la gente.
+    Le dan a Extraer todo, que crea una carpeta con el nombre del zip,
+    y la actualizacion se queda ahi sin aplicarse -- sin ningun error,
+    porque la carpeta existe y los archivos estan. Paso en la primera
+    entrega real.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.package_release import build_update
+
+    target = Path(tempfile.mkdtemp()) / "update.zip"
+    build_update(target)
+    assert "ACTUALIZAR QA2.bat" in zipfile.ZipFile(target).namelist()
+
+
+def test_the_applier_refuses_to_copy_over_a_running_qa2():
+    """Con QA2 abierto, Windows no deja reemplazar sus archivos."""
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "tasklist" in bat
+    assert "python.exe" in bat
+
+
+def test_the_applier_checks_it_found_qa2_before_copying():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "ui\\app_v2.py" in bat
+
+
+def test_the_applier_never_touches_what_must_survive():
+    """
+    El interprete, el navegador y la sesion de Innovid no estan en el
+    zip, asi que copiar encima no puede tocarlos -- y el .bat lo dice
+    antes de preguntar, que es lo que hace que alguien se atreva.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    for kept in ("python\\", "browsers\\", "config\\", "logs\\"):
+        assert kept in bat, kept
+
+
+def test_the_applier_asks_before_doing_anything():
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "set /p CONFIRM" in bat
+    assert "Cancelado" in bat
+
+
+def test_robocopy_success_is_not_zero():
+    """
+    robocopy devuelve 0-7 cuando fue bien y 8+ cuando fallo, al reves
+    que todo lo demas. Tratarlo como un comando normal daria el update
+    por fallido siempre que copiara algo.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(encoding="utf-8")
+    assert "GEQ 8" in bat
+
 
 
 def test_the_launcher_refuses_to_start_a_second_one():
-    for name in ("run_qa2.bat", "run_qa2_silent.bat"):
-        bat = (ROOT / name).read_text(encoding="utf-8")
-        assert "QA2_RUNNING" in bat, name
-        assert "app_v2" in bat, name
+    bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
+    assert "qa2.pid" in bat
+    assert "ya esta abierto" in bat
 
 
 def test_the_second_launch_opens_the_one_already_running():
     """Que no arranque otro no puede significar que no pase nada."""
     bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
     assert "start \"\" http://localhost:8501" in bat
-
-
-
-# ── el lanzador silencioso ───────────────────────────────────────────
-#
-# Una companera de Camilo abrio "Launch QA2 (Silent).vbs" en el
-# paquete, le salio "Setting up QA2 for the first time" y espero diez
-# minutos a un navegador que no iba a abrirse nunca.
-#
-# Dos cosas: el mensaje miraba si existe .venv, que es cosa de una
-# copia de desarrollo -- el paquete tiene python\ y no instala nada --
-# y el lanzador corria el .bat oculto sin volver a mirar. Sin ventana,
-# todo fallo es silencioso.
-
-VBS = (ROOT / "Launch QA2 (Silent).vbs").read_text(encoding="utf-8")
-SILENT_BAT = (ROOT / "run_qa2_silent.bat").read_text(encoding="utf-8")
-
-
-def test_the_silent_launcher_knows_what_a_package_is():
-    r"""python\python.exe, no .venv."""
-    assert "python\\python.exe" in VBS
-
-
-def test_a_package_is_not_told_it_is_being_set_up():
-    """No hay nada que instalar: anunciarlo es prometer una espera."""
-    at_package = VBS.index("esPaquete = ")
-    at_message = VBS.index("Preparando QA2 por primera vez")
-    assert at_package < at_message
-    assert "If Not esPaquete And Not fso.FolderExists" in VBS
-
-
-def test_the_silent_launcher_waits_and_checks():
-    """Lo que faltaba: mirar si arranco."""
-    assert "MSXML2.XMLHTTP" in VBS
-    assert "arrancado" in VBS
-
-
-def test_it_opens_the_browser_only_once_it_answers():
-    at_check = VBS.index("If arrancado Then")
-    at_open = VBS.index("shell.Run url")
-    assert at_check < at_open
-
-
-def test_the_bat_no_longer_opens_the_browser_itself():
-    """Lo abre el .vbs, que es quien sabe si el servidor respondio."""
-    assert "--server.headless true" in SILENT_BAT
-    assert "--server.port 8501" in SILENT_BAT
-
-
-def test_a_silent_failure_leaves_something_to_read():
-    assert "qa2_launch_error.txt" in SILENT_BAT
-    assert "NO_PYTHON" in SILENT_BAT
-    assert "qa2_launch_error.txt" in VBS
-
-
-def test_the_stale_error_file_is_cleared_first():
-    """Si no, un fallo de ayer se reporta como el de hoy."""
-    at_del = SILENT_BAT.index('del "%TEMP%\\qa2_launch_error.txt"')
-    at_write = SILENT_BAT.index("echo NO_PYTHON")
-    assert at_del < at_write
-
-
-def test_every_failure_says_something():
-    """Ningun camino puede terminar sin explicacion."""
-    assert 'If motivo = "" Then' in VBS
-    assert "no respondio" in VBS
-
-
-def test_it_points_at_the_launcher_that_shows_errors():
-    """run_qa2.bat deja ventana; este no. Hay que decirlo."""
-    assert "run_qa2.bat" in VBS
 
 
 
@@ -502,17 +643,45 @@ def test_streamlit_never_asks_for_an_email():
     assert "headless = true" in CONFIG
 
 
-def test_the_launchers_open_the_browser_since_streamlit_will_not():
+def test_the_launcher_opens_the_browser_since_streamlit_will_not():
     """headless significa que ya no lo abre solo. Alguien tiene que."""
     assert "http://localhost:8501" in MAIN_BAT
-    assert "http://localhost:8501" in VBS
 
 
-def test_both_launchers_pin_the_port():
+def test_the_launcher_pins_the_port():
     """Si Streamlit se mueve de puerto, la URL que abrimos no sirve."""
-    for name in ("run_qa2.bat", "run_qa2_silent.bat"):
-        bat = (ROOT / name).read_text(encoding="utf-8")
-        assert "--server.port 8501" in bat, name
+    assert "start_qa2.py 8501" in MAIN_BAT
+    starter = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
+    assert '"--server.port", port' in starter
+
+
+def test_the_pid_is_written_by_the_process_that_serves():
+    """
+    Estaba en app_v2.py, que corre en la primera sesion -- o sea
+    cuando alguien abre la pagina. Hasta entonces el servidor estaba
+    arriba y "Stop QA2.bat" no encontraba a quien parar.
+    """
+    starter = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
+    # Sin el docstring de arriba, que nombra cli.main() al explicarlo.
+    code = starter.split('"""', 2)[-1]
+    assert code.index("write_pid(ROOT)") < code.index("cli.main(")
+
+
+def test_the_starter_does_not_spawn_a_second_process():
+    """
+    Si lanzara otro, el PID escrito seria el del envoltorio y matarlo
+    dejaria Streamlit corriendo.
+    """
+    starter = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
+    assert "subprocess" not in starter
+    assert "cli.main(" in starter
+
+
+def test_the_pid_file_goes_away_when_qa2_stops():
+    """Si no, el siguiente arranque cree que QA2 sigue abierto."""
+    starter = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
+    assert "clear_pid(ROOT)" in starter
+    assert "finally:" in starter
 
 
 if __name__ == "__main__":

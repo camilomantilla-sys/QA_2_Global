@@ -21,20 +21,31 @@ REM
 REM  Cerrar la ventana negra NO detiene el proceso, y la siguiente vez
 REM  Streamlit encuentra el puerto ocupado y se va al de al lado. Once
 REM  vueltas, once procesos vivos -- y con ellos abiertos Windows no
-REM  deja ni borrar la carpeta de QA2. Se abre el navegador al que ya
-REM  esta y listo.
+REM  deja ni borrar la carpeta de QA2.
+REM
+REM  Se reconoce por el PID que la app deja en logs\qa2.pid. No por
+REM  puerto (se mueve) ni con wmic (Windows 11 ya no lo trae). Un PID
+REM  viejo puede estar reutilizado, asi que se comprueba que siga
+REM  siendo un python.
 REM ------------------------------------------------------------------
-for /f "tokens=2 delims==" %%P in ('wmic process where "name='python.exe' and commandline like '%%app_v2%%'" get processid /value 2^>nul ^| find "="') do set QA2_RUNNING=%%P
-
-if defined QA2_RUNNING (
-    echo QA2 ya esta abierto. Abriendo tu navegador.
-    echo.
-    echo Para detenerlo del todo, usa "Stop QA2.vbs".
-    echo.
-    start "" http://localhost:8501
-    timeout /t 4 >nul
-    exit /b 0
+if exist "logs\qa2.pid" (
+    set /p QA2_PID=<"logs\qa2.pid"
+    call :ya_corriendo
 )
+goto :arrancar
+
+:ya_corriendo
+tasklist /FI "PID eq %QA2_PID%" /FI "IMAGENAME eq python.exe" 2>nul | find /i "python.exe" >nul
+if errorlevel 1 exit /b 0
+echo QA2 ya esta abierto. Abriendo tu navegador.
+echo.
+echo Para detenerlo del todo, usa "Stop QA2.bat".
+echo.
+start "" http://localhost:8501
+timeout /t 4 >nul
+exit
+
+:arrancar
 
 if exist "python\python.exe" (
     set "QA2_PYTHON=%CD%\python\python.exe"
@@ -74,7 +85,7 @@ REM .streamlit\config.toml), asi que se abre aqui unos segundos
 REM despues -- lo que tarda el servidor en levantar.
 start "" /min powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep 6; Start-Process 'http://localhost:8501'"
 
-"%QA2_PYTHON%" -m streamlit run ui\app_v2.py --server.port 8501
+"%QA2_PYTHON%" scripts\start_qa2.py 8501
 
 pause
 exit /b

@@ -41,8 +41,14 @@ tarda unos segundos; no hay instalación que esperar.
 **Deja abierta la ventana negra mientras trabajas.** Es QA2 corriendo;
 si la cierras, se detiene.
 
-Si prefieres que no aparezca ninguna ventana, usa
-`Launch QA2 (Silent).vbs`, y `Stop QA2.vbs` para detenerlo.
+Para detenerlo, cierra esa ventana o haz doble clic en
+**`Stop QA2.bat`**.
+
+> Había también unos lanzadores `.vbs`. Se quitaron: la directiva de
+> seguridad de WPP bloquea Windows Script Host —*"This script is
+> blocked by IT policy"*— así que en la mayoría de las máquinas del
+> equipo no arrancaban. Todo se hace con `.bat`, que no está
+> bloqueado.
 
 ### 3. Conectar con Innovid (una vez, opcional)
 
@@ -165,6 +171,7 @@ además es bastante más rápido.
 | "Python was not found" | Falta la carpeta `python\` — el .zip se extrajo a medias. Vuelve a extraerlo entero. |
 | El navegador no abre solo | Ábrelo tú en `http://localhost:8501`. |
 | "Restart QA2" en la barra lateral | Alguien actualizó los archivos con QA2 abierto. Cierra la ventana negra y vuelve a abrir. |
+| "This script is blocked by IT policy" | Estás abriendo un `.vbs` de una versión vieja. Usa `run_qa2.bat`. |
 | Innovid pide iniciar sesión cada vez | Borra `config\innovid_session.json`. |
 | Se queda cargando y no aparece el botón de firma | Manda `logs\qa_run.log`. |
 
@@ -187,8 +194,8 @@ rmdir vacia QA2-1.0.0-windows
 `robocopy` sincroniza una carpeta vacía encima —eso vacía el árbol sin
 toparse con el límite— y `rmdir` quita el cascarón.
 
-Si aun así no deja, quedó un proceso suelto. `Launch QA2 (Silent).vbs`
-no abre ninguna ventana que cerrar, así que:
+Si aun así no deja, quedó un proceso suelto. Ciérralo con
+**`Stop QA2.bat`**, o a mano:
 
 ```bash
 tasklist | grep -i python        # ver si hay alguno
