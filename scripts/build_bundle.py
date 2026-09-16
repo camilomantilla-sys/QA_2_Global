@@ -421,9 +421,14 @@ def build(target: str, innovid: bool, keep: bool) -> Path:
     if innovid and not has_browser:
         print("  WITHOUT Chromium: the Innovid checks will not run.")
     print()
-    print("  Upload it to the team's SharePoint library. Whoever gets it")
-    print("  extracts the folder and double-clicks run_qa2.bat -- there")
-    print("  is nothing to install.")
+    print("  Upload it to the team's SharePoint library, and send the")
+    print(f"  size and the hash with the link: {out.stat().st_size} bytes.")
+    print("  A truncated download arrives looking fine and weighing")
+    print("  nearly the same; those two numbers are the only way anyone")
+    print("  notices before losing half an hour to it. They check with:")
+    print()
+    print(f'    (Get-Item "{out.name}").Length')
+    print(f'    certutil -hashfile "{out.name}" SHA256')
     return out
 
 

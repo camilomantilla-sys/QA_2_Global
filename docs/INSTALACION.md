@@ -127,10 +127,23 @@ está.
 > casilla **Desbloquear**, marcarla → **Aplicar**.
 
 **3. La descarga se cortó.** Un archivo de ~500 MB por SharePoint falla
-en silencio de vez en cuando.
+en silencio de vez en cuando, y es la causa más difícil de ver: el
+archivo está ahí, pesa casi lo mismo, y no avisa de nada.
 
-> Comparar el tamaño con el que dice quien lo compartió. Si no
-> coincide, descargarlo otra vez.
+> En PowerShell, en la carpeta donde está el .zip:
+>
+> ```powershell
+> (Get-Item "QA2-1.0.1-windows.zip").Length
+> certutil -hashfile "QA2-1.0.1-windows.zip" SHA256
+> ```
+>
+> Compara **los dos** con lo que envió quien lo compartió. Los bytes
+> tienen que ser idénticos, no parecidos. Si no coinciden, ese archivo
+> no sirve: descárgalo otra vez.
+
+Una pista que suele delatarlo sin comparar nada: en Propiedades, si
+**Creado** y **Modificado** están separados por minutos, la descarga
+estuvo escribiendo todo ese rato y puede haberse quedado a medias.
 
 Resuelto eso, **no uses el asistente del Explorador**. Abre PowerShell
 en la carpeta donde está el .zip (clic derecho en la carpeta →

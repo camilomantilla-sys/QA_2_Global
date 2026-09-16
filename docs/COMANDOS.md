@@ -127,9 +127,23 @@ OneDrive), desbloqueado en Propiedades, completo — y después
 `tar -xf "QA2-<versión>-windows.zip"` en PowerShell en vez del
 asistente.
 
-Y pásales el **tamaño exacto** del .zip junto al enlace. Es la única
-forma de que noten una descarga truncada antes de pelearse media hora
-con ella.
+Y pásales **el tamaño en bytes y el SHA-256** junto al enlace. Es la
+única forma de que noten una descarga truncada antes de pelearse media
+hora con ella — el archivo llega, pesa casi lo mismo, y no avisa de
+nada.
+
+El SHA-256 lo imprime `build_bundle.py` al terminar. El tamaño exacto:
+
+```bash
+stat -c %s dist/QA2-<versión>-windows.zip
+```
+
+Quien lo recibe comprueba los dos con:
+
+```powershell
+(Get-Item "QA2-<versión>-windows.zip").Length
+certutil -hashfile "QA2-<versión>-windows.zip" SHA256
+```
 
 ## Antes de subir cualquiera de los dos
 
