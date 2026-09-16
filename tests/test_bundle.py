@@ -476,10 +476,50 @@ def test_it_points_at_the_launcher_that_shows_errors():
     assert "run_qa2.bat" in VBS
 
 
+
+# ── Streamlit no puede preguntar nada por consola ────────────────────
+#
+# La primera vez pide un correo y SE QUEDA BLOQUEADO:
+#
+#     Welcome to Streamlit!
+#     ... please enter your email address below.
+#     Email: _
+#
+# En la ventana negra se ve y confunde; en el lanzador silencioso no
+# hay ventana donde escribir y QA2 no arranca nunca. Es la causa de
+# los diez minutos que espero la companera de Camilo, y habria
+# afectado a los treinta la primera vez que abrieran QA2.
+
+CONFIG = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+MAIN_BAT = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
+
+
+def test_streamlit_never_asks_for_an_email():
+    """
+    En la configuracion y no en los lanzadores: asi lo salta tambien
+    quien arranque `streamlit run ui/app_v2.py` a mano.
+    """
+    assert "headless = true" in CONFIG
+
+
+def test_the_launchers_open_the_browser_since_streamlit_will_not():
+    """headless significa que ya no lo abre solo. Alguien tiene que."""
+    assert "http://localhost:8501" in MAIN_BAT
+    assert "http://localhost:8501" in VBS
+
+
+def test_both_launchers_pin_the_port():
+    """Si Streamlit se mueve de puerto, la URL que abrimos no sirve."""
+    for name in ("run_qa2.bat", "run_qa2_silent.bat"):
+        bat = (ROOT / name).read_text(encoding="utf-8")
+        assert "--server.port 8501" in bat, name
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+
 
 
 

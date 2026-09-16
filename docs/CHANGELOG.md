@@ -40,6 +40,27 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Streamlit pedia un correo y se quedaba bloqueado
+
+La causa de verdad, y habria afectado a los treinta la primera vez que
+abrieran QA2. Streamlit, en su primer arranque, pregunta por consola:
+
+    Welcome to Streamlit!
+    ... please enter your email address below.
+    Email: _
+
+Y se queda ahi hasta que alguien pulse Enter. En la ventana negra se ve
+--y confunde, porque no parece parte de QA2--; en el lanzador
+silencioso no hay ventana donde escribir y QA2 no arranca nunca.
+
+`headless = true` en `.streamlit/config.toml` lo salta. Va en la
+configuracion y no en los lanzadores para que tambien lo salte quien
+arranque `streamlit run ui/app_v2.py` a mano.
+
+A cambio Streamlit ya no abre el navegador solo, asi que lo abren los
+lanzadores -- que ademas es mejor, porque el silencioso espera a que el
+servidor responda de verdad antes de abrirlo.
+
 ### El lanzador silencioso esperaba para siempre
 
 Una companera de Camilo abrio `Launch QA2 (Silent).vbs` en el paquete,

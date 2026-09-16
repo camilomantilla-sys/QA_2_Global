@@ -9,6 +9,22 @@ font = "sans serif"
 [server]
 maxUploadSize = 500
 
+# La primera vez, Streamlit pide un correo por consola y SE QUEDA
+# BLOQUEADO hasta que alguien pulse Enter:
+#
+#     Welcome to Streamlit!
+#     ... please enter your email address below.
+#     Email: _
+#
+# En la ventana negra se ve y confunde; en el lanzador silencioso no
+# hay ventana donde escribir y QA2 nunca arranca. Una companera de
+# Camilo espero diez minutos por esto.
+#
+# headless lo salta. A cambio Streamlit ya no abre el navegador solo,
+# asi que lo abren los lanzadores -- que ademas es mejor, porque
+# esperan a que el servidor responda de verdad.
+headless = true
+
 # QA2 is a desktop tool that happens to be drawn in a browser. Binding to
 # localhost means the port is reachable from this machine only: nobody
 # else on the corporate network can open someone's QA session, and there

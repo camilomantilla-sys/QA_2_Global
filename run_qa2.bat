@@ -69,7 +69,12 @@ echo Keep this window open while you work - closing it stops QA2.
 echo.
 
 :run
-"%QA2_PYTHON%" -m streamlit run ui\app_v2.py
+REM Streamlit ya no abre el navegador (headless, ver
+REM .streamlit\config.toml), asi que se abre aqui unos segundos
+REM despues -- lo que tarda el servidor en levantar.
+start "" /min powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep 6; Start-Process 'http://localhost:8501'"
+
+"%QA2_PYTHON%" -m streamlit run ui\app_v2.py --server.port 8501
 
 pause
 exit /b
