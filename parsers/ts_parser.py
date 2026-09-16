@@ -548,16 +548,40 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
         fams = set(colors.values())
         actionable = [k for k, v in colors.items() if v in ACTIONABLE]
 
-        if GREEN in fams and RED in fams:
-            intent = "SWAP"
-        elif GREEN in fams:
-            intent = GREEN
-        elif RED in fams:
-            intent = RED
-        elif _row_own(colors) and _row_own(colors) <= {YELLOW, GREY}:
-            # Blanco no es un color: es "esta celda no se pinto". Lo
-            # que decide es lo que SI se pinto.
+        # Lo que decide es el color de ESTA fila, no el del grupo.
+        #
+        # La celda del nombre del grupo esta fusionada y la comparten
+        # todas las filas del decision set: habla del grupo, no del
+        # creativo. Mirandola junto con las demas, un creativo ROJO
+        # dentro de un grupo verde daba {GREEN, RED} -- o sea "SWAP",
+        # que mas adelante se resuelve como GREEN. Camilo: "me sigue
+        # leyendo creativos en rojo como si fueran verdes". En su TS de
+        # BlackRock eran tres, los tres a quitar, los tres leidos como
+        # que se quedaban.
+        #
+        # Blanco tampoco es un color: es "esta celda no se pinto".
+        # _row_own deja fuera las dos cosas.
+        own = _row_own(colors)
+
+        if not own:
+            # Sin color propio, la celda del grupo puede hablar por la
+            # fila -- pero solo cuando dice que se agrega o se quita.
             #
+            # Un decision set nuevo va en verde con sus creativos en
+            # blanco, y esos si son parte de lo que se pidio. En gris
+            # no: en la TS de Dove hay placements con SOLO la celda de
+            # grupo en gris y el resto en blanco, y tomar ese gris
+            # dejaba cuatro fuera de alcance sin que nadie lo pidiera.
+            heredado = colors.get("group_name")
+            own = {heredado} if heredado in (GREEN, RED) else set()
+
+        if GREEN in own and RED in own:
+            intent = "SWAP"
+        elif GREEN in own:
+            intent = GREEN
+        elif RED in own:
+            intent = RED
+        elif own and own <= {YELLOW, GREY}:
             # En BlackRock cada grupo "... Default Web Ad" trae dos
             # filas, y la del default viejo va entera en gris -- menos
             # la celda del nombre del grupo, que es compartida por las
@@ -565,7 +589,7 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
             # blanco bastaba para que la fila pasara por contexto
             # normal y el creativo gris se colara en el decision set.
             intent = "SCOPE_EXCLUDED"
-        elif UNKNOWN in fams:
+        elif UNKNOWN in own:
             intent = "REVIEW"
         else:
             intent = WHITE

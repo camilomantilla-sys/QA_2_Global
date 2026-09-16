@@ -40,6 +40,33 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Un creativo rojo se leia como verde
+
+    "me sigue leyendo creativos en rojo como si fueran verdes"
+
+El decision set "AV Display Unit 300x600" lleva dos filas -- una ROJA
+con el creativo que sale y una VERDE con el que entra -- y la celda del
+nombre del grupo esta **fusionada entre las dos**, pintada de verde.
+
+El intent de cada fila se calculaba mirando todos los colores, incluida
+esa celda compartida:
+
+    fams = {GREEN, RED}  ->  intent = "SWAP"  ->  se resuelve GREEN
+
+Asi que el creativo que habia que QUITAR se leia como uno que se queda.
+Tres veces en esa solicitud, las tres al reves.
+
+La celda del grupo es literalmente la misma celda para todas las filas
+del decision set: habla del grupo, no del creativo. Ahora decide el
+color propio de la fila. `_row_own()` --que ya existia y ya la excluia--
+se usa tambien para el verde y el rojo, no solo para el gris.
+
+Sin color propio el grupo si puede hablar, pero solo en verde o rojo:
+un decision set nuevo va en verde con sus creativos en blanco y esos si
+se piden. En gris no -- el primer intento de arreglar esto dejo cuatro
+placements de Dove fuera de alcance sin que nadie lo pidiera, y el
+guard de snapshots lo atrapo.
+
 ### QA2 se abre con doble clic y sin ventana
 
     "yo no quiero que mi amiga tenga que abrir ninguna terminal ni
