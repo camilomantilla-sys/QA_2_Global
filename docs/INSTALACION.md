@@ -19,6 +19,11 @@ ni pedirle nada a IT. El paquete trae todo dentro.
    > el .zip solo deja *mirar* adentro. Si intentas abrir QA2 desde ahí,
    > no arranca y parece que está roto.
 
+   Si el asistente falla —*"No se tiene acceso a la carpeta comprimida"*,
+   *"No se puede completar el Asistente"*— ver
+   [Si no deja extraer el .zip](#si-no-deja-extraer-el-zip) más abajo.
+   Es lo más común y se arregla en un minuto.
+
 4. Deja la carpeta en un sitio estable: `Documentos\QA2`, por ejemplo.
    No en Descargas, que se limpia sola.
 
@@ -101,6 +106,43 @@ PDF y Excel están arriba.
 selecciones en un .zip. Déjalo en la misma carpeta de SharePoint que la
 Traffic Sheet: quien haga el QA2 lo carga desde *"Load a saved
 session"* y va directo a revisar y firmar.
+
+### Si no deja extraer el .zip
+
+El Explorador dice *"No se tiene acceso a la carpeta comprimida (en
+zip)"* o *"No se puede completar el Asistente"*. Casi siempre es una de
+estas tres, en este orden:
+
+**1. El archivo no está descargado de verdad.** Si llegó por OneDrive,
+Teams o SharePoint, puede ser un marcador en la nube — el icono es una
+nubecita, no un check. El Explorador no puede abrir lo que todavía no
+está.
+
+> Clic derecho en el .zip → **Conservar siempre en este dispositivo**.
+> Esperar a que el icono cambie a un check verde.
+
+**2. Windows lo bloqueó por venir de fuera.**
+
+> Clic derecho en el .zip → **Propiedades**. Si abajo aparece una
+> casilla **Desbloquear**, marcarla → **Aplicar**.
+
+**3. La descarga se cortó.** Un archivo de ~500 MB por SharePoint falla
+en silencio de vez en cuando.
+
+> Comparar el tamaño con el que dice quien lo compartió. Si no
+> coincide, descargarlo otra vez.
+
+Resuelto eso, **no uses el asistente del Explorador**. Abre PowerShell
+en la carpeta donde está el .zip (clic derecho en la carpeta →
+*Abrir en Terminal*) y:
+
+```powershell
+tar -xf "QA2-1.0.0-windows.zip"
+```
+
+`tar` viene incluido en Windows 10 y 11. Aguanta las rutas largas del
+navegador que lleva QA2 dentro —que es donde el asistente se atasca— y
+además es bastante más rápido.
 
 ### Si algo no funciona
 

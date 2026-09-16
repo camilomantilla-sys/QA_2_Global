@@ -115,6 +115,22 @@ de la carpeta que tiene tu equipo.
 
 ---
 
+## Al compartir el paquete completo
+
+Dile a quien lo recibe que si el Explorador se queja al extraer
+—*"No se tiene acceso a la carpeta comprimida"*— hay tres cosas que
+mirar y un comando que casi siempre funciona. Está en
+[`INSTALACION.md`](INSTALACION.md#si-no-deja-extraer-el-zip).
+
+Resumen: que el archivo esté descargado de verdad (no un marcador de
+OneDrive), desbloqueado en Propiedades, completo — y después
+`tar -xf "QA2-<versión>-windows.zip"` en PowerShell en vez del
+asistente.
+
+Y pásales el **tamaño exacto** del .zip junto al enlace. Es la única
+forma de que noten una descarga truncada antes de pelearse media hora
+con ella.
+
 ## Antes de subir cualquiera de los dos
 
 ```bash
