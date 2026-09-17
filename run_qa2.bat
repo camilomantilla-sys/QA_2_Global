@@ -40,7 +40,8 @@ if exist "logs\qa2.pid" (
 goto :arrancar
 
 :ya_corriendo
-tasklist /FI "PID eq %QA2_PID%" /FI "IMAGENAME eq python.exe" 2>nul | find /i "python.exe" >nul
+REM "python" y no "python.exe": QA2.bat arranca con pythonw.exe.
+tasklist /FI "PID eq %QA2_PID%" /NH 2>nul | find /i "python" >nul
 if errorlevel 1 exit /b 0
 echo QA2 ya esta abierto. Abriendo tu navegador.
 echo.

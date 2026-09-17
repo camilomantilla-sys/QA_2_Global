@@ -402,13 +402,40 @@ def test_stopping_qa2_checks_the_pid_is_still_python():
     Un PID viejo puede estar reutilizado por otra cosa. Matarlo a
     ciegas seria matar lo que Windows le haya dado ese numero.
     """
-    assert "IMAGENAME eq python.exe" in STOP
     assert "tasklist" in STOP
+    assert 'find /i "python"' in STOP
+
+
+def test_stopping_qa2_also_finds_the_windowless_one():
+    """
+    QA2.bat arranca con pythonw.exe -- es lo que lo hace no dejar
+    ventana, y es como abre QA2 el equipo entero. El filtro decia
+    IMAGENAME eq python.exe, asi que "Stop QA2.bat" contestaba "QA2 no
+    esta corriendo", borraba el PID y dejaba la app viva. Camilo, con
+    la carpeta que Windows no le dejaba borrar: "pues lo pare intente
+    borrar no pude".
+
+    El boton de detener no detenia nada.
+    """
+    assert "IMAGENAME eq python.exe" not in STOP
 
 
 def test_the_running_check_does_the_same():
     bat = (ROOT / "run_qa2.bat").read_text(encoding="utf-8")
-    assert "IMAGENAME eq python.exe" in bat
+    assert 'find /i "python"' in bat
+    assert "IMAGENAME eq python.exe" not in bat
+
+
+def test_the_updater_counts_the_windowless_one_too():
+    """
+    Actualizar encima de una app abierta deja la copia a medias. El
+    chequeo miraba solo python.exe, o sea que daba via libre justo con
+    el lanzador que usa todo el mundo.
+    """
+    bat = (ROOT / "scripts" / "update_template.bat").read_text(
+        encoding="utf-8"
+    )
+    assert "imagename eq pythonw.exe" in bat
 
 
 def test_a_stale_pid_file_is_cleared():

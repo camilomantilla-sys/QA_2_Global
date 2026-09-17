@@ -26,7 +26,13 @@ set /p QA2_PID=<"logs\qa2.pid"
 
 REM Un PID viejo puede haberlo reutilizado Windows para otra cosa.
 REM Comprobar que sigue siendo un python antes de matar nada.
-tasklist /FI "PID eq %QA2_PID%" /FI "IMAGENAME eq python.exe" 2>nul | find /i "python.exe" >nul
+REM
+REM "python", no "python.exe": el lanzador sin ventana arranca con
+REM pythonw.exe, que es el que usa el equipo. Filtrando por python.exe
+REM esto contestaba "QA2 no esta corriendo", borraba el PID y dejaba la
+REM app viva -- con la carpeta abierta, que Windows entonces no deja ni
+REM borrar. O sea: el boton de detener no detenia nada.
+tasklist /FI "PID eq %QA2_PID%" /NH 2>nul | find /i "python" >nul
 if errorlevel 1 (
     echo QA2 no esta corriendo.
     del "logs\qa2.pid" 2>nul

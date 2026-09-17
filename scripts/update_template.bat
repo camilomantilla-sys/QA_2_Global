@@ -23,8 +23,15 @@ echo.
 
 REM Si QA2 esta corriendo, sus archivos estan en uso y la copia falla a
 REM la mitad -- que es peor que no empezar.
+REM pythonw.exe cuenta igual: es con el que arranca QA2.bat, el que
+REM abre el equipo. Mirando solo python.exe, esto daba via libre y la
+REM copia se hacia encima de una app abierta.
+set "QA2_VIVO="
 tasklist /fi "imagename eq python.exe" 2>nul | find /i "python.exe" >nul
-if not errorlevel 1 (
+if not errorlevel 1 set "QA2_VIVO=1"
+tasklist /fi "imagename eq pythonw.exe" 2>nul | find /i "pythonw.exe" >nul
+if not errorlevel 1 set "QA2_VIVO=1"
+if defined QA2_VIVO (
     echo   QA2 parece estar abierto.
     echo.
     echo   Cierra la ventana negra de QA2 ^(o usa "Stop QA2.bat"^) y

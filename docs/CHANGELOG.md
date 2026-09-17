@@ -40,6 +40,27 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### "Stop QA2.bat" no detenia QA2
+
+    "pues lo pare intente borrar no pude... sigue sin dejarme borrar"
+
+`QA2.bat` arranca con **pythonw.exe** -- es lo que hace que no deje
+ventana, y es como abre QA2 todo el equipo. Pero el detector de "esta
+corriendo" filtraba por `IMAGENAME eq python.exe`, que es otro
+programa.
+
+Asi que "Stop QA2.bat" contestaba **"QA2 no esta corriendo"**, borraba
+el archivo del PID y dejaba la app viva. Con la carpeta abierta, que
+Windows entonces no deja ni borrar ni reemplazar.
+
+Lo mismo en otros dos sitios, con el mismo origen:
+
+- `run_qa2.bat` no veia la instancia abierta y arrancaba una segunda.
+- `ACTUALIZAR QA2.bat` daba via libre y copiaba encima de una app
+  abierta -- justo lo que ese chequeo existia para impedir.
+
+Los tres cuentan ahora `pythonw.exe` igual que `python.exe`.
+
 ### El paquete no encontraba su propio navegador
 
     "Playwright has no browser on this machine... me esta saliendo
