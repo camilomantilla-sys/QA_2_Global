@@ -137,8 +137,22 @@ def app_files(root: Path = ROOT, skip: Path | None = None) -> list[Path]:
 
 
 def build(destination: Path | None = None) -> Path:
+    """
+    El zip de solo codigo, para quien ya tiene Python.
+
+    NO es el paquete del equipo. Ese lo arma build_bundle.py y lleva
+    el interprete y Chromium adentro; este lleva el codigo y nada mas,
+    asi que quien lo abre cae en la rama de "copia de desarrollo":
+    se monta un .venv, y sin navegador el inicio de sesion de Innovid
+    no arranca.
+
+    Por eso el nombre dice -source. Antes salia QA2-1.0.1.zip al lado
+    de QA2-1.0.1-windows.zip, a un guion de distancia y en la misma
+    carpeta, y el mensaje de abajo remataba diciendo que se subiera a
+    SharePoint. Se subio el que no era.
+    """
     version = _version()
-    target = destination or (_dist() / f"QA2-{version}.zip")
+    target = destination or (_dist() / f"QA2-{version}-source.zip")
 
     included: list[Path] = []
     excluded: dict[str, int] = {}
@@ -183,10 +197,16 @@ def build(destination: Path | None = None) -> Path:
 
     print("  checked: no credentials, no session, no spreadsheets.")
     print()
-    print("  To share it: upload to the team's SharePoint library and send")
-    print("  the link. Whoever receives it unzips the folder and")
-    print("  double-clicks run_qa2.bat -- the first run installs what it")
-    print("  needs and takes a minute.")
+    print("  THIS IS NOT THE PACKAGE FOR THE TEAM.")
+    print("  It carries the code and nothing else, so whoever opens it")
+    print("  needs Python already installed, and the Innovid sign-in")
+    print("  will not run without a browser. It is for another")
+    print("  developer, or for reading the code.")
+    print()
+    print("  The package for the team, with Python and Chromium inside:")
+    print()
+    print("    python scripts/build_bundle.py")
+    print()
     return target
 
 

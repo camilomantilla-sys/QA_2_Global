@@ -160,10 +160,18 @@ repartir arranca.
 
 ## Zip de solo código, sin intérprete
 
-Para alguien que ya tiene Python y quiere el proyecto, no el paquete:
+> **Este NO es el paquete del equipo.** Lleva el código y nada más, así
+> que quien lo abra necesita Python instalado y el inicio de sesión de
+> Innovid no va a arrancar: sin navegador dentro, la app se comporta
+> como una copia de desarrollo. Es para otro desarrollador, o para leer
+> el código.
+>
+> El del equipo es `python scripts/build_bundle.py`, y sale
+> `QA2-<versión>-windows.zip`. **El nombre con la plataforma es el que
+> lleva Python adentro.**
 
 ```bash
-python scripts/package_release.py
+python scripts/package_release.py     #  sale QA2-<version>-source.zip
 ```
 
 ---
@@ -183,7 +191,12 @@ git commit -m "Version 1.1.0"
 git push -u origin claude/tag-url-validation-5adcd4
 
 #  4. armar y repartir
+#     un arreglo de reglas o de la interfaz: basta el parche
 python scripts/package_release.py --update
+
+#     si cambio el arranque, los .bat, requirements.txt o el lock:
+#     el parche NO alcanza, hay que rearmar el paquete entero
+python scripts/build_bundle.py
 ```
 
 La app lee los dos: el número sale en la barra lateral, y la entrada

@@ -558,3 +558,48 @@ if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 
 
+
+
+# ── el zip de codigo no se puede confundir con el del equipo ─────────
+#
+# Salian los dos a dist/ con un guion de diferencia --QA2-1.0.1.zip y
+# QA2-1.0.1-windows.zip-- y el de codigo remataba diciendo "subelo a
+# SharePoint y manda el link". Se subio el que no era: la app arranco
+# como copia de desarrollo, sin navegador, y el inicio de sesion de
+# Innovid no pudo abrir nada. Camilo: "cada vez es peor".
+
+def test_the_source_zip_says_source_in_its_name(tmp_path):
+    from scripts.package_release import build
+
+    out = build(tmp_path / "x.zip")
+    assert out.exists()
+
+    from scripts.package_release import _dist, _version
+
+    default = _dist() / f"QA2-{_version()}-source.zip"
+    assert "-source" in default.name
+
+
+def test_the_source_zip_does_not_send_anyone_to_sharepoint():
+    source = (ROOT / "scripts" / "package_release.py").read_text(
+        encoding="utf-8"
+    )
+    build_body = source[source.index("def build("):source.index("def build_update(")]
+    # Lo que el script IMPRIME, que es lo unico que alguien lee al
+    # terminar. El comentario de arriba si puede nombrarlo: cuenta
+    # justo esta historia.
+    printed = [
+        line for line in build_body.splitlines()
+        if line.strip().startswith("print(")
+    ]
+    assert not [line for line in printed if "SharePoint" in line]
+    assert "NOT THE PACKAGE FOR THE TEAM" in build_body
+    assert "build_bundle.py" in build_body
+
+
+def test_the_bundle_is_the_one_with_a_platform_in_its_name():
+    """
+    QA2-<version>-<plataforma>: ese es el que lleva Python adentro.
+    """
+    code = (ROOT / "scripts" / "build_bundle.py").read_text(encoding="utf-8")
+    assert 'f"QA2-{version()}-{target}"' in code

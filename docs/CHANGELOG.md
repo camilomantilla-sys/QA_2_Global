@@ -40,6 +40,28 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Dos zips a un guion de distancia
+
+`package_release.py` dejaba `QA2-1.0.1.zip` en la misma carpeta que
+`QA2-1.0.1-windows.zip`, y terminaba diciendo "subelo a SharePoint y
+manda el link". Pero ese zip lleva el codigo y **nada mas**: quien lo
+abre necesita Python instalado, y sin navegador dentro el inicio de
+sesion de Innovid no arranca.
+
+Se subio el que no era, y la app arranco como copia de desarrollo.
+
+- El zip de codigo ahora se llama `QA2-<version>-**source**.zip`.
+- Y al terminar dice lo que es, en vez de mandar a repartirlo:
+
+      THIS IS NOT THE PACKAGE FOR THE TEAM.
+      ...
+      The package for the team, with Python and Chromium inside:
+
+        python scripts/build_bundle.py
+
+**Regla para no volver a equivocarse:** el que lleva la plataforma en
+el nombre --`QA2-1.0.1-windows.zip`-- es el del equipo.
+
 ### "Stop QA2.bat" no detenia QA2
 
     "pues lo pare intente borrar no pude... sigue sin dejarme borrar"
