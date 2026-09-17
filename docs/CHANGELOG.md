@@ -40,6 +40,31 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Los creativos de un decision set oculto salian como "extra"
+
+    "los creativos blancos existentes que andan activos me los lee
+     como extra creatives... deberia salir en creatives and
+     assignment no?"
+
+Si. Un creativo blanco no es parte del cambio, pero SI es el contenido
+del Decision Set. Sin el, el placement se queda sin ningun creativo
+esperado y todo lo que Innovid tiene sale como "extra creative": sin
+comparacion, sin fechas y sin URL.
+
+`build_expected` ya lo hacia bien -- pero en "TS_Q2-Q4 2026 Co
+Marketing" las 67 filas de Creative Rotations estan ocultas, asi que no
+habia ninguno que tomar. De esa hoja ya se recuperaba el mapa grupo →
+landing page; faltaban los creativos.
+
+En un swap de SOLO landing page eso significaba que no se comparaba
+**ninguna** landing page, que es lo unico que se pedia revisar. Con los
+56 creativos recuperados: 0 extras y **28 de 28 URLs comparadas**.
+
+De una fila oculta se toma unicamente el creativo, y siempre como
+contexto blanco. Ni un verde ni un rojo: una fila oculta no es parte de
+la solicitud, y esa regla no se toca. Y lo que si se leyo manda -- lo
+oculto solo rellena lo que falta.
+
 ### Un creativo rojo se leia como verde
 
     "me sigue leyendo creativos en rojo como si fueran verdes"

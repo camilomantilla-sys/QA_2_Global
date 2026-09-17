@@ -437,6 +437,58 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 intent_fields=frozenset(row.intent_fields or ()),
             ))
 
+    # --- lo que contiene un decision set cuya hoja esta oculta
+    #
+    # Un creativo blanco no es parte del cambio, pero SI es el
+    # contenido del Decision Set, y sin el el placement se queda sin
+    # ningun creativo esperado: todo lo que Innovid tiene sale como
+    # "extra creative", sin comparacion, sin fechas y sin URL.
+    #
+    # En "TS_Q2-Q4 2026 Co Marketing" las 67 filas de Creative
+    # Rotations estan ocultas, asi que no habia ninguno. Camilo, sobre
+    # un swap de solo landing page: "los creativos blancos existentes
+    # que andan activos me los lee como extra creatives... deberia
+    # salir en creatives and assignment no?". Si.
+    #
+    # De una fila oculta se toma UNICAMENTE el creativo, y siempre
+    # como contexto blanco. Ni un verde, ni un rojo: una fila oculta no
+    # es parte de la solicitud, y esa regla no se toca. Es el mismo
+    # criterio con el que se recupera el mapa grupo -> landing page.
+    hidden_rotations = getattr(ts, "rotations_all", None)
+    if hidden_rotations is not None:
+        for row in hidden_rotations.rows:
+            g = norm_compare(str(row.values.get("group_name") or ""))
+            if not g:
+                continue
+            nombre = str(row.values.get("creative_name") or "")
+            cid = str(row.values.get("creative_id") or "")
+            if not nombre and not cid:
+                continue
+            ya = {c.key_norm for c in by_group.get(g, ())}
+            candidato = ExpectedCreative(
+                name=nombre,
+                creative_id=cid,
+                universal_ad_id=str(row.values.get("universal_ad_id") or ""),
+                intent=WHITE,
+                ts_row=row.row,
+                ts_sheet=hidden_rotations.sheet,
+                url=(
+                    landing_page_urls.get(
+                        norm_compare(str(row.values.get("lp_url") or "")), ""
+                    )
+                    if ts.profile == "wpp_standard"
+                    else str(row.values.get("lp_url") or "")
+                ),
+                cgen=str(row.values.get("cgen") or ""),
+                dims=norm_dims(row.values.get("dims_or_duration")),
+                start=_as_date(row.values.get("start_date")),
+                end=_as_date(row.values.get("end_date")),
+                rotation_weight=str(row.values.get("rotation_weight") or ""),
+                sequence=str(row.values.get("sequence") or ""),
+            )
+            if candidato.key_norm and candidato.key_norm not in ya:
+                by_group.setdefault(g, []).append(candidato)
+
     # --- placements trabajados
     for row in ts.placements.rows:
         pid = str(row.values.get("placement_id") or "")

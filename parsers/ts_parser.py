@@ -135,6 +135,14 @@ class TSResult:
     site_contacts: list[tuple[str, str]] = field(default_factory=list)
     placements: TSSheetResult | None = None
     rotations: TSSheetResult | None = None
+
+    #: Creative Rotations leida ENTERA, incluidas las filas ocultas.
+    #: Solo se rellena cuando hay alguna oculta, y solo sirve para
+    #: resolver referencias -- a que landing page apunta un grupo y
+    #: que creativos contiene. Nunca para decidir que se pidio: eso
+    #: sale de `rotations`, que solo ve lo visible.
+    rotations_all: TSSheetResult | None = None
+
     landing_pages: TSSheetResult | None = None
     groups: dict[str, GroupScope] = field(default_factory=dict)
     lp_worked: set[str] = field(default_factory=set)
@@ -944,6 +952,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
 
     # ---- propagacion y scope
     res.groups = _build_groups(res.rotations)
+    res.rotations_all = rotations_all_rows
     _merge_hidden_lp_refs(res.groups, rotations_all_rows)
     res.lp_worked = _build_lp_worked(res.landing_pages)
 

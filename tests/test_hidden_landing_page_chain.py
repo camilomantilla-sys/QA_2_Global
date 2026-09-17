@@ -50,6 +50,12 @@ class _Row:
         self.row = row
         self.intent = intent
         self.values = values
+        # Lo que build_expected lee de una fila, ademas de sus valores.
+        self.colors = {}
+        self.intent_fields = ()
+        self.inherited = set()
+        self.impl_type = ""
+        self.fmt = "display"
 
 
 class _Sheet:
@@ -185,7 +191,138 @@ def test_the_placement_reaches_url_swap():
     assert scope["10963993"].request_type == "URL_SWAP"
 
 
+
+# ── y lo que ese decision set contiene ───────────────────────────────
+#
+# El mapa grupo -> landing page no era lo unico que se perdia con las
+# filas ocultas. Tambien los creativos.
+#
+# Camilo, sobre un swap de solo landing page: "los creativos blancos
+# existentes que andan activos me los lee como extra creatives... no
+# deberia salir en creatives and assignment?". Si. Un creativo blanco
+# no es parte del cambio, pero SI es el contenido del Decision Set, y
+# sin el el placement se queda sin ningun creativo esperado: los 56
+# que Innovid tenia salian como "extra creative", sin comparacion, sin
+# fechas y sin URL. En un LP swap eso significa que no se comparaba
+# NINGUNA landing page -- justo lo unico que se pedia revisar.
+
+
+def rotations_with_creatives():
+    return _Sheet([
+        _Row(5, WHITE, group_name=GROUP, creative_id="6338888",
+             creative_name="ishares_300x600_v1.jpg", lp_url=LP),
+        _Row(6, WHITE, group_name=GROUP, creative_id="6343752",
+             creative_name="ishares_300x600_v2.jpg", lp_url=LP),
+    ])
+
+
+def test_the_hidden_rows_supply_the_creatives_of_the_decision_set():
+    from core.matching import build_expected
+
+    class _TS:
+        profile = "wpp_standard"
+        placements = _Sheet([
+            _Row(30, WHITE, placement_id="10963972",
+                 placement_name="ETF Intenders", dimensions="300x600",
+                 group_name=GROUP, lp_ref="See Creative Rotation Tab"),
+        ], sheet="Placements")
+        rotations = _Sheet([])
+        rotations_all = rotations_with_creatives()
+        landing_pages = None
+        groups = {}
+        lp_worked = set()
+        scope = {"10963972": _ScopeStub()}
+
+    esperado = build_expected(_TS())["10963972"]
+    assert {c.creative_id for c in esperado.creatives} == {"6338888", "6343752"}
+
+
+def test_they_come_in_as_context_never_as_a_request():
+    """
+    Una fila oculta no es parte de la solicitud, y eso no cambia. Si un
+    verde oculto contara, volverian los ejemplos de la plantilla al QA.
+    """
+    from core.matching import build_expected
+
+    class _TS:
+        profile = "wpp_standard"
+        placements = _Sheet([
+            _Row(30, WHITE, placement_id="10963972",
+                 placement_name="ETF Intenders", dimensions="300x600",
+                 group_name=GROUP, lp_ref="See Creative Rotation Tab"),
+        ], sheet="Placements")
+        rotations = _Sheet([])
+        rotations_all = _Sheet([
+            _Row(5, GREEN, group_name=GROUP, creative_id="111",
+                 creative_name="a.jpg", lp_url=LP),
+            _Row(6, RED, group_name=GROUP, creative_id="222",
+                 creative_name="b.jpg", lp_url=LP),
+        ])
+        landing_pages = None
+        groups = {}
+        lp_worked = set()
+        scope = {"10963972": _ScopeStub()}
+
+    esperado = build_expected(_TS())["10963972"]
+    assert {c.intent for c in esperado.creatives} == {WHITE}
+
+
+def test_a_visible_row_is_not_replaced_by_a_hidden_one():
+    """Lo que se leyo manda; lo oculto solo rellena lo que falta."""
+    from core.matching import build_expected
+
+    class _TS:
+        profile = "wpp_standard"
+        placements = _Sheet([
+            _Row(30, WHITE, placement_id="10963972",
+                 placement_name="ETF Intenders", dimensions="300x600",
+                 group_name=GROUP, lp_ref="See Creative Rotation Tab"),
+        ], sheet="Placements")
+        rotations = _Sheet([
+            _Row(9, GREEN, group_name=GROUP, creative_id="6338888",
+                 creative_name="ishares_300x600_v1.jpg", lp_url=LP),
+        ])
+        rotations_all = rotations_with_creatives()
+        landing_pages = None
+        groups = {}
+        lp_worked = set()
+        scope = {"10963972": _ScopeStub()}
+
+    esperado = build_expected(_TS())["10963972"]
+    porid = {c.creative_id: c.intent for c in esperado.creatives}
+    assert porid["6338888"] == GREEN
+    assert porid["6343752"] == WHITE
+
+
+def test_without_hidden_rows_nothing_changes():
+    from core.matching import build_expected
+
+    class _TS:
+        profile = "wpp_standard"
+        placements = _Sheet([
+            _Row(30, WHITE, placement_id="10963972",
+                 placement_name="ETF Intenders", dimensions="300x600",
+                 group_name=GROUP, lp_ref="See Creative Rotation Tab"),
+        ], sheet="Placements")
+        rotations = _Sheet([])
+        rotations_all = None
+        landing_pages = None
+        groups = {}
+        lp_worked = set()
+        scope = {"10963972": _ScopeStub()}
+
+    assert build_expected(_TS())["10963972"].creatives == []
+
+
+class _ScopeStub:
+    request_type = "URL_SWAP"
+    visual_review = False
+    source = ""
+    groups = {GROUP.casefold()}
+
+
 if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+
