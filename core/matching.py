@@ -160,6 +160,13 @@ class ExpectedPlacement:
     source: str = ""
     creatives: list[ExpectedCreative] = field(default_factory=list)
     ts_rows: list[int] = field(default_factory=list)
+    # Los creativos PEDIDOS -- verdes o rojos -- de la rotacion que
+    # este placement declara que se descartaron por no ser de su
+    # dimension. Un grupo de Adobe trae los 5 tamanos y descartar los
+    # otros 4 es correcto; descartarlos TODOS quiere decir que la
+    # rotacion que el placement nombra no es de su tamano, y eso no se
+    # puede quedar callado. Lo lee PLC-007.
+    dims_dropped: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def green(self) -> list[ExpectedCreative]:
@@ -457,6 +464,16 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     hidden_rotations = getattr(ts, "rotations_all", None)
     if hidden_rotations is not None:
         for row in hidden_rotations.rows:
+            # Una fila gris NO se recupera. Recuperar es rellenar lo
+            # que no se alcanzo a leer, no revivir lo que la TS
+            # descarto a proposito: el gris es la forma en que
+            # BlackRock retira el default viejo, y traerlo de vuelta
+            # como blanco lo ponia otra vez a exigirse en Innovid,
+            # donde ya no esta, y a ocupar el lugar del creativo que
+            # si se pidio. Camilo: "sigue teniendo el problema de que
+            # me trae grises a la app".
+            if row.intent == "SCOPE_EXCLUDED":
+                continue
             g = norm_compare(str(row.values.get("group_name") or ""))
             if not g:
                 continue
@@ -579,6 +596,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             if not c.key_norm or c.key_norm in have:
                 continue
             if not dims_match(ep.dims, c.dims):
+                if c.intent in (GREEN, RED, "SWAP"):
+                    ep.dims_dropped.append((c.name, c.dims))
                 continue
             # Si el placement entero va en rojo, lo que tenga asignado
             # se va con el.

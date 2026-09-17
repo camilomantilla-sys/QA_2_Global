@@ -40,6 +40,51 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El default viejo, en gris, volvia a la app
+
+    "sigue teniendo el problema de que me trae grises a la app... me
+     trae el current default, el default viejo en gris"
+
+BlackRock retira el default viejo pintandolo de GRIS y escribe el nuevo
+debajo, en blanco. La recuperacion de filas ocultas -- la de la entrada
+de abajo -- se traia el gris de vuelta como contexto blanco: el default
+retirado volvia a exigirse en Innovid, donde ya no esta porque termino,
+y salia como creativo faltante.
+
+Recuperar es rellenar lo que no se alcanzo a leer, no revivir lo que la
+TS descarto a proposito. Una fila gris ya no se recupera, este oculta o
+no.
+
+**En la app:** el default ad ahora dice `DEFAULT` en la columna Intent,
+en vez de un blanco que se leia igual que el contenido del decision set.
+El default no lo declara el placement: se engancha por dimension.
+
+### Nueva regla `PLC-007` — la rotacion que no es del tamano del placement
+
+    "no me esta trayendo el creativo correcto... el creativo que debe
+     estar rotando al 100 me lo lleva a extra creatives"
+
+Los creativos de un grupo se filtran por dimension a proposito: un
+grupo de Adobe trae los 5 tamanos y un placement de 160x600 solo sirve
+los suyos. Pero cuando el filtro se lleva **todos** los creativos
+pedidos, el placement se queda sin nada que comparar -- y eso no se
+decia. El hueco lo tapaba el default ad, que se engancha por dimension,
+y la fila se leia como si estuviera revisada.
+
+Paso con dos placements cuyas rotaciones quedaron cruzadas en la TS: el
+de 300x600 nombrando la rotacion de 300x250 y al reves. Innovid corria
+el creativo correcto; la TS era la que estaba mal, y el creativo bueno
+aparecia en "extra creatives" sin ninguna explicacion.
+
+Ahora sale un REVIEW que dice cual es:
+
+> The creative rotation this placement declares has no creative of its
+> dimension, so nothing that was requested could be compared.
+> Expected: A 300x600 creative in "Ticker Search Banner 300x250 - Tax"
+
+Cuando el grupo trae varios tamanos y al placement le queda el suyo, no
+dice nada: eso es el filtro haciendo su trabajo.
+
 ### Los creativos de un decision set oculto salian como "extra"
 
     "los creativos blancos existentes que andan activos me los lee

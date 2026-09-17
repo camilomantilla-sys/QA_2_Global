@@ -209,6 +209,7 @@ Estado: `PASS` · `FAIL` · `REVIEW` · `NOT_VERIFIED` · `INFO` · `BLOCKED`.
 | `PLC-001` | El placement de la TS existe en Innovid | El más básico |
 | `PLC-002` | La desasignación se confirmó: el placement está detenido | Solo en pedidos de remoción |
 | `PLC-006` | El Placement Name coincide | En `rules/naming.py` |
+| `PLC-007` | La rotación que el placement declara tiene al menos un creativo de su dimensión | REVIEW. Salta cuando el filtro por dimensión se lleva **todos** los creativos pedidos: la TS nombró una rotación de otro tamaño |
 
 ### Creativos y rotación — `rules/creatives.py`, `rules/rotation.py`
 

@@ -1,3 +1,4 @@
+from core.colors import GREEN, RED
 from core.findings import Domain
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
@@ -27,6 +28,64 @@ def evaluate(match_result, buffer):
         )
 
         _evaluate_disassignment(pm, buffer)
+
+    # PLC-007 mira la TS, no Innovid: vale igual para un placement que
+    # volvio y para uno que no.
+    for ep in [pm.expected for pm in match_result.matched] + list(
+        match_result.only_expected
+    ):
+        _evaluate_rotation_dims(ep, buffer)
+
+
+def _evaluate_rotation_dims(ep, buffer):
+    """
+    PLC-007 -- la rotacion que el placement declara no es de su tamano.
+
+    Los creativos de un grupo se filtran por dimension a proposito: un
+    grupo de Adobe trae los 5 tamanos y un placement de 160x600 solo
+    sirve los suyos. Pero cuando el filtro se lleva TODOS los creativos
+    pedidos, el placement se queda sin nada que comparar y el reporte
+    no lo decia: el hueco se tapaba solo con el default ad, que se
+    engancha por dimension, y la fila se leia como si estuviera
+    revisada.
+
+    Es lo que paso con dos placements de BlackRock cuyas rotaciones
+    quedaron cruzadas en la TS -- el de 300x600 nombrando la rotacion
+    de 300x250 y viceversa. Innovid estaba bien; la TS no.
+    """
+    pedidos = [
+        c for c in ep.creatives
+        if not c.is_default and c.intent in (GREEN, RED, "SWAP")
+    ]
+
+    # Si quedo aunque sea uno, el filtro hizo su trabajo: el grupo
+    # traia varios tamanos y este placement se quedo con el suyo.
+    if not ep.dims_dropped or pedidos:
+        return
+
+    descartados = ", ".join(
+        f"{name} ({dims})" if dims else name
+        for name, dims in ep.dims_dropped
+    )
+
+    buffer.review(
+        rule_id="PLC-007",
+        domain=Domain.SCOPE,
+        message=(
+            "The creative rotation this placement declares has no "
+            "creative of its dimension, so nothing that was requested "
+            "could be compared."
+        ),
+        placement_id=ep.placement_id,
+        placement_name=ep.name,
+        expected=f"A {ep.dims} creative in \"{ep.group_name}\"",
+        actual=f"{ep.group_name} contains: {descartados}",
+        recommended_action=(
+            "Check the Creative Rotation column of the Traffic Sheet: "
+            f"this placement is {ep.dims} and the rotation it names is "
+            "not."
+        ),
+    )
 
 
 def _evaluate_disassignment(pm, buffer):

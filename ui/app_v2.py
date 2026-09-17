@@ -4396,8 +4396,16 @@ if True:
 
                             creative_rows.append(
                                 {
+                                    # El default ad no lo declara el
+                                    # placement: se engancha por
+                                    # dimension y corre debajo de la
+                                    # rotacion. En blanco a secas se
+                                    # leia igual que el contenido del
+                                    # decision set.
                                     "Intent": (
-                                        expected_creative.intent
+                                        "DEFAULT"
+                                        if expected_creative.is_default
+                                        else expected_creative.intent
                                     ),
                                     "TS Creative": (
                                         expected_creative.name
