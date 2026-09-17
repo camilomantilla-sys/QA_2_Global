@@ -20,6 +20,7 @@ cd ~/Downloads/QA_2_Global
 git pull origin claude/tag-url-validation-5adcd4
 source .venv/Scripts/activate
 pip install -r requirements-dev.txt
+python -m streamlit run ui/app_v2.py
 ```
 
 > El `git pull` va **antes** a propósito: `requirements-dev.txt` llegó
