@@ -24,6 +24,7 @@ Run with pytest, or directly:
 """
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import tempfile
@@ -34,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.innovid_login import (  # noqa: E402
     LoginStart,
     bundled_browser_dir,
+    ensure_browser_path,
     missing_browser_reason,
     start_innovid_login,
 )
@@ -141,3 +143,81 @@ if __name__ == "__main__":
     import pytest
 
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# ── el proceso de la app tambien necesita la variable ────────────────
+#
+# El chequeo contra Innovid abre Chromium DENTRO del proceso de la
+# app, no en un subproceso: pasarle el entorno a un Popen no alcanza.
+# Y el lanzador sin ventana --el que usa el equipo-- no la ponia: solo
+# lo hacia run_qa2.bat, la version con consola. Un paquete completo
+# abierto con doble clic no encontraba su propio navegador.
+
+def test_the_package_browser_is_set_on_this_process(monkeypatch):
+    root = _fake_install(bundled=True, with_browser=True)
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH", raising=False)
+    assert ensure_browser_path(root) == root / "browsers"
+    assert os.environ["PLAYWRIGHT_BROWSERS_PATH"] == str(root / "browsers")
+
+
+def test_a_variable_already_set_by_hand_wins(monkeypatch):
+    root = _fake_install(bundled=True, with_browser=True)
+    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", "/somewhere/else")
+    assert ensure_browser_path(root) is None
+    assert os.environ["PLAYWRIGHT_BROWSERS_PATH"] == "/somewhere/else"
+
+
+def test_a_development_copy_is_left_alone(monkeypatch):
+    root = _fake_install(bundled=False, with_browser=False)
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH", raising=False)
+    assert ensure_browser_path(root) is None
+    assert "PLAYWRIGHT_BROWSERS_PATH" not in os.environ
+
+
+def test_the_app_sets_it_before_starting():
+    """
+    En scripts/start_qa2.py, que es por donde entra todo el mundo:
+    QA2.bat, run_qa2.bat y quien lo llame a mano.
+    """
+    source = (ROOT / "scripts" / "start_qa2.py").read_text(encoding="utf-8")
+    assert "ensure_browser_path(ROOT)" in source
+
+
+def test_the_silent_launcher_is_not_the_one_that_knows():
+    """
+    QA2.bat tambien la pone, pero la app no depende de eso: se dedujo
+    de la carpeta. Esta prueba fija justo eso -- que no volvamos a
+    dejarlo solo en el .bat con ventana.
+    """
+    silent = (ROOT / "QA2.bat").read_text(encoding="utf-8")
+    assert "PLAYWRIGHT_BROWSERS_PATH" in silent
+
+
+# ── el zip de actualizacion no es la aplicacion ──────────────────────
+
+def test_the_update_zip_opened_on_its_own_says_so():
+    """
+    Ese zip es un parche: el codigo y nada mas, para caer encima de
+    una instalacion que ya existe. Extraido solo, arranca --hay Python
+    en la maquina-- pero sin interprete propio ni navegador, y lo
+    unico que se veia era un "corre pip install" que no tiene nada que
+    ver con lo que pasa.
+    """
+    root = _fake_install(bundled=False, with_browser=False)
+    (root / "ACTUALIZAR QA2.bat").write_text("", encoding="utf-8")
+    reason = missing_browser_reason(root)
+    assert "update" in reason.lower()
+    assert "pip install" not in reason
+    assert "playwright install" not in reason
+
+
+def test_a_real_development_copy_still_gets_the_command():
+    """
+    Una copia del repositorio tiene .git: ahi el `playwright install`
+    si es el remedio, aunque el archivo del actualizador exista en
+    scripts/.
+    """
+    root = _fake_install(bundled=False, with_browser=False)
+    (root / ".git").mkdir()
+    (root / "ACTUALIZAR QA2.bat").write_text("", encoding="utf-8")
+    assert "playwright install chromium" in missing_browser_reason(root)

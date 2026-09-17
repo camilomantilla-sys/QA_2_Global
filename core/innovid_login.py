@@ -42,6 +42,33 @@ def bundled_browser_dir(root: Path) -> Path | None:
     return None
 
 
+def ensure_browser_path(root: Path | None = None) -> Path | None:
+    """
+    Pone PLAYWRIGHT_BROWSERS_PATH en ESTE proceso, si el paquete trae
+    navegador propio.
+
+    El lanzador sin ventana --el que usa el equipo-- no lo ponia: solo
+    lo hacia run_qa2.bat, la version con consola. Y como el chequeo
+    contra Innovid abre Chromium DENTRO del proceso de la app, y no en
+    un subproceso al que se le pueda pasar el entorno, un paquete
+    completo abierto con doble clic no encontraba su propio navegador:
+    Playwright lo buscaba en la carpeta del usuario, donde no hay nada.
+
+    Se arregla aqui y no en el .bat porque la ruta se deduce sola de la
+    carpeta del proyecto, y asi vale igual para el .bat, para el CLI y
+    para quien lo arranque de otra manera. Una variable ya puesta a
+    mano manda: quien la declara sabe lo que hace.
+    """
+    if os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "").strip():
+        return None
+    root = root or Path(__file__).resolve().parents[1]
+    browsers = bundled_browser_dir(root)
+    if browsers is None:
+        return None
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers)
+    return browsers
+
+
 def missing_browser_reason(root: Path) -> str:
     """
     Por que no hay navegador, dicho para quien lo va a leer.
@@ -61,6 +88,23 @@ def missing_browser_reason(root: Path) -> str:
             "The browser folder in this package looks incomplete. Ask "
             "for the package to be built again."
         )
+    # Ni paquete ni copia de desarrollo: lo que hay es el zip de
+    # actualizacion extraido por su cuenta.
+    #
+    # Ese zip es un parche, no una aplicacion: trae el codigo y nada
+    # mas, para caer encima de una instalacion que ya existe. Abierto
+    # solo, arranca --hay Python en la maquina de quien lo intenta--
+    # pero sin interprete propio ni navegador, y lo unico que se veia
+    # era un "corre pip install" que no tiene nada que ver.
+    es_desarrollo = (root / ".git").exists() or (root / ".venv").is_dir()
+    if not es_desarrollo and (root / "ACTUALIZAR QA2.bat").exists():
+        return (
+            "This folder is the QA2 update, not QA2 itself: it carries "
+            "the code and nothing else. Extract it over your existing "
+            'QA2 folder and run "ACTUALIZAR QA2.bat" from there, or '
+            "ask for the full package."
+        )
+
     return (
         "Playwright has no browser on this machine. In the project "
         "folder run:\n\n    python -m playwright install chromium"

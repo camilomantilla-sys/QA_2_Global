@@ -30,7 +30,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from core.innovid_login import ensure_browser_path  # noqa: E402
 from core.pidfile import clear_pid, write_pid  # noqa: E402
+
+# El navegador del paquete, antes de que arranque nada.
+#
+# El chequeo contra Innovid abre Chromium dentro de ESTE proceso, asi
+# que la variable tiene que estar puesta aqui: pasarsela a un
+# subproceso no alcanza, y el lanzador sin ventana no la ponia.
+ensure_browser_path(ROOT)
 
 DEFAULT_PORT = 8501
 

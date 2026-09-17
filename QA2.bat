@@ -18,6 +18,11 @@ REM  Para ver que pasa mientras arranca, usa run_qa2.bat: ese si deja
 REM  ventana con todo lo que Streamlit imprime.
 REM ------------------------------------------------------------------
 
+REM El navegador del paquete. QA2 tambien lo deduce solo al
+REM arrancar, asi que esto es solo por si alguien lanza algo a mano
+REM desde aqui.
+if exist "browsers" set "PLAYWRIGHT_BROWSERS_PATH=%CD%\browsers"
+
 if exist "python\pythonw.exe" (
     start "" "%CD%\python\pythonw.exe" "%CD%\scripts\start_qa2.py" 8501
     exit /b 0

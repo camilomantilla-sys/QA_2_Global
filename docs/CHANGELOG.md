@@ -40,6 +40,34 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El paquete no encontraba su propio navegador
+
+    "Playwright has no browser on this machine... me esta saliendo
+     esto en el ultimo zip extraido"
+
+Dos cosas, y las dos se arreglaron.
+
+**La de fondo.** `PLAYWRIGHT_BROWSERS_PATH` solo la ponia
+`run_qa2.bat`, la version con ventana. `QA2.bat` --el que usa el
+equipo-- no. Y el chequeo contra Innovid abre Chromium **dentro** del
+proceso de la app, no en un subproceso al que se le pueda pasar el
+entorno: un paquete completo abierto con doble clic buscaba el
+navegador en la carpeta del usuario, donde no hay nada.
+
+Ahora la app lo deduce sola de su propia carpeta al arrancar, asi que
+vale igual para `QA2.bat`, para `run_qa2.bat`, para el CLI y para quien
+lo lance de otra manera. Si alguien pone la variable a mano, esa manda.
+
+**La del mensaje.** El zip de actualizacion es un parche: el codigo y
+nada mas, para caer **encima** de una instalacion que ya existe.
+Extraido por su cuenta arranca --hay Python en la maquina-- pero sin
+interprete propio ni navegador, y lo unico que decia era "corre
+`pip install`", que no tiene nada que ver. Ahora lo dice:
+
+> This folder is the QA2 update, not QA2 itself: it carries the code
+> and nothing else. Extract it over your existing QA2 folder and run
+> "ACTUALIZAR QA2.bat" from there, or ask for the full package.
+
 ### El default viejo, en gris, volvia a la app
 
     "sigue teniendo el problema de que me trae grises a la app... me

@@ -18,6 +18,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from core.innovid_login import ensure_browser_path  # noqa: E402
+
+# El navegador del paquete, antes de importar nada que lo abra. Vale
+# tambien para quien corra esto a mano desde la carpeta.
+ensure_browser_path(Path(__file__).resolve().parent)
+
 from core.innovid_api import (  # noqa: E402
     CREDENTIALS_PATH,
     SESSION_PATH,
