@@ -154,22 +154,35 @@ def _flight_dates(reconciliation, buffer):
             )
             continue
 
-        # Encontrado por id porque el nombre no coincidia: Innovid lo
-        # tiene renombrado. Sus fechas y su rotacion SI se revisan
-        # (por eso llega aqui como MATCHED), pero el nombre distinto
-        # es un callout por derecho propio: alguien tiene que decidir
-        # si el renombrado fue intencional.
-        # Solo cuando el nombre difiere de verdad. Emparejar por id es
-        # ahora el camino normal, no la excepcion, asi que sin esta
-        # comprobacion INV-004 saltaria en todos los creativos: el
-        # nombre de Innovid arrastra su sello de subida y eso no es un
-        # renombrado. norm_creative lo quita, con el mismo criterio
-        # que usa el resto del motor.
+        # El nombre de la TS contra las DOS etiquetas de Innovid.
+        #
+        # Innovid guarda dos nombres para el mismo creative id y no
+        # siempre coinciden: dentro del decision set suele poner el
+        # nombre del CONCEPTO y en el export Placement-Creative el del
+        # ARCHIVO. Comparando solo contra el del decision set, esta
+        # regla saltaba en TODOS los creativos de una campaña de
+        # Unilever -- 70 revisiones que firmar en una sola solicitud,
+        # y un Excel donde las dos columnas de nombre salian iguales
+        # porque ahi se compara contra el export. Camilo: "pierdo
+        # tiempo validando manualmente que todo esta bien".
+        #
+        # Si el nombre de la TS concuerda con ALGUNA de las dos, hay
+        # dos hechos independientes que dicen que es el creativo
+        # correcto: el id y ese nombre. No hay nada que decidir.
+        #
+        # Lo que si queda: el id lo escribe una persona. Un id mal
+        # tecleado emparejaria con el creativo equivocado y el unico
+        # aviso seria que NINGUNO de los dos nombres concuerda. Eso
+        # sigue siendo REVIEW.
+        _nombre_ts = norm_creative(check.creative_name)
+        _en_dset = norm_creative(check.actual_name)
+        _en_export = norm_creative(check.export_name)
+
         if (
-            check.matched_by == "creative_id"
+            check.matched_by in ("creative_id", "export_creative_id")
             and check.actual_name
-            and norm_creative(check.actual_name)
-            != norm_creative(check.creative_name)
+            and _en_dset != _nombre_ts
+            and not (_en_export and _en_export == _nombre_ts)
         ):
             buffer.review(
                 rule_id="INV-004",

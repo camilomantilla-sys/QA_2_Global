@@ -115,7 +115,7 @@ from core.tag_inventory import (
     build_tag_inventory_from_results,
 )
 from core.matching import match, norm_creative
-from core.qa_export import build_qa_rows
+from core.qa_export import _dset_name as dset_name, build_qa_rows
 from core.urls import account_uses_cgen
 from core.normalize import (
     norm_compare,
@@ -4529,6 +4529,17 @@ if True:
                                         )
                                         if actual_creative
                                         else ""
+                                    ),
+                                    # El tercer nombre: como lo llama
+                                    # Innovid DENTRO del decision set,
+                                    # y solo cuando no lo llama igual.
+                                    # Es la misma columna que lleva el
+                                    # Excel, para que las dos caras
+                                    # enseñen los mismos tres datos y
+                                    # no haya que abrir Innovid para
+                                    # cuadrarlas.
+                                    "Innovid Creative (DS)": dset_name(
+                                        _check, expected_creative.name
                                     ),
                                     "TS Creative ID": (
                                         expected_creative.creative_id

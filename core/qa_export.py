@@ -33,6 +33,20 @@ COLUMNS = [
     "TS Dimensions", "Innovid Dimensions",
     "TS Creative ID", "Innovid Creative ID",
     "TS Creative Name", "Innovid Creative Name",
+    # El tercer nombre, y el unico que no se veia en ningun archivo.
+    #
+    # Innovid guarda dos etiquetas para el mismo creative id: el
+    # export Placement-Creative trae el nombre del ARCHIVO y el
+    # decision set suele mostrar el del CONCEPTO. Las columnas de
+    # arriba comparan contra el export, asi que salian iguales y en
+    # verde -- y la app, que mira el decision set, marcaba el mismo
+    # creativo. Para saber por que habia que abrir Innovid.
+    #
+    # Se llena SOLO cuando el decision set lo llama distinto. Una
+    # columna que casi siempre repite a la de al lado es ruido en una
+    # hoja de treinta; una celda con algo escrito quiere decir "aqui
+    # Innovid lo etiqueta asi", y ya no hay que ir a mirar.
+    "Innovid Creative Name (Decision Set)",
     "TS Creative Dims", "Innovid Creative Dims",
     "TS Creative Dates", "Innovid Creative Dates",
     "TS Rotation", "Innovid Rotation",
@@ -66,6 +80,26 @@ PAIRS = [
 ]
 
 _WORST = ["FAIL", "REVIEW", "NOT_VERIFIED", "INFO", "PASS"]
+
+
+def _dset_name(check, ts_name: str) -> str:
+    """
+    Como se llama el creativo DENTRO del decision set, y solo cuando
+    no se llama igual que en la Traffic Sheet.
+
+    Es el dato que obligaba a abrir Innovid: la app comparaba contra
+    el y el Excel contra el export, asi que el mismo creativo salia
+    marcado en una pantalla y en verde en la otra sin nada que lo
+    explicara.
+    """
+    if check is None:
+        return ""
+    dentro = str(getattr(check, "actual_name", "") or "")
+    if not dentro:
+        return ""
+    if norm_creative(dentro) == norm_creative(ts_name):
+        return ""
+    return dentro
 
 
 # Innovid solo admite porcentajes enteros en el decision set, asi que
@@ -248,6 +282,12 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                 "Innovid Creative Name": _text(
                     (creative_actual.name or creative_actual.filename)
                     if creative_actual else ""
+                ),
+                # Solo si el decision set lo llama de otra forma. En
+                # blanco quiere decir "lo llama igual", que es lo que
+                # pasa casi siempre y no hace falta escribir.
+                "Innovid Creative Name (Decision Set)": _dset_name(
+                    check, cl.expected.name
                 ),
                 # La dimension de ESTE creativo, que no es la del
                 # placement.

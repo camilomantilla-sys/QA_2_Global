@@ -91,7 +91,16 @@ class CreativeFlightCheck:
     # Innovid no es un creativo ausente, y darlo por ausente dejaba
     # sin revisar sus fechas y su rotacion.
     matched_by: str = "name"
+    #: Como se llama el nodo DENTRO del decision set.
     actual_name: str = ""
+    #: Como se llama el MISMO creativo en el export Placement-Creative.
+    #:
+    #: Innovid tiene dos etiquetas para el mismo id y no siempre
+    #: coinciden: dentro del decision set suele poner el nombre del
+    #: concepto y en el export el del archivo. Guardar las dos es lo
+    #: que permite decir si la TS concuerda con alguna, en vez de
+    #: comparar contra una sola y mandar a revisar la diferencia.
+    export_name: str = ""
 
     # Las celdas que la TS pinto en este creativo. La hoja marca el
     # CAMPO que cambia, no la fila: sin esto la regla no puede saber
@@ -234,9 +243,10 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
         # id es el mismo con el que el decision set identifica el
         # nodo: es el conector que faltaba.
         export_ids = {
-            norm_creative(link.expected.name): str(
-                link.actual.creative_id or ""
-            ).strip()
+            norm_creative(link.expected.name): (
+                str(link.actual.creative_id or "").strip(),
+                str(link.actual.name or link.actual.filename or ""),
+            )
             for link in (getattr(pm, "creative_links", None) or [])
             if link.actual is not None and link.expected.name
         }
@@ -381,13 +391,13 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
         # el mismo con el que el decision set identifica su nodo. Con
         # el, las fechas y la rotacion SI se leen, que es lo que habia
         # que revisar.
-        if not candidates:
-            del_export = (export_ids or {}).get(key, "")
-            if del_export:
-                candidates = by_id.get(del_export, [])
-                if candidates:
-                    matched_by = "export_creative_id"
-                    seen_ids.add(del_export)
+        del_export, nombre_export = (export_ids or {}).get(key, ("", ""))
+
+        if not candidates and del_export:
+            candidates = by_id.get(del_export, [])
+            if candidates:
+                matched_by = "export_creative_id"
+                seen_ids.add(del_export)
 
         if not candidates:
             out.flights.append(CreativeFlightCheck(
@@ -405,6 +415,7 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
                     and creative.intent != RED
                     else MISSING_IN_INNOVID
                 ),
+                export_name=nombre_export,
                 intent=creative.intent,
                 is_default=creative.is_default,
                 intent_fields=frozenset(
@@ -459,6 +470,7 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
             dset_name=node.dtree_name,
             matched_by=matched_by,
             actual_name=node.creative_name or "",
+            export_name=nombre_export,
         ))
 
     for key, candidates in by_name.items():

@@ -76,7 +76,7 @@ def _run(*, in_export: bool, intent=GREEN, nodes=None,
         expected,
         nodes if nodes is not None else [_Node()],
         out,
-        {norm_creative(ARCHIVO): export_id} if in_export else {},
+        {norm_creative(ARCHIVO): (export_id, ARCHIVO)} if in_export else {},
     )
     return out.flights[0]
 

@@ -73,6 +73,44 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### 70 revisiones que firmar, y un Excel que las desmentia
+
+    "me lo flaggea en 2. Creative & Assignments, pero en el excel
+     descargado me lo compara con el placement creative export y ahi
+     si hace match... pierdo tiempo validando manualmente que todo
+     esta bien"
+
+El caso real, de la campaña de Vaseline:
+
+| dónde | cómo se llama |
+|---|---|
+| Traffic Sheet | `CHERRY-HYDRATION_LOTION_20OZ-PUMP_..._160X600_...` · ID 6398957 |
+| export Placement-Creative | **el mismo nombre** |
+| dentro del decision set | `VAS_Cherry_Lotion_LapsedBuyers1_Static_Display_160x600_082726.jpg` |
+
+Son **dos etiquetas de Innovid para el mismo creative id**: el archivo
+en el export, el concepto dentro del decision set. `INV-004` comparaba
+solo contra la del decision set, asi que salto en los **70 creativos**
+de la solicitud -- 70 revisiones que firmar a mano -- mientras el Excel,
+que compara contra el export, enseñaba las dos columnas de nombre
+iguales y en verde. Sin nada que explicara por que se habia firmado
+algo.
+
+**La lectura estaba bien. Lo que estaba mal era comparar contra una
+sola etiqueta.** Si el nombre de la TS concuerda con **alguna** de las
+dos, hay dos hechos independientes diciendo que es el creativo
+correcto: el id y ese nombre. No hay nada que decidir, y `INV-004` se
+calla.
+
+Sigue sonando cuando no concuerda con **ninguna** de las dos. Ese aviso
+importa: el Creative ID lo teclea una persona, y un id mal escrito
+emparejaria con el creativo equivocado sin que nada mas lo delatara.
+
+**Y el nombre del decision set ya no hay que ir a buscarlo a Innovid.**
+Hay una columna nueva en el Excel —`Innovid Creative Name (Decision
+Set)`— y la misma en la app, que se llenan **solo** cuando el decision
+set lo llama distinto. En blanco quiere decir "lo llama igual".
+
 ### El mismo creativo, marcado en la app y en verde en el Excel
 
     "si en un lado me muestra el creativo dentro del DS y en otro el
