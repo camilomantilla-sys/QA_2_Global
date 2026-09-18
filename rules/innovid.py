@@ -18,6 +18,7 @@ from core.innovid_reconciliation import (
     EXTRA_IN_INNOVID,
     MATCHED,
     MISSING_IN_INNOVID,
+    ONLY_IN_EXPORT,
 )
 from core.intent import requested
 from core.matching import norm_creative
@@ -80,6 +81,40 @@ def _flight_dates(reconciliation, buffer):
                 recommended_action=(
                     "Add the creative to the decision set, or confirm "
                     "it was dropped from the request."
+                ),
+                **common,
+            )
+            continue
+
+        if check.status == ONLY_IN_EXPORT:
+            # Innovid SI lo tiene: sale en el export
+            # Placement-Creative. Lo que no se pudo es encontrarlo
+            # dentro del decision set, porque alli Innovid lo muestra
+            # con el nombre del concepto y no con el del archivo.
+            #
+            # Decir "no esta en Innovid" era falso, y ademas el Excel
+            # --que compara contra el export-- enseñaba los dos
+            # nombres iguales y en verde. La app hacia firmar una
+            # discrepancia que el reporte desmentia. Camilo: "si en un
+            # lado me muestra el creativo dentro del DS y en otro el
+            # del export, pierdo tiempo validando manualmente que todo
+            # esta bien".
+            #
+            # Ni fallo ni aprobado: esta asignado, y sus fechas y su
+            # rotacion DENTRO del decision set no se pudieron leer.
+            buffer.not_verified(
+                message=(
+                    f"{check.creative_name} is assigned in Innovid, "
+                    "but the decision set does not show it under that "
+                    "name, so its flight dates and rotation inside "
+                    "the decision set could not be read"
+                ),
+                expected=check.creative_name,
+                actual="(in the Placement-Creative export)",
+                recommended_action=(
+                    "Open the decision set in Innovid and confirm "
+                    "which node is this creative -- it is usually the "
+                    "concept name instead of the filename."
                 ),
                 **common,
             )

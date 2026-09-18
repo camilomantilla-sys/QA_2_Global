@@ -40,6 +40,47 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### El mismo creativo, marcado en la app y en verde en el Excel
+
+    "si en un lado me muestra el creativo dentro del DS y en otro el
+     del export, pierdo tiempo validando manualmente que todo esta
+     bien"
+
+Innovid tiene dos vistas del mismo creativo y no siempre lo llama
+igual: dentro del **decision set** suele mostrar el nombre del
+concepto, y en el **export Placement-Creative** el del archivo. QA2
+comparaba contra el decision set en la app y contra el export en el
+Excel, asi que el mismo creativo salia marcado en una pantalla y en
+verde en la otra. Se firmaba una discrepancia que el reporte
+desmentia.
+
+Ahora las dos vistas cuentan. Si el creativo esta en el export,
+**no** se dice que falte: se dice lo que pasa de verdad —
+
+> is assigned in Innovid, but the decision set does not show it under
+> that name, so its flight dates and rotation inside the decision set
+> could not be read
+
+Sale como **NOT_VERIFIED**, no como fallo: esta asignado, y lo que no
+se pudo leer son sus fechas y su rotacion dentro del decision set. Lo
+que no se pudo comprobar nunca pasa en verde.
+
+Un creativo que no esta en **ninguna** de las dos vistas sigue siendo
+un fallo, y uno en rojo sigue confirmando la remocion.
+
+### El 1x1 de Adobe: `N/A` no es un nombre que falte
+
+En Adobe el 1x1 lo sirve el publisher, asi que el creativo nunca pasa
+por Innovid y la TS escribe `N/A` en Creative Names. Eso no generaba
+ningun creativo esperado, y el placement se quedaba **sin una sola
+comprobacion de creativo**: la seccion salia vacia y el reporte
+cerraba limpio.
+
+Comparar el nombre no dice nada -- `1x1.gif` es el mismo para toda la
+cuenta. Que este asignado, si. La regla nueva es **`CRE-002`**: si el
+pixel esta, PASS; si no esta, FAIL; si el placement no volvio en el
+export, NOT_VERIFIED.
+
 ### Dos zips a un guion de distancia
 
 `package_release.py` dejaba `QA2-1.0.1.zip` en la misma carpeta que

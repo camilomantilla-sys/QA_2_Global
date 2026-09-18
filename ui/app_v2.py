@@ -77,6 +77,7 @@ from core.innovid_reconciliation import (
     AMBIGUOUS,
     EXTRA_IN_INNOVID,
     MISSING_IN_INNOVID,
+    ONLY_IN_EXPORT,
     flights_by_creative,
     reconcile as reconcile_innovid,
 )
@@ -4396,6 +4397,12 @@ if True:
                             return "not returned"
                         if check.status == MISSING_IN_INNOVID:
                             return "not in decision set"
+                        if check.status == ONLY_IN_EXPORT:
+                            # Asignado, pero el decision set lo
+                            # muestra con otro nombre. Un "not in
+                            # decision set" aqui hacia firmar una
+                            # discrepancia que el Excel desmentia.
+                            return "assigned, named differently in DS"
                         if check.status == EXTRA_IN_INNOVID:
                             return "not in the Traffic Sheet"
                         if check.status == AMBIGUOUS:

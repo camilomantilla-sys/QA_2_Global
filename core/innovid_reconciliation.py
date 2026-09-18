@@ -30,6 +30,23 @@ MISSING_IN_INNOVID = "MISSING_IN_INNOVID"
 EXTRA_IN_INNOVID = "EXTRA_IN_INNOVID"
 AMBIGUOUS = "AMBIGUOUS"
 
+#: Innovid SI lo tiene asignado -- sale en el export
+#: Placement-Creative -- pero dentro del decision set no aparece con
+#: ese nombre ni con ese id.
+#:
+#: Innovid muestra a menudo el nombre del concepto dentro del decision
+#: set y el del archivo en el export, asi que este caso se daba por
+#: "no esta en Innovid": la app hacia firmar una discrepancia y el
+#: Excel, que compara contra el export, enseñaba los dos nombres
+#: iguales y en verde. Camilo: "si en un lado me muestra el creativo
+#: dentro del DS y en otro el del export, pierdo tiempo validando
+#: manualmente que todo esta bien".
+#:
+#: No es un creativo que falte, y tampoco es un creativo comprobado:
+#: sin nodo no se pueden leer sus fechas ni su rotacion dentro del
+#: decision set. Es exactamente lo que no se pudo comprobar.
+ONLY_IN_EXPORT = "ONLY_IN_EXPORT"
+
 
 @dataclass
 class CreativeFlightCheck:
@@ -208,7 +225,17 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             )
             continue
 
-        _compare_creatives(pid, expected, nodes, out)
+        # Lo que el export Placement-Creative ya emparejo. El decision
+        # set y el export son dos vistas de lo mismo, y cuando solo
+        # una encuentra el creativo, lo que falta es la lectura, no el
+        # creativo.
+        in_export = {
+            norm_creative(link.expected.name)
+            for link in (getattr(pm, "creative_links", None) or [])
+            if link.actual is not None and link.expected.name
+        }
+
+        _compare_creatives(pid, expected, nodes, out, in_export)
 
     _normalize_weights(out)
 
@@ -285,7 +312,7 @@ def _expected_creatives(pm) -> list:
     return [c for c in expected.creatives if c.name]
 
 
-def _compare_creatives(pid, expected, nodes, out) -> None:
+def _compare_creatives(pid, expected, nodes, out, in_export=None) -> None:
     by_name: dict[str, list] = {}
     for node in nodes:
         key = norm_creative(node.creative_name or node.creative_id)
@@ -339,7 +366,17 @@ def _compare_creatives(pid, expected, nodes, out) -> None:
             out.flights.append(CreativeFlightCheck(
                 placement_id=pid,
                 creative_name=creative.name,
-                status=MISSING_IN_INNOVID,
+                # En el export si esta: entonces no falta, solo que el
+                # decision set lo muestra con otro nombre.
+                # Un creativo en ROJO se queda como esta: la TS pide
+                # quitarlo del decision set, y no estar ahi es que se
+                # hizo. Que siga en el export es otra pregunta, y la
+                # contesta CRE-001.
+                status=(
+                    ONLY_IN_EXPORT
+                    if key in (in_export or ()) and creative.intent != RED
+                    else MISSING_IN_INNOVID
+                ),
                 intent=creative.intent,
                 is_default=creative.is_default,
                 intent_fields=frozenset(
