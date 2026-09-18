@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.colors import GREEN, RED  # noqa: E402
 from core.findings import FindingsBuffer, Status  # noqa: E402
 from core.innovid_reconciliation import (  # noqa: E402
+    MATCHED,
     MISSING_IN_INNOVID,
     ONLY_IN_EXPORT,
     CreativeFlightCheck,
@@ -45,6 +46,11 @@ PID = "10707596"
 ARCHIVO = "USWA_A_Static_BINC_300x600.jpg"
 
 
+#: El id que Innovid le dio al creativo. El export lo trae, y es el
+#: mismo con el que el decision set identifica su nodo.
+ID_INNOVID = "6078568"
+
+
 class _Node:
     """Un nodo del decision set, con el nombre del concepto."""
 
@@ -52,28 +58,71 @@ class _Node:
         self.creative_name = name
         self.creative_id = creative_id
         self.is_default = False
-        self.start_timestamp = ""
-        self.end_timestamp = ""
-        self.weight = ""
+        self.start_timestamp = "2026-04-09T00:00:00Z"
+        self.end_timestamp = "2026-09-07T00:00:00Z"
+        self.weight = "50"
         self.dtree_id = ""
         self.dtree_name = ""
 
 
-def _run(*, in_export: bool, intent=GREEN, nodes=None):
+def _run(*, in_export: bool, intent=GREEN, nodes=None,
+         export_id=ID_INNOVID, ts_id=""):
     out = InnovidReconciliation()
-    expected = [ExpectedCreative(name=ARCHIVO, intent=intent)]
+    expected = [
+        ExpectedCreative(name=ARCHIVO, intent=intent, creative_id=ts_id)
+    ]
     _compare_creatives(
         PID,
         expected,
         nodes if nodes is not None else [_Node()],
         out,
-        {norm_creative(ARCHIVO)} if in_export else set(),
+        {norm_creative(ARCHIVO): export_id} if in_export else {},
     )
     return out.flights[0]
 
 
-def test_in_the_export_is_not_missing_from_innovid():
-    assert _run(in_export=True).status == ONLY_IN_EXPORT
+# ── el id del export es el tercer enganche ───────────────────────────
+
+def test_the_export_id_finds_the_node_the_name_could_not():
+    """
+    El conector es el creative id. Pero la TS no siempre lo declara
+    --las de Adobe casi nunca-- y sin el se caia al nombre, que es
+    justo el que no coincide.
+
+    El export SI trae el id de Innovid, y es el mismo del nodo. Con
+    el, las fechas y la rotacion se leen de verdad.
+    """
+    check = _run(in_export=True, nodes=[_Node(creative_id=ID_INNOVID)])
+    assert check.status == MATCHED
+    assert check.matched_by == "export_creative_id"
+    assert check.actual_start is not None
+    assert check.actual_weight == "50"
+
+
+def test_the_traffic_sheet_id_still_wins_when_it_has_one():
+    check = _run(
+        in_export=True,
+        ts_id="999",
+        nodes=[_Node(creative_id="999"), _Node(creative_id=ID_INNOVID)],
+    )
+    assert check.matched_by == "creative_id"
+
+
+def test_the_name_still_works_when_it_does_match():
+    check = _run(in_export=True, nodes=[_Node(name=ARCHIVO)])
+    assert check.status == MATCHED
+    assert check.matched_by == "name"
+
+
+# ── y cuando de verdad no hay nodo ───────────────────────────────────
+
+def test_in_the_export_but_in_no_node_is_not_missing_from_innovid():
+    """
+    Ni por nombre ni por ninguno de los dos ids. Esta asignado --el
+    export lo prueba-- pero no hay nodo que leer.
+    """
+    check = _run(in_export=True, nodes=[_Node(creative_id="otro")])
+    assert check.status == ONLY_IN_EXPORT
 
 
 def test_not_in_the_export_either_is_still_missing():
@@ -87,7 +136,9 @@ def test_a_removal_is_still_a_removal():
     cumplida, y eso no lo cambia que siga figurando en el export. Esa
     otra pregunta la contesta CRE-001.
     """
-    assert _run(in_export=True, intent=RED).status == MISSING_IN_INNOVID
+    check = _run(in_export=True, intent=RED,
+                 nodes=[_Node(creative_id="otro")])
+    assert check.status == MISSING_IN_INNOVID
 
 
 # ── lo que el reporte dice ───────────────────────────────────────────
@@ -101,13 +152,13 @@ def _findings(check: CreativeFlightCheck) -> list:
 
 
 def test_it_is_not_reported_as_a_failure():
-    found = _findings(_run(in_export=True))
+    found = _findings(_run(in_export=True, nodes=[_Node(creative_id='otro')]))
     assert len(found) == 1, found
     assert found[0].status == Status.NOT_VERIFIED
 
 
 def test_it_does_not_claim_the_creative_is_absent():
-    message = _findings(_run(in_export=True))[0].message
+    message = _findings(_run(in_export=True, nodes=[_Node(creative_id='otro')]))[0].message
     assert "not in the decision set" not in message
     assert "assigned in Innovid" in message
 
@@ -117,7 +168,7 @@ def test_it_says_what_could_not_be_read():
     Lo que no se pudo comprobar nunca pasa en verde, y tiene que
     decir QUE fue lo que no se pudo comprobar.
     """
-    message = _findings(_run(in_export=True))[0].message
+    message = _findings(_run(in_export=True, nodes=[_Node(creative_id='otro')]))[0].message
     assert "flight dates and rotation" in message
 
 

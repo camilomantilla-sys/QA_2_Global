@@ -225,17 +225,23 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             )
             continue
 
-        # Lo que el export Placement-Creative ya emparejo. El decision
-        # set y el export son dos vistas de lo mismo, y cuando solo
-        # una encuentra el creativo, lo que falta es la lectura, no el
-        # creativo.
-        in_export = {
-            norm_creative(link.expected.name)
+        # El id que Innovid le dio al creativo, segun el export.
+        #
+        # La Traffic Sheet trae una columna Creative ID, pero muchas
+        # no la llenan -- las de Adobe casi nunca -- y entonces el
+        # unico enganche que quedaba era el nombre, que es justo el
+        # que no coincide. El export SI trae el id de Innovid, y ese
+        # id es el mismo con el que el decision set identifica el
+        # nodo: es el conector que faltaba.
+        export_ids = {
+            norm_creative(link.expected.name): str(
+                link.actual.creative_id or ""
+            ).strip()
             for link in (getattr(pm, "creative_links", None) or [])
             if link.actual is not None and link.expected.name
         }
 
-        _compare_creatives(pid, expected, nodes, out, in_export)
+        _compare_creatives(pid, expected, nodes, out, export_ids)
 
     _normalize_weights(out)
 
@@ -312,7 +318,7 @@ def _expected_creatives(pm) -> list:
     return [c for c in expected.creatives if c.name]
 
 
-def _compare_creatives(pid, expected, nodes, out, in_export=None) -> None:
+def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
     by_name: dict[str, list] = {}
     for node in nodes:
         key = norm_creative(node.creative_name or node.creative_id)
@@ -362,6 +368,27 @@ def _compare_creatives(pid, expected, nodes, out, in_export=None) -> None:
         else:
             candidates = by_name.get(key, [])
 
+        # Tercer intento: el id que Innovid le dio, segun el export.
+        #
+        # El id manda -- pero hasta aqui el unico que se probaba era
+        # el que escribe la Traffic Sheet, y hay cuentas enteras que
+        # no llenan esa columna. Sin id declarado se caia al nombre, y
+        # el nombre es justo el que no coincide: dentro del decision
+        # set Innovid suele mostrar el nombre del CONCEPTO y en el
+        # export el del ARCHIVO.
+        #
+        # El export trae el id real de Innovid para ese creativo, y es
+        # el mismo con el que el decision set identifica su nodo. Con
+        # el, las fechas y la rotacion SI se leen, que es lo que habia
+        # que revisar.
+        if not candidates:
+            del_export = (export_ids or {}).get(key, "")
+            if del_export:
+                candidates = by_id.get(del_export, [])
+                if candidates:
+                    matched_by = "export_creative_id"
+                    seen_ids.add(del_export)
+
         if not candidates:
             out.flights.append(CreativeFlightCheck(
                 placement_id=pid,
@@ -374,7 +401,8 @@ def _compare_creatives(pid, expected, nodes, out, in_export=None) -> None:
                 # contesta CRE-001.
                 status=(
                     ONLY_IN_EXPORT
-                    if key in (in_export or ()) and creative.intent != RED
+                    if key in (export_ids or {})
+                    and creative.intent != RED
                     else MISSING_IN_INNOVID
                 ),
                 intent=creative.intent,

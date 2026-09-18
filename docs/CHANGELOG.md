@@ -87,8 +87,26 @@ Excel, asi que el mismo creativo salia marcado en una pantalla y en
 verde en la otra. Se firmaba una discrepancia que el reporte
 desmentia.
 
-Ahora las dos vistas cuentan. Si el creativo esta en el export,
-**no** se dice que falte: se dice lo que pasa de verdad —
+Ahora las dos vistas cuentan, y en el orden correcto. El enganche es
+el **creative id**, no el nombre — pero hasta ahora el unico id que se
+probaba era el que escribe la Traffic Sheet, y hay cuentas enteras que
+no llenan esa columna (las de Adobe casi nunca). Sin id declarado se
+caia al nombre, que es justo el que no coincide.
+
+El export **si** trae el id que Innovid le dio al creativo, y es el
+mismo con el que el decision set identifica su nodo. Asi que se
+intenta en tres pasos:
+
+1. el Creative ID que declara la Traffic Sheet
+2. el nombre del archivo
+3. **el id de Innovid, tomado del export**
+
+Con el tercero, las fechas y la rotacion dentro del decision set **se
+leen de verdad**. Es el caso comun, y ahora se comprueba en vez de
+quedarse sin comprobar.
+
+Solo cuando ninguno de los tres encuentra el nodo -- el creativo esta
+asignado pero no hay nodo que leer -- se dice lo que pasa de verdad —
 
 > is assigned in Innovid, but the decision set does not show it under
 > that name, so its flight dates and rotation inside the decision set
