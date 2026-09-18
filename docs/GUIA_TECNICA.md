@@ -216,6 +216,7 @@ Estado: `PASS` · `FAIL` · `REVIEW` · `NOT_VERIFIED` · `INFO` · `BLOCKED`.
 | ID | Qué comprueba | Notas |
 |---|---|---|
 | `CRE-001` | El creativo existe en el export | Encontrar el creativo es verdad; que la rotación quedó como se pidió, no |
+| `CRE-002` | El pixel 1x1 está asignado, en un placement site-served | Adobe: la TS dice `N/A` porque el creativo lo sirve el publisher. Sin esto el placement se quedaba sin ninguna comprobación de creativo |
 | `CRE-008` | La rotación (capacidad `ROTATION`) | |
 | `ROT-001` | El cambio de rotación pedido se aplicó | Sin Innovid conectado sale `NOT_VERIFIED`, nunca `PASS` |
 
