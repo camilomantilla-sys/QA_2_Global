@@ -441,7 +441,10 @@ def test_it_says_no_end_date_and_not_other_dates():
     got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
     message = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0].message
     assert "no end date in Innovid" in message
-    assert "keeps serving" in message
+    # El hecho y la fecha que la TS pide, no la consecuencia: si el
+    # placement cierra ese mismo dia, lo para igual.
+    assert "2026-12-31" in message
+    assert "keeps serving" not in message
 
 
 def test_a_ts_with_no_dates_at_all_is_still_nothing_to_compare():

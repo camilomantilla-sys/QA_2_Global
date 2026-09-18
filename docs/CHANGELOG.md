@@ -84,11 +84,15 @@ el par en naranja, pero la regla daba **PASS** — asi que el reporte
 marcaba una diferencia que no habia forma de firmar.
 
 **Cambio de comportamiento.** Antes esto pasaba en verde a proposito
-("sin fecha en Innovid no hay nada que contradiga a la TS"). Ya no: un
-creativo sin cierre sigue sirviendo cuando el vuelo acaba, y eso son
-impresiones despues del cierre. Ahora sale como **REVIEW** — se ve, se
-firma, y las dos caras dicen lo mismo. No es FAIL, porque firmarlo es
-justo lo que se quiere poder hacer.
+("sin fecha en Innovid no hay nada que contradiga a la TS"). Ya no:
+cualquier fecha de fin que la TS declare y que Innovid no lleve sale
+como **REVIEW** — se ve, se firma, y las dos caras dicen lo mismo. No
+es FAIL, porque firmarlo es justo lo que se quiere poder hacer.
+
+El hallazgo dice **el hecho**, no la consecuencia: que Innovid no
+lleva esa fecha. Si el placement cierra el mismo dia, lo para igual —
+y eso es lo que hay que mirar antes de firmar, asi que va en la accion
+recomendada y no en el mensaje.
 
 Y tiene **su propio motivo**, para que la firma en bloque funcione:
 

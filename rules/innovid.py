@@ -244,13 +244,23 @@ def _flight_dates(reconciliation, buffer):
             _sin_cierre = bool(check.expected_end) and not check.actual_end
 
             if _sin_cierre:
+                # El hecho, no la consecuencia.
+                #
+                # Decia "so it keeps serving after the flight closes",
+                # que no siempre es verdad: si el placement cierra el
+                # mismo dia, el placement lo para igual. En Vaseline
+                # los 70 son asi. El hallazgo dice lo que se sabe --
+                # que Innovid no lleva esa fecha -- y la accion dice
+                # que mirar.
                 message = (
                     f"{check.creative_name} has no end date in Innovid, "
-                    "so it keeps serving after the flight closes"
+                    "and the Traffic Sheet closes it on "
+                    f"{check.expected_end}"
                 )
                 accion = (
-                    "Set the end date in the decision set, or sign this "
-                    "off if it is meant to run on."
+                    "Check whether the placement closes it on that "
+                    "date anyway. If it doesn't, set the end date in "
+                    "the decision set; if it does, sign this off."
                 )
             else:
                 message = (
