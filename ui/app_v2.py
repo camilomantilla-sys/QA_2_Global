@@ -4522,10 +4522,22 @@ if True:
                                     "TS Creative": (
                                         expected_creative.name
                                     ),
+                                    # Creative_Name y no Filename, el
+                                    # mismo orden que el Excel.
+                                    #
+                                    # El export trae los dos y en
+                                    # Unilever son distintos: aqui
+                                    # salia el VAS_Cherry_Lotion_... y
+                                    # en el Excel el
+                                    # OLD-LOTION-GOOD-RUN_..., asi que
+                                    # la app parecia enseñar un
+                                    # creativo que no era. El nombre
+                                    # limpio es Creative_Name; Filename
+                                    # arrastra el sello de subida.
                                     "Innovid Creative": (
                                         (
-                                            actual_creative.filename
-                                            or actual_creative.name
+                                            actual_creative.name
+                                            or actual_creative.filename
                                         )
                                         if actual_creative
                                         else ""
@@ -4628,6 +4640,45 @@ if True:
                                     ),
                                 }
                             )
+
+                    # El 1x1 de un site-served, que no tenia fila.
+                    #
+                    # La TS escribe "N/A" en Creative Names porque el
+                    # creativo lo sirve el publisher, asi que no hay
+                    # creativo esperado y la seccion salia vacia. Pero
+                    # Innovid SI tiene algo asignado -- el pixel de la
+                    # cuenta -- y es lo unico que hay que mirar ahi.
+                    # Camilo: "me trae espacios en blanco, me gustaria
+                    # que trajera asi fuera el N/A de la TS... y asi
+                    # identifico que es 1x1.gif".
+                    _trackers = (
+                        getattr(placement_match, "actual_trackers", None)
+                        or []
+                    ) if placement_match is not None else []
+
+                    if not creative_rows and _trackers:
+                        for _tracker in _trackers:
+                            creative_rows.append({
+                                "Intent": "1x1",
+                                "TS Creative": "N/A (site-served)",
+                                "Innovid Creative": (
+                                    _tracker.name or _tracker.filename
+                                ),
+                                "Innovid Creative (DS)": "",
+                                "TS Creative ID": "N/A",
+                                "Innovid Creative ID": _tracker.creative_id,
+                                # El pixel corre con las fechas del
+                                # placement, que ya salen arriba en la
+                                # tabla 1: repetirlas aqui seria el
+                                # mismo dato dos veces.
+                                "TS Dates": "",
+                                "Innovid Dates": "(placement dates)",
+                                "Status": _tracker.state_label,
+                                "URL": "-",
+                                "Attribution": "-",
+                                "Match key": "site-served 1x1",
+                                "Confidence": "-",
+                            })
 
                     if creative_rows:
                         st.dataframe(
