@@ -234,19 +234,41 @@ def _flight_dates(reconciliation, buffer):
         end_off = _differs(check.expected_end, check.actual_end)
 
         if start_off or end_off:
-            buffer.review(
-                message=(
+            # "Sin fecha de fin" merece decirse aparte.
+            #
+            # No es que corra en otras fechas: es que no tiene cierre,
+            # y va a seguir sirviendo cuando el vuelo acabe. Ademas la
+            # firma se hace en bloque por motivo, asi que con el
+            # mensaje generico estos quedaban revueltos con los
+            # desplazamientos de un dia.
+            _sin_cierre = bool(check.expected_end) and not check.actual_end
+
+            if _sin_cierre:
+                message = (
+                    f"{check.creative_name} has no end date in Innovid, "
+                    "so it keeps serving after the flight closes"
+                )
+                accion = (
+                    "Set the end date in the decision set, or sign this "
+                    "off if it is meant to run on."
+                )
+            else:
+                message = (
                     f"{check.creative_name} flights on other dates"
                     if _asked_for_dates
                     else f"{check.creative_name} flights on other dates, "
                          "and this request didn't ask to change them"
-                ),
-                expected=_span(check.expected_start, check.expected_end),
-                actual=_span(check.actual_start, check.actual_end),
-                recommended_action=(
+                )
+                accion = (
                     "Check the dates and sign this off, or correct them "
                     "in the decision set."
-                ),
+                )
+
+            buffer.review(
+                message=message,
+                expected=_span(check.expected_start, check.expected_end),
+                actual=_span(check.actual_start, check.actual_end),
+                recommended_action=accion,
                 **common,
             )
         else:
@@ -405,8 +427,23 @@ def _unchecked(reconciliation, buffer):
 
 
 def _differs(expected, actual) -> bool:
-    """Solo hay diferencia cuando ambos lados declaran una fecha."""
-    return bool(expected and actual and expected != actual)
+    """
+    Una fecha que un lado declara y el otro no TAMBIEN es diferencia.
+
+    Antes solo contaba cuando los dos lados traian fecha, asi que una
+    TS que cierra el 2026-12-28 contra un creativo sin fecha de fin en
+    Innovid daba "flights as requested" y pasaba en verde -- sobre un
+    creativo que se va a quedar sirviendo despues del vuelo. El Excel
+    si pintaba el par en naranja, porque ahi se comparan las celdas:
+    el reporte marcaba la diferencia y no habia nada que firmar.
+    Camilo: "hay un mismatch de fechas de creativo y no me salio la
+    opcion para firmar eso".
+
+    Que la TS no declare NINGUNA fecha se resuelve antes, con un
+    NOT_VERIFIED: ahi de verdad no hay nada que comparar. Cuando se
+    llega aqui, la solicitud pidio al menos una.
+    """
+    return bool((expected or actual) and expected != actual)
 
 
 def _span(start, end) -> str:

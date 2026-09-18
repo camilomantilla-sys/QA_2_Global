@@ -73,6 +73,66 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### Un creativo sin fecha de fin pasaba en verde
+
+    "hay un mismatch de fechas de creativo y no me salio la opcion
+     para firmar eso"
+
+En la campaña de Vaseline la TS cierra el **2026-12-28** y en Innovid
+el creativo no tiene fecha de fin: corre **ongoing**. El Excel pintaba
+el par en naranja, pero la regla daba **PASS** — asi que el reporte
+marcaba una diferencia que no habia forma de firmar.
+
+**Cambio de comportamiento.** Antes esto pasaba en verde a proposito
+("sin fecha en Innovid no hay nada que contradiga a la TS"). Ya no: un
+creativo sin cierre sigue sirviendo cuando el vuelo acaba, y eso son
+impresiones despues del cierre. Ahora sale como **REVIEW** — se ve, se
+firma, y las dos caras dicen lo mismo. No es FAIL, porque firmarlo es
+justo lo que se quiere poder hacer.
+
+Y tiene **su propio motivo**, para que la firma en bloque funcione:
+
+> `INV-001 [REVIEW] · has no end date in Innovid, so it keeps serving
+> after the flight closes (70)`
+
+Con el mensaje generico estos quedaban revueltos con los creativos que
+corren desplazados un dia, que no se firman con el mismo criterio.
+
+Sin ninguna fecha pedida en la TS sigue siendo `NOT_VERIFIED`: ahi de
+verdad no hay nada que comparar.
+
+### Los creativos que la app mostraba distintos del Excel
+
+El export trae **dos nombres** por creativo, y en Unilever son
+distintos:
+
+| campo del export | valor |
+|---|---|
+| `Creative_Name` | `OLD-LOTION-GOOD-RUN_LOTION_20OZ-PUMP_..._300X600` |
+| `Filename` | `VAS_Cherry_Lotion_PopCultureEnthusiasts1_..._300x600` |
+
+El Excel pedia el primero — el limpio, a proposito, porque `Filename`
+arrastra el sello de subida de Innovid. La app pedia el segundo. Asi
+que el mismo creativo se leia `OLD-LOTION-GOOD-RUN` en el Excel y
+`VAS_Cherry_Lotion` en la app, al lado de una columna de TS que decia
+`OLD-LOTION-GOOD-RUN`. Parecia que QA2 habia emparejado el creativo
+equivocado. Las dos caras piden ahora el mismo nombre.
+
+### El 1x1 de Adobe ya tiene fila
+
+La seccion "2. Creatives & Assignment" salia **vacia** en un
+site-served: la TS dice `N/A` en Creative Names, asi que no hay
+creativo esperado. Pero Innovid si tiene algo asignado — el pixel de
+la cuenta — y es lo unico que hay que mirar ahi. Camilo: "me trae
+espacios en blanco, me gustaria que trajera asi fuera el N/A de la TS".
+
+| Intent | TS Creative | Innovid Creative |
+|---|---|---|
+| `1x1` | `N/A (site-served)` | `1x1.gif` |
+
+Solo cuando no hay nada mas que enseñar: si la TS declaro creativos,
+manda lo que se pidio.
+
 ### 70 revisiones que firmar, y un Excel que las desmentia
 
     "me lo flaggea en 2. Creative & Assignments, pero en el excel

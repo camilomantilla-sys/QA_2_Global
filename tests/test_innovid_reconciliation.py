@@ -402,18 +402,55 @@ def test_a_creative_date_mismatch_holds_the_qa_for_review():
     assert _findings(reconcile(ts, got)).scorecard().verdict == "NEEDS_REVIEW"
 
 
-def test_an_ongoing_creative_against_a_dated_ts_is_not_a_failure():
-    # Camilo: si la TS cierra el 31 de diciembre, que Innovid diga
-    # "ongoing" esta bien. Sin fecha en Innovid no hay nada que
-    # contradiga a la TS.
+def test_an_ongoing_creative_against_a_dated_ts_is_signed_off():
+    """
+    Cambio de criterio, pedido por Camilo sobre la campaña de
+    Vaseline.
+
+    Antes esto pasaba en verde: "si la TS cierra el 31 de diciembre,
+    que Innovid diga ongoing esta bien; sin fecha en Innovid no hay
+    nada que contradiga a la TS". Pero el Excel SI pintaba el par en
+    naranja, asi que el reporte marcaba una diferencia que no se podia
+    firmar -- y, sobre todo, un creativo sin fecha de fin sigue
+    sirviendo cuando el vuelo acaba, que son impresiones despues del
+    cierre.
+
+    Ahora es REVIEW: se ve, se firma, y las dos caras dicen lo mismo.
+    No es FAIL, porque firmarlo es justo lo que se quiere poder hacer.
+    """
     ts = _ts("11087616", [
         ExpectedCreative(name=V2, intent=GREEN,
                          start=date(2026, 4, 22), end=date(2026, 12, 31)),
     ])
     got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
     findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
-    assert [f.status.name for f in findings] == ["PASS"]
+    assert [f.status.name for f in findings] == ["REVIEW"]
     assert "ongoing" in findings[0].actual
+
+
+def test_it_says_no_end_date_and_not_other_dates():
+    """
+    Su propio motivo, porque la firma se hace en bloque por motivo:
+    con el mensaje generico estos quedaban revueltos con los
+    creativos que corren desplazados un dia.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 12, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    message = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0].message
+    assert "no end date in Innovid" in message
+    assert "keeps serving" in message
+
+
+def test_a_ts_with_no_dates_at_all_is_still_nothing_to_compare():
+    # Sin fecha pedida no hay diferencia posible: eso sigue siendo
+    # NOT_VERIFIED, no una revision que firmar.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["NOT_VERIFIED"]
 
 
 # --- verification partner ----------------------------------------
