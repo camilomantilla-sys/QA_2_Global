@@ -126,7 +126,7 @@ def test_the_legend_explains_the_colours():
         str(cell.value or "")
         for row in ws.iter_rows() for cell in row
     )
-    assert "signed this off by hand" in text
+    assert "reviewed and accepted" in text
     assert "still open" in text
 
 
@@ -278,4 +278,4 @@ def test_the_legend_no_longer_claims_purple_means_a_mismatch():
     text = " ".join(
         str(c.value) for row in ws.iter_rows() for c in row if c.value
     )
-    assert "A reviewer signed this off by hand" in text
+    assert "A difference someone reviewed and accepted" in text

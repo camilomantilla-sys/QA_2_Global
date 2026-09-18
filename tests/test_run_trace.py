@@ -112,15 +112,29 @@ def test_only_the_chosen_section_is_drawn():
     assert "st.tabs(" not in APP_SOURCE
     assert "st.segmented_control(" in APP_SOURCE
     for label in (
-        "Worked Placements", "Findings", "Rules Executed",
+        "Worked Placements", "Findings",
         "Files & Extraction", "Tags", "DV Pinnacle Tags",
     ):
         assert f'if _section == "{label}":' in APP_SOURCE, label
 
 
+def test_rules_executed_is_not_a_section_of_its_own():
+    """
+    Es la constancia de que se reviso: util el dia que alguien
+    pregunte "¿esto si comprobo X?", ruido el resto de los dias.
+    Vive dentro de "Files & Extraction", en un desplegable cerrado.
+    Camilo: "ocultar rules executed en la interfaz".
+
+    Oculta, no borrada: se sigue llegando a ella con un clic.
+    """
+    assert 'if _section == "Rules Executed":' not in APP_SOURCE
+    assert '"Rule Execution Coverage"' in APP_SOURCE
+    assert "rule_summary_dataframe(" in APP_SOURCE
+
+
 def test_every_section_says_when_it_starts():
     # Para que el log diga cual es la cara, y no haya que adivinarlo.
-    assert APP_SOURCE.count('trace("section ') == 6
+    assert APP_SOURCE.count('trace("section ') == 5
 
 
 def test_signing_lives_in_the_body():

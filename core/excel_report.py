@@ -395,6 +395,18 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
     _colour_legend(ws, len(qa_rows) + 3)
 
 
+def _audit_tab(ws) -> None:
+    """
+    Oculta, no borrada.
+
+    Son la constancia de que se reviso: a quien audita el reporte le
+    hacen falta, y a quien lo lee le sobran. Oculta cumple las dos
+    cosas -- el dato sigue ahi y vuelve con clic derecho > Mostrar --
+    y "muy oculta" no, porque entonces solo se ve desde VBA.
+    """
+    ws.sheet_state = "hidden"
+
+
 def _colour_legend(ws, row: int) -> None:
     """
     Que significa cada color, debajo de la tabla.
@@ -410,9 +422,8 @@ def _colour_legend(ws, row: int) -> None:
         (AGREE_FILL, "Traffic Sheet and Innovid agree"),
         (DISAGREE_FILL, "They differ, and it is still open"),
         (SIGNED_OFF_FILL,
-         "A reviewer signed this off by hand -- on Status, whatever "
-         "the row shows; on a pair, where that is what was signed. "
-         "See Notes for who and why"),
+         "A difference someone reviewed and accepted. Left as a "
+         "callout, not a failure -- see Notes for who and why"),
     )
     for offset, (fill, text) in enumerate(entries, start=1):
         swatch = ws.cell(row=row + offset, column=1, value="")
@@ -564,6 +575,7 @@ def build_excel_report(
 
     ws = wb.create_sheet("Rules Executed")
     _write_table(ws, rules_df)
+    _audit_tab(ws)
 
     ws = wb.create_sheet("Files & Extraction")
     _write_table(ws, files_df, status_col="Status")
@@ -580,6 +592,7 @@ def build_excel_report(
     if tag_coverage_df is not None:
         ws = wb.create_sheet("Tag Coverage")
         _write_table(ws, tag_coverage_df)
+        _audit_tab(ws)
 
     _evidence_sheet(wb, evidence_images or [])
 

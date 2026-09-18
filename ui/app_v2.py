@@ -85,6 +85,7 @@ from core.dv_omni_reconciliation import reconcile_dv_omni
 from core.innovid_login import start_innovid_login
 from core.pidfile import write_pid
 from core.release import qa2_version, release_notes
+from core.report_name import report_filename
 from core.team_roster import (
     ACCOUNTS as TEAM_ACCOUNTS,
     load_roster,
@@ -1308,6 +1309,29 @@ st.markdown(
         div[data-baseweb="tab-highlight"] {
             background-color: var(--wpp-indigo) !important;
         }
+
+        /*
+         * Descargar el reporte es lo ultimo que se hace, y los dos
+         * botones quedaban iguales a todos los demas de la pagina.
+         * Camilo: "el boton de descargar el excel y el pdf se pierde
+         * un poco".
+         *
+         * Navy sobre un teal muy lavado: se distinguen de un vistazo
+         * sin competir con el boton primario, que es el que lanza el
+         * QA. Es el unico sitio donde se usa este par.
+         */
+        [data-testid="stDownloadButton"] > button {
+            background-color: #EAF7F9;
+            border: 1px solid var(--wpp-pantone629);
+            color: var(--wpp-navy);
+            font-weight: 600;
+        }
+
+        [data-testid="stDownloadButton"] > button:hover {
+            background-color: var(--wpp-pantone629);
+            border-color: var(--wpp-teal);
+            color: var(--wpp-navy);
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1698,6 +1722,20 @@ with st.sidebar:
                             st.session_state[_field_key] = (
                                 _manifest[_meta_key]
                             )
+
+                    # La fecha se guardaba desde el principio y no se
+                    # devolvia: era el unico campo del Implementation
+                    # Record que habia que volver a escribir. Un texto
+                    # raro en el manifest no puede tumbar la carga del
+                    # bundle, asi que se ignora y se deja vacia.
+                    _impl_date = _manifest.get("implementation_date")
+                    if _impl_date:
+                        try:
+                            st.session_state["qa2_record_impl_date"] = (
+                                date.fromisoformat(str(_impl_date))
+                            )
+                        except ValueError:
+                            pass
                     if _manifest.get("implementation_date"):
                         st.session_state["qa2_record_impl_date"] = (
                             date.fromisoformat(
@@ -3917,9 +3955,7 @@ if True:
         download_columns[0].download_button(
             "Download PDF Report",
             data=pdf_report_bytes,
-            file_name=(
-                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-            ),
+            file_name=report_filename("pdf", record_campaign),
             mime="application/pdf",
             use_container_width=True,
         )
@@ -3927,9 +3963,7 @@ if True:
         download_columns[1].download_button(
             "Download Excel Report",
             data=excel_report_bytes,
-            file_name=(
-                f"qa_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-            ),
+            file_name=report_filename("xlsx", record_campaign),
             mime=(
                 "application/vnd.openxmlformats-officedocument"
                 ".spreadsheetml.sheet"
@@ -3947,10 +3981,16 @@ if True:
         # cada vez que se toca cualquier cosa. La pasada no terminaba,
         # y mientras no termina, Streamlit no atiende el clic
         # siguiente: se pulsaba firmar y no pasaba nada.
+        # "Rules Executed" no esta aqui a proposito.
+        #
+        # Es la constancia de que se reviso -- util el dia que alguien
+        # pregunte "¿esto si comprobo X?" -- y ruido el resto de los
+        # dias. Vive dentro de "Files & Extraction", en un desplegable
+        # cerrado: sigue a un clic, sin ocupar un sitio en la barra.
+        # Camilo: "ocultar rules executed en la interfaz".
         SECTIONS = [
             "Worked Placements",
             "Findings",
-            "Rules Executed",
             "Files & Extraction",
             "Tags",
             "DV Pinnacle Tags",
@@ -5122,33 +5162,6 @@ if True:
                 )
 
         # ====================================================
-        # TAB: Rules Executed
-        # ====================================================
-
-        if _section == "Rules Executed":
-            trace("section Rules Executed")
-            st.subheader(
-                "Rule Execution Coverage"
-            )
-
-            rules_dataframe = (
-                rule_summary_dataframe(
-                    findings_buffer
-                )
-            )
-
-            if rules_dataframe.empty:
-                st.warning(
-                    "The Rule Engine did not emit any results."
-                )
-            else:
-                st.dataframe(
-                    rules_dataframe,
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-        # ====================================================
         # TAB: Files & Extraction
         # ====================================================
 
@@ -5163,6 +5176,31 @@ if True:
                 use_container_width=True,
                 hide_index=True,
             )
+
+            # La constancia de que se reviso, a un clic.
+            with st.expander("Rule Execution Coverage"):
+                st.caption(
+                    "Every rule QA2 ran on this request, and what it "
+                    "found. This is the audit trail: it answers "
+                    "\"did it actually check X?\"."
+                )
+
+                rules_dataframe = (
+                    rule_summary_dataframe(
+                        findings_buffer
+                    )
+                )
+
+                if rules_dataframe.empty:
+                    st.warning(
+                        "The Rule Engine did not emit any results."
+                    )
+                else:
+                    st.dataframe(
+                        rules_dataframe,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
             st.markdown("#### Traffic Sheet")
 
