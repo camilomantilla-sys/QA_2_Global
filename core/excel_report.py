@@ -22,6 +22,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from core.pdf_report import ReportMeta
 from core.qa_export import COLUMNS as QA_COLUMNS, PAIRS, cells_agree
+from core.verdict import SCOPE_LABELS, VERDICT_LABELS
 
 # WPP Media Brand Guidelines 2025 v1.0 (openpyxl wants RRGGBB, no #).
 WPP_NAVY = "000050"
@@ -237,6 +238,29 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         ))
 
     row += 1
+
+    # Implementacion y tags, por separado.
+    #
+    # Va inmediatamente debajo del veredicto porque es lo que decide
+    # que hace quien lo lee: rehacer la implementacion, o esperar un
+    # correo con un pixel. Camilo: "la implementacion estuvo ok --
+    # echale un ojo a los tags".
+    if meta.scope_verdicts:
+        partes = " · ".join(
+            f"{SCOPE_LABELS.get(scope, scope)}: "
+            f"{VERDICT_LABELS.get(verdict, verdict)}"
+            for scope, verdict in sorted(meta.scope_verdicts.items())
+        )
+        ws.cell(row=row, column=1, value=partes).font = Font(
+            color=WPP_INK, bold=True, size=10
+        )
+        row += 1
+
+    if meta.scope_summary:
+        ws.cell(row=row, column=1, value=meta.scope_summary).font = Font(
+            color=WPP_MUTED, size=10
+        )
+        row += 1
 
     # Quien firmo y cuando ya viven en el Implementation Record, unas
     # filas mas abajo. Aqui habia ademas una celda de texto libre que

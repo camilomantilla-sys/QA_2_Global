@@ -47,6 +47,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from core.colors import RED
 from core.review import bulk_groups
+from core.verdict import (
+    SCOPE_LABELS,
+    VERDICT_LABELS,
+    headline as scope_headline,
+    verdicts_by_scope,
+)
 from core.engine import run_rules
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
@@ -199,15 +205,6 @@ STATUS_COLOR = {
     "REVIEW": "#D97706",
     "NOT_VERIFIED": "#64748B",
     "INFO": "#0EA5C4",
-}
-
-
-VERDICT_LABELS = {
-    "PASSED": "PASSED",
-    "FAILED": "REQUIRES CORRECTION",
-    "BLOCKED": "BLOCKED",
-    "NEEDS_REVIEW": "REVIEW REQUIRED",
-    "NO_CHECKS": "NO CHECKS RUN",
 }
 
 
@@ -944,7 +941,7 @@ def render_status_badge(status: str) -> None:
     )
 
 
-def show_verdict(verdict: str) -> None:
+def show_verdict(verdict: str, findings=None) -> None:
     label = VERDICT_LABELS.get(verdict, verdict)
     color = VERDICT_COLORS.get(verdict, "#64748b")
 
@@ -963,6 +960,46 @@ def show_verdict(verdict: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    if findings is None:
+        return
+
+    # Implementacion y tags, por separado.
+    #
+    # Un pixel que llega dos dias despues de enviar los tags no
+    # significa que el trafficking este mal, y metidos en un solo
+    # veredicto no habia forma de saber cual de los dos hay que
+    # arreglar. Camilo: "la implementacion estuvo ok - echale un ojo a
+    # los tags".
+    scopes = verdicts_by_scope(findings)
+    if len(scopes) < 2:
+        return
+
+    summary = scope_headline(findings)
+    if summary:
+        st.markdown(f"**{summary}**")
+
+    columns = st.columns(len(scopes))
+    for column, (scope, scope_verdict) in zip(
+        columns, sorted(scopes.items())
+    ):
+        column.markdown(
+            f"""
+            <div class="scope-card"
+                 style="border-left:6px solid
+                        {VERDICT_COLORS.get(scope_verdict, '#64748b')};">
+                <div class="verdict-caption">
+                    {SCOPE_LABELS.get(scope, scope).upper()}
+                </div>
+                <div class="scope-value"
+                     style="color:{VERDICT_COLORS.get(
+                         scope_verdict, '#64748b')};">
+                    {VERDICT_LABELS.get(scope_verdict, scope_verdict)}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ============================================================
@@ -1158,6 +1195,20 @@ st.markdown(
             margin: 8px 0 0 0;
             opacity: 0.94;
             font-size: 0.97rem;
+        }
+
+        .scope-card {
+            background: #FFFFFF;
+            border-radius: 10px;
+            padding: 0.6rem 0.9rem;
+            margin-bottom: 0.9rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 80, 0.08);
+        }
+
+        .scope-value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }
 
         .verdict-card {
@@ -3290,7 +3341,7 @@ if True:
         # Results header
         # ----------------------------------------------------
 
-        show_verdict(scorecard.verdict)
+        show_verdict(scorecard.verdict, findings_buffer.findings)
 
         st.markdown(
             f"""
@@ -3769,6 +3820,13 @@ if True:
                 verdict_label=VERDICT_LABELS.get(
                     scorecard.verdict, scorecard.verdict
                 ),
+                # El veredicto partido en dos, igual que en pantalla:
+                # el reporte que se reparte tiene que decir lo mismo
+                # que vio quien lo genero.
+                scope_verdicts=verdicts_by_scope(
+                    findings_buffer.findings
+                ),
+                scope_summary=scope_headline(findings_buffer.findings),
                 profile_used=professional_profile_name(
                     ts_result.profile
                 ),
@@ -3890,6 +3948,13 @@ if True:
                 verdict_label=VERDICT_LABELS.get(
                     scorecard.verdict, scorecard.verdict
                 ),
+                # El veredicto partido en dos, igual que en pantalla:
+                # el reporte que se reparte tiene que decir lo mismo
+                # que vio quien lo genero.
+                scope_verdicts=verdicts_by_scope(
+                    findings_buffer.findings
+                ),
+                scope_summary=scope_headline(findings_buffer.findings),
                 profile_used=professional_profile_name(
                     ts_result.profile
                 ),

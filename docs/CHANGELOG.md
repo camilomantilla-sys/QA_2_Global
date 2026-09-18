@@ -40,6 +40,39 @@ Primera versión que se entrega al equipo.
   fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
   y no los devolvían, contaminando lo que corriera después.
 
+### Dos veredictos: la implementacion y los tags
+
+    "yo implemento bien para adobe, pasa el QA y se puede demorar 2
+     dias en recibir pixels pero ya envie tags, entonces es diferente
+     la implementacion a los tags"
+
+Un pixel que llega dos dias despues de enviar los tags no significa
+que el trafficking este mal. Metidos en un solo veredicto, un vendor
+que todavia no ha mandado su pixel teñia de rojo un reporte donde los
+placements, los creativos, las fechas y las URLs estaban perfectos — y
+quien lo recibia no sabia si tenia que rehacer la implementacion o
+solo esperar un correo.
+
+Ahora se cuentan por separado:
+
+| | qué incluye |
+|---|---|
+| **Implementation** | placements, creativos, fechas, dimensiones, rotación, URLs, atribución. Lo que hizo AdOps y lo que AdOps puede arreglar |
+| **Tags & pixels** | lo que se entrega y lo que ponen terceros. Un fallo aquí casi nunca se arregla volviendo a Innovid |
+
+**El veredicto general sigue siendo el peor de los dos:** con los tags
+mal, el QA no está aprobado. Lo que cambia es que ahora el reporte dice
+*cuál* de los dos falla, con una frase delante:
+
+> **The implementation is fine.** Take a look at the tags and pixels.
+
+Y cuando los dos están bien, no dice nada: una frase que no aporta es
+una frase que se aprende a saltar.
+
+Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
+etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
+en vez de estar copiadas en tres.
+
 ### El mismo creativo, marcado en la app y en verde en el Excel
 
     "si en un lado me muestra el creativo dentro del DS y en otro el

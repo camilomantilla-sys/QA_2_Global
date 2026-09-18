@@ -30,6 +30,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from core.verdict import SCOPE_LABELS, VERDICT_LABELS
+
 PAGE_W, PAGE_H = letter
 
 FONT_DIR = Path(__file__).resolve().parents[1] / "ui" / "assets" / "fonts"
@@ -131,6 +133,16 @@ class ReportMeta:
     metrics: dict[str, int] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
     source_files: list[str] = field(default_factory=list)
+
+    # El veredicto, partido en dos: lo que se trafico y lo que se
+    # entrega. Un pixel que llega dos dias tarde no significa que la
+    # implementacion este mal, y en un solo veredicto no habia forma
+    # de saber cual de los dos hay que arreglar.
+    #
+    # {"implementation": "PASSED", "tags": "NEEDS_REVIEW"}
+    scope_verdicts: dict[str, str] = field(default_factory=dict)
+    # La frase que dice cual mirar, ya escrita.
+    scope_summary: str = ""
 
     # Implementation record -- filled from the sidebar, or left blank
     # for the reviewer to fill by hand on a printed copy.
@@ -240,6 +252,24 @@ def _verdict_flowable(meta: ReportMeta, styles):
             )
         ],
     ]
+
+    # Implementacion y tags, por separado, debajo del veredicto.
+    #
+    # Es lo que decide que hace quien lo lee: rehacer la
+    # implementacion, o esperar un correo con un pixel. En un solo
+    # veredicto no habia forma de distinguirlos.
+    if meta.scope_verdicts:
+        partes = " &nbsp;·&nbsp; ".join(
+            f"<b>{SCOPE_LABELS.get(scope, scope)}:</b> "
+            f'<font color="'
+            f'{VERDICT_COLORS.get(verdict, WPP_MUTED).hexval()}">'
+            f"{VERDICT_LABELS.get(verdict, verdict)}</font>"
+            for scope, verdict in sorted(meta.scope_verdicts.items())
+        )
+        data.append([Paragraph(partes, styles["body"])])
+
+    if meta.scope_summary:
+        data.append([Paragraph(meta.scope_summary, styles["muted"])])
     t = Table(data, colWidths=[170 * mm])
     t.setStyle(
         TableStyle(

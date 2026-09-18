@@ -174,6 +174,27 @@ BLOCKED  >  FAILED  >  NEEDS_REVIEW  >  PASSED
 `NOT_VERIFIED` no es un aprobado: es "esto no se pudo comprobar", y
 tiene que verse.
 
+### Dos veredictos, no uno
+
+La misma escalera se calcula **dos veces**, sobre dos mitades de los
+hallazgos (`core/verdict.py`):
+
+| Alcance | Dominios |
+|---|---|
+| **Implementation** | todo lo demás: `Scope`, `Identity`, `Dates`, `Dimensions`, `Creative`, `Rotation`, `URL`, `Attribution`, `Cardinality`, `Structure`, `Ingestion` |
+| **Tags & pixels** | `Pixel`, `Tag` |
+
+Porque no se arreglan igual: un creativo mal asignado lo corrige AdOps
+en Innovid; un píxel que no ha llegado se espera. Con un solo veredicto,
+un vendor que todavía no mandó su píxel teñía de rojo un trafficking
+perfecto.
+
+**El veredicto que manda sigue siendo el peor de los dos** — con los
+tags mal el QA no está aprobado. Lo que aporta la separación es decir
+*cuál* de los dos hay que mirar, y eso sale como una frase encima de
+todo: *"The implementation is fine. Take a look at the tags and
+pixels."* Cuando los dos están bien, no dice nada.
+
 ### Lo que no se pudo comprobar nunca pasa en verde
 
 La regla de oro del proyecto. Si falta el insumo, el hallazgo sale
