@@ -32,7 +32,13 @@ COLUMNS = [
     "TS Dset / Dtree", "Innovid Dset / Dtree",
     "TS Dimensions", "Innovid Dimensions",
     "TS Creative ID", "Innovid Creative ID",
-    "TS Creative Name", "Innovid Creative Name",
+    # De donde sale cada nombre, dicho en el encabezado.
+    #
+    # Innovid tiene dos etiquetas para el mismo creativo y la columna
+    # se llamaba "Innovid Creative Name" a secas, asi que no habia
+    # forma de saber cual de las dos se estaba mirando. Camilo: "para
+    # lo de los creativos especificar cual es el del export".
+    "TS Creative Name", "Innovid Creative Name (Export)",
     # El tercer nombre, y el unico que no se veia en ningun archivo.
     #
     # Innovid guarda dos etiquetas para el mismo creative id: el
@@ -71,7 +77,7 @@ PAIRS = [
     ("TS Dset / Dtree", "Innovid Dset / Dtree"),
     ("TS Dimensions", "Innovid Dimensions"),
     ("TS Creative ID", "Innovid Creative ID"),
-    ("TS Creative Name", "Innovid Creative Name"),
+    ("TS Creative Name", "Innovid Creative Name (Export)"),
     ("TS Creative Dims", "Innovid Creative Dims"),
     ("TS Creative Dates", "Innovid Creative Dates"),
     ("TS Rotation", "Innovid Rotation"),
@@ -279,7 +285,7 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                 # escribe la Traffic Sheet. Mostrar el sucio hacia que
                 # la columna saliera en naranja teniendo delante dos
                 # nombres iguales.
-                "Innovid Creative Name": _text(
+                "Innovid Creative Name (Export)": _text(
                     (creative_actual.name or creative_actual.filename)
                     if creative_actual else ""
                 ),

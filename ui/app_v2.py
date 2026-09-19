@@ -46,7 +46,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from core.colors import RED
-from core.review import bulk_groups
+from core.review import bulk_groups, group_review_findings
 from core.verdict import (
     SCOPE_LABELS,
     VERDICT_LABELS,
@@ -1374,14 +1374,16 @@ st.markdown(
          */
         [data-testid="stDownloadButton"] > button {
             background-color: #EAF7F9;
-            border: 1px solid var(--wpp-pantone629);
+            /* El mismo azul del boton que lanza el QA, para que se
+               lean como de la misma familia. */
+            border: 1px solid var(--wpp-cornflower);
             color: var(--wpp-navy);
             font-weight: 600;
         }
 
         [data-testid="stDownloadButton"] > button:hover {
             background-color: var(--wpp-pantone629);
-            border-color: var(--wpp-teal);
+            border-color: var(--wpp-cornflower);
             color: var(--wpp-navy);
         }
     </style>
@@ -3157,6 +3159,27 @@ if True:
                         "approved yet."
                     )
 
+                # Que son los que faltan, antes de firmarlos.
+                #
+                # El panel decia "70 to review" y nada mas: para saber
+                # de que eran habia que bajar a la tabla y leer fila
+                # por fila. Camilo: "me gustaria tener una anotacion
+                # que sea, los 70 creativos por firmar tienen una
+                # diferencia de fechas o algo asi, como para saber".
+                _reasons = sorted(
+                    group_review_findings(review_findings).items(),
+                    key=lambda item: -len(item[1]),
+                )
+                if _reasons:
+                    st.markdown(
+                        "**What is waiting for a signature**\n"
+                        + "\n".join(
+                            f"- **{len(items)}** · {reason or rule}"
+                            f"  ({rule})"
+                            for (rule, reason), items in _reasons
+                        )
+                    )
+
                 _orphans = int(
                     st.session_state.get("qa2_review_orphans", 0)
                 )
@@ -3224,7 +3247,12 @@ if True:
 
                 _panel_groups = bulk_groups(review_findings)
 
-                if len(_panel_groups) > 1:
+                # Antes solo aparecia con DOS grupos o mas. Con uno
+                # solo --los 70 de la misma diferencia de fechas-- la
+                # unica opcion visible era "Sign off all", que no dice
+                # que se esta firmando. Con un grupo tambien se enseña:
+                # el nombre del grupo ES la explicacion.
+                if _panel_groups:
                     _chosen = _button_columns[2].multiselect(
                         "Or sign off only these groups",
                         options=list(_panel_groups),
@@ -4534,7 +4562,7 @@ if True:
                                     # creativo que no era. El nombre
                                     # limpio es Creative_Name; Filename
                                     # arrastra el sello de subida.
-                                    "Innovid Creative": (
+                                    "Innovid Creative (Export)": (
                                         (
                                             actual_creative.name
                                             or actual_creative.filename
@@ -4661,7 +4689,7 @@ if True:
                             creative_rows.append({
                                 "Intent": "1x1",
                                 "TS Creative": "N/A (site-served)",
-                                "Innovid Creative": (
+                                "Innovid Creative (Export)": (
                                     _tracker.name or _tracker.filename
                                 ),
                                 "Innovid Creative (DS)": "",

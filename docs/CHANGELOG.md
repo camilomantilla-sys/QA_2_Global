@@ -73,6 +73,58 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### El panel de firma dice de que son
+
+Decia `70 to review` y nada mas: para saber de que eran habia que
+bajar a la tabla y leer fila por fila. Y el selector de grupos solo
+aparecia con **dos** motivos o mas, asi que en el caso tipico --los 70
+con la misma diferencia de fechas-- la unica opcion visible era "Sign
+off all", que tampoco dice que se esta firmando.
+
+Ahora, encima de los botones:
+
+> **What is waiting for a signature**
+> - **70** · has no end date in Innovid, and the Traffic Sheet closes
+>   it on 2026-12-28  (INV-001 [REVIEW])
+
+Y el selector de grupos sale **tambien con un solo grupo**, porque el
+nombre del grupo es la explicacion. Con varios motivos se pueden
+firmar unos si y otros no, como antes.
+
+### Cual de los dos nombres de Innovid es cual
+
+La columna se llamaba `Innovid Creative Name` a secas, y Innovid tiene
+dos etiquetas para el mismo creativo. Ahora el encabezado lo dice:
+
+| columna | de donde sale |
+|---|---|
+| `Innovid Creative Name (Export)` | el export Placement-Creative |
+| `Innovid Creative Name (Decision Set)` | el nodo dentro del decision set, solo si se llama distinto |
+
+Lo mismo en la app: `Innovid Creative (Export)`.
+
+### El 1x1 de Adobe ya no avisa de unas fechas que no existen
+
+    "dice Creative dates were not checked: Innovid did not return this
+     placement... aca adopta las fechas del placement entonces es como
+     una falsa alerta"
+
+Un 1x1 site-served no tiene decision set, y la API a veces ni devuelve
+el placement: **no hay arbol que pedir**. Eso salia como
+`NOT_VERIFIED`, un aviso sobre algo que no existe.
+
+Ya se trataba bien el caso "el placement vuelve pero sin nodos";
+faltaba el de "el placement no vuelve". Ahora los dos dicen lo mismo:
+
+> Site-served 1x1: the creative is assigned to the placement and runs
+> on its dates, so there is no decision set to check
+
+Un placement de display que no vuelve **sigue** saliendo
+`NOT_VERIFIED`: ahi si falta algo que mirar.
+
+**Y el borde de los botones de Excel y PDF** pasa al mismo azul del
+boton que lanza el QA.
+
 ### Un creativo sin fecha de fin pasaba en verde
 
     "hay un mismatch de fechas de creativo y no me salio la opcion

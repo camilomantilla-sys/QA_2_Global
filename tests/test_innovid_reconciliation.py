@@ -847,3 +847,44 @@ if __name__ == "__main__":
 
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+# --- el 1x1 que Innovid ni devuelve --------------------------------
+
+def test_a_site_served_1x1_missing_from_the_api_is_not_an_alert():
+    """
+    Un 1x1 site-served no tiene decision set, y la API a veces ni
+    devuelve el placement: no hay arbol que pedir. Eso salia como
+    "Creative dates were not checked: Innovid did not return this
+    placement", que es un aviso sobre algo que no existe.
+
+    El creativo va asignado DIRECTO al placement y corre con SUS
+    fechas, que ya se comparan arriba. Camilo, sobre sus 1x1 de
+    Adobe: "aca adopta las fechas del placement entonces es como una
+    falsa alerta".
+    """
+    ts = _ts("11154704", [], fmt="1x1", dims="1x1", vendors="")
+    # La API contesta, pero sin este placement.
+    got = _innovid("99999999", 40316, [])
+
+    out = reconcile(ts, got)
+    assert out.site_served == ["11154704"]
+    assert out.unchecked == []
+
+    findings = _by_rule(_findings(out), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
+    assert "runs on its dates" in findings[0].message
+
+
+def test_a_display_placement_missing_from_the_api_still_says_so():
+    # Ahi si falta algo: un display corre por decision set, y sin el
+    # no se pudieron mirar las fechas.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("99999999", 40316, [])
+
+    out = reconcile(ts, got)
+    assert out.site_served == []
+    assert [pid for pid, _ in out.unchecked] == ["11087616"]
+
+    findings = _by_rule(_findings(out), "INV-001")
+    assert [f.status.name for f in findings] == ["NOT_VERIFIED"]

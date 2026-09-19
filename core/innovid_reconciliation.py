@@ -187,6 +187,17 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
 
         innovid_placement = innovid_by_placement.get(pid)
         if innovid_placement is None:
+            # Un 1x1 site-served no tiene decision set, y la API a
+            # veces ni devuelve el placement: no hay arbol que pedir.
+            # Eso no es "no se pudo comprobar" -- es que el creativo
+            # va asignado DIRECTO al placement y corre con SUS fechas,
+            # que ya se comparan arriba. Camilo, viendo el aviso sobre
+            # sus 1x1 de Adobe: "acá adopta las fechas del placement
+            # entonces es como una falsa alerta".
+            if _is_site_served_1x1(pm):
+                out.site_served.append(pid)
+                continue
+
             out.unchecked.append(
                 (pid, "Innovid did not return this placement")
             )
