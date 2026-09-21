@@ -67,10 +67,38 @@ def save_roster(roster: dict[str, list[str]]) -> None:
     )
 
 
+def base_account(value: str) -> str:
+    """
+    La cuenta a la que pertenece lo que se eligio en el selector.
+
+    El selector "Account / Campaign" no ofrece solo cuentas: tambien
+    las lineas de negocio de la tabla de pixeles de Adobe, porque el
+    pixel oficial cambia de una a otra ("Adobe Acrobat", "Adobe
+    Firefly", "Adobe PGA"...). Elegir una de esas dejaba los tres
+    desplegables de "By" con solo Support, porque el roster se busca
+    por clave exacta.
+
+    Una etiqueta que empieza por el nombre de una cuenta pertenece a
+    esa cuenta. Se prefiere la coincidencia mas larga, por si algun
+    dia dos cuentas comparten prefijo.
+    """
+    texto = str(value or "").strip()
+    if not texto or texto in ACCOUNTS:
+        return texto
+
+    clave = texto.casefold()
+    candidatas = [
+        account for account in ACCOUNTS
+        if account != "Support" and clave.startswith(account.casefold())
+    ]
+    return max(candidatas, key=len) if candidatas else texto
+
+
 def names_for_account(roster: dict[str, list[str]], account: str) -> list[str]:
     """Roster for one account plus Support, deduped, order preserved."""
     names: list[str] = []
-    for name in roster.get(account, []) + roster.get("Support", []):
+    cuenta = base_account(account)
+    for name in roster.get(cuenta, []) + roster.get("Support", []):
         if name and name not in names:
             names.append(name)
     return names

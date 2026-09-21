@@ -203,7 +203,12 @@ def test_the_only_outbound_hosts_are_the_ad_servers():
         "www.adobe.com",
         "m-wendys.com",
         "www.efront.com",
+        # Los dos pixeles oficiales de Adobe, DISQO e iSpot. Viajan
+        # como VALOR DE REFERENCIA en la tabla editable: QA2 compara
+        # contra ellos el pixel que encuentra en los tags o en
+        # Innovid, y nunca los pide.
         "track.activemetering.com",
+        "pi.ispot.tv",
         "ad-score.com",
         "x.com",
         "api.",

@@ -1,14 +1,44 @@
 [
   {
-    "name": "DISQO",
-    "campaign": "",
-    "official_pixel": "",
-    "note": ""
-  },
-  {
     "name": "iSpot",
     "campaign": "",
-    "official_pixel": "",
-    "note": ""
+    "official_pixel": "https://pi.ispot.tv/v2/TC-4078-2.gif?platform=ott&publisher=[%siteName%]&placementid=[%placementID%]&creativename=[%creativeName%]&creativeid=[%creativeID%]&campaignid=[%campaignID%]&dsp=flashtalking",
+    "note": "Universal: el mismo para todas las lineas de negocio de Adobe."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe Everyone Can",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=7699f5e9-927a-44e6-85d3-f1b1942cdd70&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]",
+    "note": "Everyone Can (Photoshop). Brand Specific."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe Acrobat",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=6e79c5ee-c9af-47c2-8460-9fcd0ecdf7b8&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]&campaignId=[%campaignID%]&adId=[%adID%]",
+    "note": "Adobe Acrobat Q3 FT Universal."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe Firefly",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=e6b5fc5a-aeb3-4dd2-a116-b220eaafdb2f&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]&campaignId=[%campaignID%]&adId=[%adID%]",
+    "note": "Adobe Firefly Q2-Q3-Q4 2026 FT Universal."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe STE",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=4a639669-fdec-4c85-87c9-85eaa36b8f5f&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]",
+    "note": "STE (Student) 2026."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe PGA",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=48253abc-2f93-4553-9f38-d13818a93769&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]&campaignId=[%campaignID%]&adId=[%adID%]",
+    "note": "PGA 2026."
+  },
+  {
+    "name": "DISQO",
+    "campaign": "Adobe MLB",
+    "official_pixel": "https://track.activemetering.com/pixel/v1/all/pixel.gif?cid=b03990c4-b7e5-4738-af33-6adea39b5b18&creativeId=[%creativeID%]&placementId=[%placementID%]&siteId=[%siteID%]&campaignId=[%campaignID%]&adId=[%adID%]",
+    "note": "MLB 26 FT Universal."
   }
 ]

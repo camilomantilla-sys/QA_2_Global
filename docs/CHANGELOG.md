@@ -73,6 +73,42 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### Los pixeles oficiales de Adobe, ya cargados
+
+La tabla venia vacia y habia que escribirla a mano. Ahora trae los
+siete que Adobe usa hoy:
+
+| Vendor | Campaña | |
+|---|---|---|
+| iSpot | *(en blanco)* | universal: el mismo para todo Adobe |
+| DISQO | Adobe Acrobat | |
+| DISQO | Adobe Firefly | |
+| DISQO | Adobe Everyone Can | Photoshop, Brand Specific |
+| DISQO | Adobe STE | Student |
+| DISQO | Adobe PGA | |
+| DISQO | Adobe MLB | |
+
+**La columna Campaña es la etiqueta que se elige arriba en "Account /
+Campaign"** — no tiene que coincidir con el nombre de la campaña en la
+Traffic Sheet, que cambia cada trimestre. Por eso son nombres cortos y
+estables. Una fila sin campaña aplica a todas; una con campaña gana
+sobre la de su mismo vendor cuando se elige esa linea.
+
+Si no se elige linea de negocio, **DISQO no se comprueba**: sin saber
+cual es, no hay un pixel correcto contra el que comparar, y adivinar
+marcaria como drift un pixel que esta bien. iSpot si, porque es el
+mismo siempre.
+
+**Solo 3P.** Un site-served 1x1 no lleva el pixel oficial de Adobe: lo
+pone el sitio en su propio tag, con sus macros, asi que la URL no
+tiene por que parecerse a la de referencia. Compararla solo producia
+un REVIEW sobre algo bien traficado.
+
+**Y elegir una linea de negocio ya no vacia los desplegables de "By".**
+El roster se buscaba por clave exacta, asi que "Adobe Acrobat" no
+encontraba al equipo de Adobe. Una etiqueta que empieza por el nombre
+de una cuenta pertenece a esa cuenta.
+
 ### El panel de firma dice de que son
 
 Decia `70 to review` y nada mas: para saber de que eran habia que
