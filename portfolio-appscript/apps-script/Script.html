@@ -1,0 +1,638 @@
+<script>
+/* ============================================================================
+   Portafolio — front-end
+   Todo lo que se ve se dibuja a partir del objeto de datos que viene de la
+   hoja de cálculo. Si mañana cambias una fila en Sheets, cambia la web.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var $ = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+  var esVerdadero = function (v) { return /^(true|sí|si|yes|1|x)$/i.test(String(v || '').trim()); };
+  var hayServidor = typeof google !== 'undefined' && google.script && google.script.run;
+
+  function crear(tag, clase, texto) {
+    var n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto != null) n.textContent = texto;
+    return n;
+  }
+
+  // --------------------------------------------------------------------------
+  // Arranque
+  // --------------------------------------------------------------------------
+  var DATOS = (typeof DATOS_INICIALES !== 'undefined' && DATOS_INICIALES) ? DATOS_INICIALES : null;
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (DATOS) {
+      pintar(DATOS);
+    } else if (hayServidor) {
+      google.script.run.withSuccessHandler(pintar).getPortfolioData();
+    }
+  });
+
+  function pintar(datos) {
+    DATOS = datos || {};
+    DATOS.config = DATOS.config || {};
+    ['recibo', 'recibo_total', 'rewards', 'experiencia', 'skills', 'bag', 'proyectos'].forEach(function (k) {
+      if (!Array.isArray(DATOS[k])) DATOS[k] = [];
+    });
+    DATOS.resumen = DATOS.resumen || {};
+
+    aplicarColores(DATOS.config);
+    pintarHero(DATOS.config);
+    pintarRecibo(DATOS);
+    pintarBanco(DATOS);
+    pintarSkills(DATOS.skills);
+    pintarBolso(DATOS.bag);
+    pintarProyectos(DATOS.proyectos);
+    pintarContacto(DATOS.config);
+    activarNavegacion();
+    activarReveal();
+    activarCursor();
+  }
+
+  function aplicarColores(cfg) {
+    var mapa = {
+      '--vino': cfg.color_vino, '--carmin': cfg.color_carmin, '--rosa': cfg.color_rosa,
+      '--nude': cfg.color_nude, '--durazno': cfg.color_durazno, '--papel': cfg.color_papel
+    };
+    Object.keys(mapa).forEach(function (k) {
+      if (mapa[k]) document.documentElement.style.setProperty(k, mapa[k]);
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 1. Hero
+  // --------------------------------------------------------------------------
+  function pintarHero(cfg) {
+    $('#hero .saludo').textContent = cfg.saludo || "Hi, i'm";
+    $('#rol').textContent = cfg.rol || '';
+    document.title = cfg.nombre || 'Portafolio';
+
+    // El nombre entra letra por letra.
+    var destino = $('#nombre');
+    destino.innerHTML = '';
+    var n = 0;
+    (cfg.nombre || '').split(/\s+/).filter(Boolean).forEach(function (palabra) {
+      var caja = crear('span', 'palabra');
+      palabra.split('').forEach(function (letra) {
+        var s = crear('span', null, letra);
+        s.style.animationDelay = (0.25 + (n++) * 0.035) + 's';
+        caja.appendChild(s);
+      });
+      destino.appendChild(caja);
+    });
+
+    var paleta = [cfg.color_rosa, cfg.color_vino, '#111111', cfg.color_nude, cfg.color_carmin];
+    var cont = $('#paleta');
+    cont.innerHTML = '';
+    paleta.forEach(function (color, i) {
+      if (!color) return;
+      var chip = crear('i');
+      chip.style.background = color;
+      chip.style.animationDelay = (1 + i * 0.09) + 's';
+      chip.title = color;
+      cont.appendChild(chip);
+    });
+
+    if (cfg.foto_url) {
+      var retrato = $('#retrato');
+      retrato.innerHTML = '';
+      var img = new Image();
+      img.src = cfg.foto_url;
+      img.alt = cfg.nombre || '';
+      retrato.appendChild(img);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 2. Recibo
+  // --------------------------------------------------------------------------
+  function pintarRecibo(d) {
+    var cfg = d.config, r = d.resumen;
+    $('#ticket-meta').innerHTML = '';
+    [['Customer', cfg.nombre], ['Date', r.periodo]].forEach(function (par) {
+      if (!par[1]) return;
+      var l = crear('div', null, par[0] + ': ' + par[1]);
+      $('#ticket-meta').appendChild(l);
+    });
+
+    var lista = $('#ticket-items');
+    lista.innerHTML = '';
+    d.recibo.forEach(function (fila, i) {
+      var li = crear('li');
+      var izq = crear('span');
+      izq.appendChild(crear('b', null, fila.num || String(i + 1)));
+      izq.appendChild(document.createTextNode(fila.item || ''));
+      li.appendChild(izq);
+      li.appendChild(crear('i', null, esVerdadero(fila.check) ? '✓' : ''));
+      li.style.transitionDelay = (0.55 + i * 0.09) + 's';
+      lista.appendChild(li);
+    });
+
+    var tot = $('#ticket-totales');
+    tot.innerHTML = '';
+    d.recibo_total.forEach(function (fila) {
+      var div = crear('div');
+      div.appendChild(crear('span', null, (fila.campo || '') + ':'));
+      div.appendChild(crear('span', null, fila.valor || ''));
+      tot.appendChild(div);
+    });
+
+    // El ticket "se imprime" cuando entra en pantalla.
+    var ticket = $('#ticket');
+    observarUnaVez(ticket, function () { ticket.classList.add('impreso'); });
+
+    $$('[data-ir]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var destino = $(b.getAttribute('data-ir'));
+        if (destino) destino.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 3. Experience Bank
+  // --------------------------------------------------------------------------
+  function pintarBanco(d) {
+    var r = d.resumen, cfg = d.config;
+    $('#banco-titulo').textContent = r.titulo || 'Experience Bank';
+    $('#banco-sub').textContent = r.subtitulo || '';
+    $('#banco-titular').textContent = (cfg.nombre || '').toUpperCase();
+
+    var meta = $('#banco-meta');
+    meta.innerHTML = '';
+    [['Statement Period:', r.periodo], ['Account:', r.cuenta], ['Status:', r.estado]].forEach(function (par) {
+      if (!par[1]) return;
+      meta.appendChild(crear('dt', null, par[0]));
+      meta.appendChild(crear('dd', null, par[1]));
+    });
+
+    filas($('#resumen-cuenta'), [
+      ['Total Experience', r.total_experiencia],
+      ['Professional Focus', r.enfoque],
+      ['Skills Acquired', r.skills]
+    ]);
+    filas($('#resumen-pago'), [
+      ['Payment Method', r.metodo_pago, true],
+      ['Payment frequency', r.frecuencia],
+      ['Accepted currency', r.moneda]
+    ]);
+    filas($('#resumen-rewards'), d.rewards.map(function (x) { return [x.concepto, x.valor]; }));
+    pintarTarjeta(cfg, r);
+
+    function pintarTarjeta(cfg, r) {
+      var t = $('#tarjeta');
+      t.innerHTML = '';
+      var top = crear('div');
+      top.style.display = 'flex';
+      top.style.justifyContent = 'space-between';
+      top.style.alignItems = 'flex-start';
+      top.appendChild(crear('div', 'marca', r.titulo || 'Experience Bank'));
+      top.appendChild(crear('div', 'chip'));
+      t.appendChild(top);
+      t.appendChild(crear('div', 'numero', '2023  2024  2025  2026'));
+      var pie = crear('div', 'pie-tarjeta');
+      pie.appendChild(crear('span', null, cfg.nombre || ''));
+      pie.appendChild(crear('span', null, 'valid thru ' + (r.periodo || '').split('-').pop().trim()));
+      t.appendChild(pie);
+    }
+
+    function filas(cont, pares) {
+      cont.innerHTML = '';
+      pares.forEach(function (par) {
+        if (!par[1]) return;
+        var f = crear('div', 'fila');
+        f.appendChild(crear('b', null, par[0]));
+        var v = crear('span');
+        if (par[2]) { var m = crear('span', 'marker', par[1]); v.appendChild(m); }
+        else { v.textContent = par[1]; }
+        f.appendChild(v);
+        cont.appendChild(f);
+      });
+    }
+
+    // Movimientos: cada empleo es una "transacción" que se abre.
+    var cont = $('#movimientos');
+    cont.innerHTML = '';
+    d.experiencia.forEach(function (exp) {
+      var det = crear('details', 'mov');
+      det.setAttribute('data-cat', exp.categoria || '');
+      var sum = crear('summary');
+      sum.appendChild(crear('span', 'fecha', exp.fecha || ''));
+      var emp = crear('span', 'empresa');
+      emp.appendChild(crear('span', 'marker', exp.empresa || ''));
+      sum.appendChild(emp);
+      sum.appendChild(crear('span', 'cargo', exp.rol || ''));
+      sum.appendChild(crear('span', 'cat', exp.categoria || ''));
+      sum.appendChild(crear('span', 'mas', '+'));
+      det.appendChild(sum);
+
+      var cuerpo = crear('div', 'detalle');
+      cuerpo.appendChild(crear('small', null, 'Transaction details'));
+      cuerpo.appendChild(document.createTextNode(exp.detalle || ''));
+      det.appendChild(cuerpo);
+      det.addEventListener('toggle', function () {
+        det.classList.toggle('abierta', det.open);
+      });
+      cont.appendChild(det);
+    });
+
+    // Filtros por categoría.
+    var cats = ['Todo'].concat(d.experiencia.map(function (e) { return e.categoria || ''; })
+      .filter(function (c, i, a) { return c && a.indexOf(c) === i; }));
+    var filtros = $('#filtros');
+    filtros.innerHTML = '';
+    cats.forEach(function (cat, i) {
+      var b = crear('button', null, cat);
+      b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        $$('button', filtros).forEach(function (o) { o.setAttribute('aria-pressed', 'false'); });
+        b.setAttribute('aria-pressed', 'true');
+        $$('.mov', cont).forEach(function (m) {
+          m.classList.toggle('oculta', cat !== 'Todo' && m.getAttribute('data-cat') !== cat);
+        });
+      });
+      filtros.appendChild(b);
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. Deck of skills
+  // --------------------------------------------------------------------------
+  var PALOS = { hearts: '♥', diamonds: '♦', spades: '♠', clubs: '♣', joker: '★' };
+
+  function pintarSkills(skills) {
+    var mesa = $('#mesa');
+    mesa.innerHTML = '';
+    var n = skills.length || 1;
+
+    skills.forEach(function (sk, i) {
+      var carta = crear('button', 'carta');
+      carta.type = 'button';
+      carta.setAttribute('data-palo', sk.palo || 'hearts');
+      carta.setAttribute('aria-label', (sk.titulo || '') + ': ' + (sk.herramientas || ''));
+
+      // Abanico: la carta del medio queda recta, las de los lados se inclinan.
+      var centro = (n - 1) / 2;
+      var pos = i - centro;
+      carta.style.setProperty('--rot', (pos * 7) + 'deg');
+      carta.style.setProperty('--x', (pos * 105) + '%');
+      carta.style.setProperty('--y', (Math.abs(pos) * 14) + 'px');
+      carta.style.setProperty('--n', Math.max(0, Math.min(100, parseInt(sk.nivel, 10) || 80)) + '%');
+      carta.style.zIndex = String(10 - Math.abs(pos));
+
+      var simbolo = PALOS[(sk.palo || 'hearts').toLowerCase()] || '♥';
+      var etiqueta = sk.carta || 'A';
+
+      var frente = crear('div', 'cara frente');
+      frente.appendChild(esquina('ti', etiqueta, simbolo));
+      frente.appendChild(esquina('bd', etiqueta, simbolo));
+      frente.appendChild(crear('h3', null, sk.titulo || ''));
+      frente.appendChild(crear('p', null, sk.herramientas || ''));
+      carta.appendChild(frente);
+
+      var atras = crear('div', 'cara atras');
+      atras.appendChild(crear('h3', null, sk.titulo || ''));
+      atras.appendChild(crear('p', 'tools', sk.herramientas || ''));
+      atras.appendChild(crear('p', null, sk.descripcion || ''));
+      var nivel = crear('div', 'nivel');
+      nivel.appendChild(crear('i'));
+      atras.appendChild(nivel);
+      carta.appendChild(atras);
+
+      carta.addEventListener('click', function () {
+        var estaba = carta.classList.contains('girada');
+        $$('.carta', mesa).forEach(function (c) { c.classList.remove('girada'); });
+        carta.classList.toggle('girada', !estaba);
+      });
+      mesa.appendChild(carta);
+    });
+
+    function esquina(donde, texto, simbolo) {
+      var e = crear('span', 'esquina ' + donde, texto);
+      e.appendChild(crear('small', null, simbolo));
+      return e;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. What's in my bag
+  // --------------------------------------------------------------------------
+  function pintarBolso(items) {
+    var escenario = $('#escenario');
+    var lista = $('#bolso-lista');
+    $$('.hotspot,.etiqueta', escenario).forEach(function (n) { n.remove(); });
+    lista.innerHTML = '';
+
+    items.forEach(function (item, i) {
+      var x = item.x || (15 + i * 18), y = item.y || 30;
+
+      var boton = crear('button', 'hotspot');
+      boton.type = 'button';
+      boton.style.setProperty('--x', x);
+      boton.style.setProperty('--y', y);
+      boton.style.setProperty('--i', i);
+      boton.setAttribute('aria-expanded', 'false');
+      boton.setAttribute('aria-label', item.etiqueta || item.objeto || '');
+      if (item.imagen_url) {
+        var img = new Image();
+        img.src = item.imagen_url;
+        img.alt = item.objeto || '';
+        boton.appendChild(img);
+      } else {
+        boton.textContent = item.icono || '✦';
+      }
+
+      var tag = crear('div', 'etiqueta');
+      tag.style.setProperty('--x', x);
+      tag.style.setProperty('--y', y);
+      tag.appendChild(crear('h4', null, item.etiqueta || ''));
+      tag.appendChild(crear('p', null, item.keywords || ''));
+      if (item.frase) tag.appendChild(crear('p', 'frase', item.frase));
+
+      boton.addEventListener('click', function () {
+        var abierta = tag.classList.contains('abierta');
+        $$('.etiqueta', escenario).forEach(function (t) { t.classList.remove('abierta'); });
+        $$('.hotspot', escenario).forEach(function (h) { h.setAttribute('aria-expanded', 'false'); });
+        tag.classList.toggle('abierta', !abierta);
+        boton.setAttribute('aria-expanded', String(!abierta));
+      });
+
+      escenario.appendChild(boton);
+      escenario.appendChild(tag);
+
+      // Versión móvil: la misma información como lista.
+      var li = crear('li');
+      li.appendChild(crear('div', 'ic', item.icono || '✦'));
+      li.appendChild(crear('h4', null, item.etiqueta || ''));
+      li.appendChild(crear('p', null, item.keywords || ''));
+      if (item.frase) li.appendChild(crear('p', 'frase', item.frase));
+      lista.appendChild(li);
+    });
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.hotspot')) return;
+      $$('.etiqueta', escenario).forEach(function (t) { t.classList.remove('abierta'); });
+      $$('.hotspot', escenario).forEach(function (h) { h.setAttribute('aria-expanded', 'false'); });
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. Proyectos + lightbox
+  // --------------------------------------------------------------------------
+  function pintarProyectos(proyectos) {
+    var galeria = $('#galeria');
+    galeria.innerHTML = '';
+    proyectos.forEach(function (p, i) {
+      var card = crear('button', 'polaroid reveal');
+      card.type = 'button';
+      card.style.setProperty('--r', ((i % 2 ? 1 : -1) * (1.4 + (i % 3))) + 'deg');
+      card.setAttribute('data-delay', String(i % 4));
+
+      var foto = crear('div', 'foto');
+      if (p.imagen_url) {
+        var img = new Image();
+        img.src = p.imagen_url;
+        img.alt = p.titulo || '';
+        img.loading = 'lazy';
+        foto.appendChild(img);
+      } else {
+        foto.appendChild(crear('span', null, 'IMG_00' + (i + 1) + '.JPG'));
+      }
+      card.appendChild(foto);
+      if (p.categoria) card.appendChild(crear('span', 'cat', p.categoria));
+      card.appendChild(crear('h3', null, p.titulo || ''));
+      card.addEventListener('click', function () { abrirLightbox(p); });
+      galeria.appendChild(card);
+    });
+  }
+
+  var lb = $('#lightbox');
+  function abrirLightbox(p) {
+    var foto = $('#lb-foto');
+    foto.innerHTML = '';
+    if (p.imagen_url) {
+      var img = new Image();
+      img.src = p.imagen_url;
+      img.alt = p.titulo || '';
+      foto.appendChild(img);
+    }
+    $('#lb-titulo').textContent = p.titulo || '';
+    $('#lb-meta').textContent = [p.categoria, p.fecha, p.tags].filter(Boolean).join(' · ');
+    $('#lb-desc').textContent = p.descripcion || '';
+    var link = $('#lb-link');
+    if (p.link) { link.href = p.link; link.style.display = 'inline-block'; }
+    else { link.style.display = 'none'; }
+    lb.classList.add('abierto');
+    lb.setAttribute('aria-hidden', 'false');
+    $('#lb-cerrar').focus();
+  }
+  function cerrarLightbox() {
+    lb.classList.remove('abierto');
+    lb.setAttribute('aria-hidden', 'true');
+  }
+  $('#lb-cerrar').addEventListener('click', cerrarLightbox);
+  lb.addEventListener('click', function (e) { if (e.target === lb) cerrarLightbox(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarLightbox(); });
+
+  // --------------------------------------------------------------------------
+  // 7. Contacto
+  // --------------------------------------------------------------------------
+  function pintarContacto(cfg) {
+    $('#cierre-titulo').textContent = cfg.cierre_titulo || 'Thanks for looking';
+    $('#cierre-sub').textContent = cfg.cierre_sub || '';
+    $('#form-titulo').textContent = cfg.form_titulo || "Let's talk";
+    $('#form-nota').textContent = cfg.form_nota || '';
+    $('#pie').textContent = '© ' + new Date().getFullYear() + ' ' + (cfg.nombre || '');
+
+    var datos = [
+      { ic: '✉', texto: cfg.email, href: cfg.email ? 'mailto:' + cfg.email : '', copiar: true },
+      { ic: 'in', texto: cfg.linkedin_label || cfg.linkedin, href: cfg.linkedin },
+      { ic: '☎', texto: cfg.telefono, href: cfg.telefono_link ? 'tel:' + cfg.telefono_link : '', copiar: true },
+      { ic: '⚲', texto: cfg.ubicacion, href: '' },
+      { ic: '⤓', texto: cfg.cv_url ? 'Descargar CV' : '', href: cfg.cv_url }
+    ];
+
+    $('#marca-agua').textContent = cfg.contacto_titulo || "Let's talk";
+    var ul = $('#contacto-lista');
+    ul.innerHTML = '';
+    datos.forEach(function (d) {
+      if (!d.texto) return;
+      var li = crear('li');
+      li.appendChild(crear('span', 'ic', d.ic));
+      if (d.href) {
+        var a = crear('a', null, d.texto);
+        a.href = d.href;
+        if (/^https?:/.test(d.href)) { a.target = '_blank'; a.rel = 'noopener'; }
+        li.appendChild(a);
+      } else {
+        li.appendChild(crear('span', null, d.texto));
+      }
+      if (d.copiar) {
+        var b = crear('button', 'copiar', 'copiar');
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          copiar(d.texto, function (ok) {
+            b.textContent = ok ? '¡copiado!' : 'copia manual';
+            setTimeout(function () { b.textContent = 'copiar'; }, 1800);
+          });
+        });
+        li.appendChild(b);
+      }
+      ul.appendChild(li);
+    });
+  }
+
+  function copiar(texto, cb) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(function () { cb(true); }, function () { cb(false); });
+    } else { cb(false); }
+  }
+
+  $('#form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var boton = $('.enviar'), estado = $('#estado');
+    var payload = {
+      nombre: $('#f-nombre').value.trim(),
+      email: $('#f-email').value.trim(),
+      mensaje: $('#f-mensaje').value.trim(),
+      website: $('.honeypot').value,
+      origen: location.hostname
+    };
+    estado.className = 'estado';
+    if (!payload.nombre || !payload.email || !payload.mensaje) {
+      estado.className = 'estado error';
+      estado.textContent = 'Completa los tres campos y te escribo.';
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.email)) {
+      estado.className = 'estado error';
+      estado.textContent = 'Revisa el correo, creo que le falta algo.';
+      return;
+    }
+    boton.disabled = true;
+    estado.textContent = 'Enviando…';
+
+    if (!hayServidor) { // vista previa fuera de Apps Script
+      setTimeout(function () {
+        boton.disabled = false;
+        estado.className = 'estado ok';
+        estado.textContent = 'Vista previa: en la web publicada esto se guarda en tu hoja.';
+        e.target.reset();
+      }, 700);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        boton.disabled = false;
+        estado.className = 'estado ' + (res && res.ok ? 'ok' : 'error');
+        estado.textContent = (res && (res.mensaje || res.error)) || 'Listo.';
+        if (res && res.ok) e.target.reset();
+      })
+      .withFailureHandler(function () {
+        boton.disabled = false;
+        estado.className = 'estado error';
+        estado.textContent = 'No se pudo enviar. Escríbeme directo al correo.';
+      })
+      .enviarMensaje(payload);
+  });
+
+  // --------------------------------------------------------------------------
+  // Navegación, scroll y cursor
+  // --------------------------------------------------------------------------
+  function activarNavegacion() {
+    var secciones = $$('.seccion');
+    var dots = $('#dots');
+    dots.innerHTML = '';
+    secciones.forEach(function (sec) {
+      var b = crear('button');
+      b.type = 'button';
+      b.setAttribute('data-label', sec.getAttribute('data-nav') || '');
+      b.setAttribute('aria-label', 'Ir a ' + (sec.getAttribute('data-nav') || ''));
+      b.addEventListener('click', function () { sec.scrollIntoView({ behavior: 'smooth' }); });
+      dots.appendChild(b);
+    });
+
+    var botones = $$('button', dots);
+    var visto = {};
+    var observer = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        var i = secciones.indexOf(en.target);
+        botones.forEach(function (b, j) { b.setAttribute('aria-current', String(i === j)); });
+        // El color del dot se adapta al fondo de la sección.
+        dots.style.color = ['#EFA9C9', '#3E0620', '#3E0620', '#EFA9C9', '#3E0620', '#3E0620', '#3E0620'][i] || '#fff';
+        var id = en.target.id;
+        if (!visto[id]) { visto[id] = true; registrarVisita(id); }
+      });
+    }, { threshold: 0.55 });
+    secciones.forEach(function (s) { observer.observe(s); });
+
+    var barra = $('#progreso');
+    var actualizar = function () {
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      barra.style.width = (max > 0 ? (window.scrollY / max) * 100 : 0) + '%';
+    };
+    window.addEventListener('scroll', actualizar, { passive: true });
+    actualizar();
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (/input|textarea/i.test((e.target.tagName || ''))) return;
+      var actual = secciones.filter(function (s) { return s.getBoundingClientRect().top <= 10; }).pop() || secciones[0];
+      var i = secciones.indexOf(actual) + (e.key === 'ArrowDown' ? 1 : -1);
+      if (secciones[i]) { e.preventDefault(); secciones[i].scrollIntoView({ behavior: 'smooth' }); }
+    });
+  }
+
+  function registrarVisita(seccion) {
+    if (!hayServidor) return;
+    try {
+      var clave = 'visita_' + seccion;
+      if (sessionStorage.getItem(clave)) return;
+      sessionStorage.setItem(clave, '1');
+    } catch (err) { /* sin sessionStorage */ }
+    google.script.run.withFailureHandler(function () {}).registrarVisita(seccion);
+  }
+
+  function activarReveal() {
+    var obs = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add('visible'); obs.unobserve(en.target); }
+      });
+    }, { threshold: 0.18 });
+    $$('.reveal').forEach(function (n) { obs.observe(n); });
+  }
+
+  function observarUnaVez(nodo, fn) {
+    var obs = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (en) { if (en.isIntersecting) { fn(); obs.disconnect(); } });
+    }, { threshold: 0.3 });
+    obs.observe(nodo);
+  }
+
+  function activarCursor() {
+    if (!window.matchMedia('(pointer:fine)').matches) return;
+    var punto = $('#cursor'), anillo = $('#cursor-anillo');
+    var x = 0, y = 0, ax = 0, ay = 0;
+    document.addEventListener('mousemove', function (e) {
+      x = e.clientX; y = e.clientY;
+      document.body.classList.add('cursor-listo');
+      punto.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    });
+    (function animar() {
+      ax += (x - ax) * 0.16; ay += (y - ay) * 0.16;
+      anillo.style.transform = 'translate(' + ax + 'px,' + ay + 'px)';
+      requestAnimationFrame(animar);
+    })();
+    document.addEventListener('mouseover', function (e) {
+      var interactivo = e.target.closest('a,button,summary,input,textarea,.hotspot,.polaroid,.carta');
+      document.body.classList.toggle('hover-activo', !!interactivo);
+    });
+  }
+})();
+</script>

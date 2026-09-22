@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Portafolio María Alejandra</title>
+  <?!= include('Styles') ?>
+</head>
+<body>
+
+<div id="progreso"></div>
+<div id="cursor"></div>
+<div id="cursor-anillo"></div>
+
+<nav id="dots" aria-label="Secciones"></nav>
+
+<!-- ============================ 1. HERO ============================== -->
+<header class="seccion" id="hero" data-nav="Inicio">
+  <div class="grano"></div>
+  <div class="hero-grid">
+    <div>
+      <p class="saludo reveal">Hi, i'm</p>
+      <h1 class="titulo nombre" id="nombre"></h1>
+      <p class="rol reveal" data-delay="2" id="rol"></p>
+      <div class="paleta" id="paleta"></div>
+    </div>
+    <div class="retrato reveal" data-delay="1" id="retrato">
+      <svg class="silueta" viewBox="0 0 200 260" aria-hidden="true">
+        <circle cx="100" cy="66" r="52" fill="#1a0a12"/>
+        <path d="M100 126c-48 0-78 30-84 74-3 22-5 40-6 60h180c-1-20-3-38-6-60-6-44-36-74-84-74z" fill="#1a0a12"/>
+      </svg>
+    </div>
+  </div>
+  <div class="scroll-cue">scroll</div>
+</header>
+
+<!-- ============================ 2. RECIBO ============================ -->
+<section class="seccion" id="recibo" data-nav="Perfil">
+  <div class="recibo-grid">
+    <div>
+      <h2 class="titulo reveal">Everything<br>I've picked up <em>along the way</em></h2>
+      <p class="pista reveal" data-delay="2">Don't just read the receipt, check the details <span>→</span></p>
+    </div>
+    <div class="impresora reveal" data-delay="1">
+      <div class="ticket" id="ticket">
+        <h3>EXPERIENCE RECEIPT</h3>
+        <div class="meta" id="ticket-meta"></div>
+        <ul id="ticket-items"></ul>
+        <div class="totales" id="ticket-totales"></div>
+        <div class="cierre">
+          <strong>TOTAL EXPERIENCE</strong>
+          <p style="margin:6px 0 0">A profile built at the intersection of creativity, data, marketing and operations</p>
+          <div class="barcode"></div>
+          **YOUR RECEIPT HAS MORE DETAILS**
+          <button class="cta" data-ir="#banco">VER EL EXTRACTO COMPLETO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 3. EXPERIENCE BANK ======================== -->
+<section class="seccion" id="banco" data-nav="Experiencia">
+  <article class="extracto reveal">
+    <div class="extracto-head">
+      <div>
+        <h2 id="banco-titulo"></h2>
+        <h3 id="banco-sub"></h3>
+      </div>
+      <div>
+        <div class="titular" id="banco-titular"></div>
+        <dl id="banco-meta"></dl>
+      </div>
+    </div>
+
+    <div class="bloques">
+      <div class="bloque">
+        <h4>Account summary</h4>
+        <div id="resumen-cuenta"></div>
+        <div class="tarjeta" id="tarjeta" aria-hidden="true"></div>
+      </div>
+      <div class="bloque">
+        <h4>Payment information</h4>
+        <div id="resumen-pago"></div>
+        <h4 style="margin-top:22px">Rewards summary</h4>
+        <div id="resumen-rewards"></div>
+      </div>
+    </div>
+
+    <div class="actividad">
+      <h4 style="font-size:13px;letter-spacing:.13em;font-weight:600;margin:0;padding-bottom:7px;border-bottom:1.5px solid var(--tinta);text-transform:uppercase">Account activity</h4>
+      <div class="filtros" id="filtros" role="group" aria-label="Filtrar por categoría"></div>
+      <div id="movimientos"></div>
+    </div>
+  </article>
+</section>
+
+<!-- ========================= 4. DECK OF SKILLS ======================= -->
+<section class="seccion" id="skills" data-nav="Skills">
+  <div class="grano"></div>
+  <h2 class="reveal">My deck of skills</h2>
+  <p class="lead reveal" data-delay="1">Every project calls for a different card. I know which one to <em>play.</em></p>
+  <div class="mesa" id="mesa"></div>
+  <p class="as-manga reveal" data-delay="2">And yes, I always keep an ace up my sleeve</p>
+  <p class="ayuda reveal" data-delay="3">toca una carta para darle la vuelta</p>
+</section>
+
+<!-- ======================== 5. WHAT'S IN MY BAG ====================== -->
+<section class="seccion" id="bolso" data-nav="Bag">
+  <div class="encabezado">
+    <h2 class="reveal">Here's <em>What's in my bag</em></h2>
+  </div>
+  <div class="escenario" id="escenario">
+    <svg class="bolso-svg" viewBox="0 0 240 210" aria-hidden="true">
+      <path d="M84 74V56a36 36 0 0 1 72 0v18" fill="none" stroke="#6E0A29" stroke-width="10" stroke-linecap="round"/>
+      <path d="M16 74h44l6 116H44a14 14 0 0 1-13-11z" fill="#68091F"/>
+      <path d="M224 74h-44l-6 116h16a14 14 0 0 0 13-11z" fill="#68091F"/>
+      <path d="M52 74h136l-12 112a18 18 0 0 1-18 16H82a18 18 0 0 1-18-16z" fill="#8A1034"/>
+      <path d="M52 74h136l-5 30H57z" fill="#9C1339"/>
+      <rect x="66" y="96" width="108" height="13" rx="6" fill="#6E0A29"/>
+      <rect x="110" y="93" width="20" height="19" rx="4" fill="#D8B26A"/>
+      <ellipse cx="120" cy="204" rx="86" ry="6" fill="rgba(90,11,45,.18)"/>
+    </svg>
+  </div>
+  <ul class="bolso-lista" id="bolso-lista"></ul>
+</section>
+
+<!-- =========================== 6. PROYECTOS ========================== -->
+<section class="seccion" id="proyectos" data-nav="Proyectos">
+  <div class="proyectos-head">
+    <h2 class="reveal">Ideas worth capturing <em>My passion projects</em></h2>
+    <p class="lead reveal" data-delay="1">Curiosity has a funny way of turning into projects</p>
+  </div>
+  <div class="galeria" id="galeria"></div>
+</section>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-hidden="true">
+  <button class="cerrar" id="lb-cerrar" aria-label="Cerrar">&times;</button>
+  <div class="caja">
+    <div class="foto" id="lb-foto"></div>
+    <div class="info">
+      <h3 id="lb-titulo"></h3>
+      <div class="meta" id="lb-meta"></div>
+      <p id="lb-desc"></p>
+      <a class="link" id="lb-link" href="#" target="_blank" rel="noopener">Ver el proyecto</a>
+    </div>
+  </div>
+</div>
+
+<!-- =========================== 7. CONTACTO =========================== -->
+<footer class="seccion" id="contacto" data-nav="Contacto">
+  <h2 class="cierre-titulo reveal" id="cierre-titulo"></h2>
+  <p class="cierre-sub reveal" data-delay="1" id="cierre-sub"></p>
+
+  <div class="contacto-grid">
+    <div class="reveal" data-delay="2">
+      <p class="marca-agua" id="marca-agua"></p>
+      <ul class="contacto-lista" id="contacto-lista"></ul>
+    </div>
+
+    <form class="formulario reveal" data-delay="3" id="form" novalidate>
+      <h3 id="form-titulo"></h3>
+      <p class="nota" id="form-nota"></p>
+      <div class="campo">
+        <input id="f-nombre" name="nombre" placeholder=" " maxlength="120" required>
+        <label for="f-nombre">Tu nombre</label>
+      </div>
+      <div class="campo">
+        <input id="f-email" name="email" type="email" placeholder=" " maxlength="160" required>
+        <label for="f-email">Tu correo</label>
+      </div>
+      <div class="campo">
+        <textarea id="f-mensaje" name="mensaje" placeholder=" " maxlength="3000" required></textarea>
+        <label for="f-mensaje">Cuéntame en qué estás pensando</label>
+      </div>
+      <input class="honeypot" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button class="enviar" type="submit">Enviar mensaje</button>
+      <p class="estado" id="estado" role="status"></p>
+    </form>
+  </div>
+
+  <p class="pie" id="pie"></p>
+</footer>
+
+<script>
+  // El servidor inyecta aquí el contenido de la hoja para pintar sin esperas.
+  var DATOS_INICIALES = <?!= datosIniciales ?>;
+</script>
+<?!= include('Script') ?>
+</body>
+</html>
