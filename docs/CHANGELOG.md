@@ -13,32 +13,11 @@ necesita entrada.
 
 ---
 
-## 1.0.0 — Lanzamiento · 2026-09-15
+## 1.0.2 — 2026-09-23
 
-Primera versión que se entrega al equipo.
-
-### Preparación para el lanzamiento
-
-- **Configuración compartida en SharePoint.** Las tablas de vendors,
-  píxeles de Adobe y roster pueden vivir en una carpeta única: se apunta
-  `QA2_CONFIG_DIR` a una biblioteca sincronizada y quien edita la tabla
-  en la app la comparte con todo el equipo. Si la carpeta está vacía,
-  QA2 sigue con los valores que trae y empieza a usarla en cuanto
-  alguien guarde. No hay migración que coordinar.
-- **El log de corrida se puede mover** con `QA2_OUTPUT_DIR`.
-- **La contraseña y las cookies de Innovid no se pueden mover.**
-  Resuelven siempre a la carpeta local, sin importar cómo esté
-  configurado el entorno. Es a propósito, y hay pruebas que lo fijan.
-- **La app escucha solo en `localhost`.** Streamlit no trae ese ajuste
-  por defecto: sin él, cualquiera en la red podría abrir la sesión de QA
-  de otra persona.
-- **Documentación:** nota de seguridad para revisión de IT
-  ([`SEGURIDAD.md`](SEGURIDAD.md)), guía técnica de reglas y funciones
-  ([`GUIA_TECNICA.md`](GUIA_TECNICA.md)), este registro, y un empaquetador
-  para distribuir al equipo (`scripts/package_release.py`).
-- **Pruebas:** seis que fallaban solo en la corrida completa ya no
-  fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
-  y no los devolvían, contaminando lo que corriera después.
+Lo que se corrigió probando con solicitudes reales de BlackRock,
+Unilever y Adobe, más los arreglos de entrega que salieron de
+repartir el paquete a otras máquinas.
 
 ### Dos veredictos: la implementacion y los tags
 
@@ -503,6 +482,10 @@ Ahora sale un REVIEW que dice cual es:
 Cuando el grupo trae varios tamanos y al placement le queda el suyo, no
 dice nada: eso es el filtro haciendo su trabajo.
 
+---
+
+## 1.0.1 — 2026-09-17
+
 ### Los creativos de un decision set oculto salian como "extra"
 
     "los creativos blancos existentes que andan activos me los lee
@@ -834,6 +817,35 @@ probablemente ni podrian.
 - [`INSTALACION.md`](INSTALACION.md) reescrita: para el equipo, para
   quien arma el paquete, y para quien desarrolla.
 
+---
+
+## 1.0.0 — Lanzamiento · 2026-09-15
+
+Primera versión que se entrega al equipo.
+
+### Preparación para el lanzamiento
+
+- **Configuración compartida en SharePoint.** Las tablas de vendors,
+  píxeles de Adobe y roster pueden vivir en una carpeta única: se apunta
+  `QA2_CONFIG_DIR` a una biblioteca sincronizada y quien edita la tabla
+  en la app la comparte con todo el equipo. Si la carpeta está vacía,
+  QA2 sigue con los valores que trae y empieza a usarla en cuanto
+  alguien guarde. No hay migración que coordinar.
+- **El log de corrida se puede mover** con `QA2_OUTPUT_DIR`.
+- **La contraseña y las cookies de Innovid no se pueden mover.**
+  Resuelven siempre a la carpeta local, sin importar cómo esté
+  configurado el entorno. Es a propósito, y hay pruebas que lo fijan.
+- **La app escucha solo en `localhost`.** Streamlit no trae ese ajuste
+  por defecto: sin él, cualquiera en la red podría abrir la sesión de QA
+  de otra persona.
+- **Documentación:** nota de seguridad para revisión de IT
+  ([`SEGURIDAD.md`](SEGURIDAD.md)), guía técnica de reglas y funciones
+  ([`GUIA_TECNICA.md`](GUIA_TECNICA.md)), este registro, y un empaquetador
+  para distribuir al equipo (`scripts/package_release.py`).
+- **Pruebas:** seis que fallaban solo en la corrida completa ya no
+  fallan. Cinco módulos de prueba reescribían globales de `innovid_api`
+  y no los devolvían, contaminando lo que corriera después.
+
 ### Interfaz
 
 - **Los tags de DV Pinnacle aceptan varios archivos.** Una campana puede
@@ -961,6 +973,8 @@ Qué se hizo:
 - PDF con marca de WPP Media.
 - El identificador de cada hallazgo es determinista, así que una firma
   sobrevive a volver a correr el QA.
+
+---
 
 ---
 
