@@ -181,6 +181,18 @@ además es bastante más rápido.
 | "This script is blocked by IT policy" | Estás abriendo un `.vbs` de una versión vieja. Usa `run_qa2.bat`. |
 | Innovid pide iniciar sesión cada vez | Borra `config\innovid_session.json`. |
 | Se queda cargando y no aparece el botón de firma | Manda `logs\qa_run.log`. |
+| **Doble clic y no pasa absolutamente nada** | Doble clic en **`DIAGNOSTICO QA2.bat`**. Deja `logs\diagnostico.txt` con todo lo que hace falta: mándalo. |
+| Se abre pero con otra versión distinta a la que abriste | Tenías otra copia de QA2 corriendo. El número de versión está abajo en la barra lateral. |
+
+> **La regla:** cuando QA2 no abre, no hay que adivinar. `DIAGNOSTICO
+> QA2.bat` responde en un archivo lo que haría falta preguntar en diez
+> mensajes — qué versión es, si el paquete llegó completo, qué procesos
+> hay vivos, quién tiene el puerto y qué dijo el último arranque.
+>
+> Y si ese archivo dice que **no existe `logs\qa2_startup.log`**, QA2
+> nunca llegó a arrancar: casi siempre el .zip llegó **bloqueado** por
+> Windows. Clic derecho en el .zip → Propiedades → **Desbloquear**, y
+> volver a extraer.
 
 ### Cómo desinstalar (y por qué Windows no deja)
 

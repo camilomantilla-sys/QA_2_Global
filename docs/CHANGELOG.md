@@ -73,6 +73,43 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### Un arranque que falla ya deja rastro
+
+    "solo me dice que no le abre nada"
+
+Doble clic, y nada. Ni ventana, ni navegador, ni error, ni archivo que
+mirar. La causa no era de ese paquete: era de diseño.
+
+`QA2.bat` arranca con **pythonw.exe, que no tiene consola**, y
+`start_qa2.py` importaba medio QA2 **antes** de abrir el log. Cualquier
+fallo ahi --un archivo que no llego en el .zip, un permiso, un
+import-- no tenia donde escribirse. El proceso moria en silencio.
+
+Ahora lo primero que hace es abrir el log, y **todo** lo demas va
+dentro de un try que escribe ahi lo que pase y lo enseña en un cuadro
+de dialogo. El log empieza diciendo de que copia se trata:
+
+    QA2 1.0.1 arrancando  2026-09-23 17:40:12
+      carpeta      C:\Users\...\QA2-1.0.1-windows
+      interprete   ...\python\pythonw.exe
+      python\      si
+      browsers\    si
+      puerto       8501
+
+### `DIAGNOSTICO QA2.bat`
+
+Y para cuando **ni el log existe** --porque el .bat no llego a lanzar
+python-- hay un archivo nuevo en la carpeta. Doble clic, y deja en
+`logs\diagnostico.txt` la version, que hay en la carpeta, que procesos
+de python corren, quien tiene el puerto 8501 y el ultimo arranque.
+
+Si no hay log, lo dice y da el motivo mas probable: **el .zip llego
+bloqueado por Windows**. Clic derecho en el .zip → Propiedades →
+Desbloquear, y volver a extraer.
+
+Un archivo que mandar, en vez de diez mensajes preguntando que sale en
+pantalla.
+
 ### Dos carpetas de QA2, y la que se veia no era la que abriste
 
     "intenté correr esa version vieja que nunca la borré y me corre la

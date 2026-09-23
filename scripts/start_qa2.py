@@ -24,21 +24,25 @@ import socket
 import sys
 import threading
 import time
+import traceback
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.innovid_login import ensure_browser_path  # noqa: E402
-from core.pidfile import clear_pid, is_running, write_pid  # noqa: E402
-
-# El navegador del paquete, antes de que arranque nada.
+# NADA de QA2 se importa aqui arriba, a proposito.
 #
-# El chequeo contra Innovid abre Chromium dentro de ESTE proceso, asi
-# que la variable tiene que estar puesta aqui: pasarsela a un
-# subproceso no alcanza, y el lanzador sin ventana no la ponia.
-ensure_browser_path(ROOT)
+# Este archivo lo arranca pythonw.exe, que NO TIENE CONSOLA: si algo
+# falla antes de que el log este abierto, el mensaje no va a ninguna
+# parte. Doble clic y no pasa nada, sin un solo rastro -- que es
+# exactamente lo que le paso al jefe de Camilo con el paquete 1.0.1:
+# "solo me dice que no le abre nada".
+#
+# Asi que lo primero que hace main() es abrir el log, y TODO lo demas
+# --incluidos los imports de core-- va dentro de un try que escribe
+# ahi lo que pase y lo enseña en un cuadro de dialogo.
 
 DEFAULT_PORT = 8501
 
@@ -110,13 +114,100 @@ def _watch(port: int, log: Path) -> None:
     )
 
 
+def _open_log(log: Path):
+    """
+    El log, abierto ANTES que nada.
+
+    Si no hay consola --pythonw.exe, que es como arranca el equipo--
+    ademas se le manda stdout y stderr: de otro modo un fallo de
+    arranque no deja rastro en ningun sitio.
+    """
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        handle = log.open("w", encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    if sys.stdout is None or not sys.stdout.isatty():
+        sys.stdout = handle
+        sys.stderr = handle
+    return handle
+
+
+def _note(handle, text: str) -> None:
+    """Al log siempre; y a la consola tambien, si la hay."""
+    try:
+        print(text)
+    except Exception:
+        pass
+    if handle is not None and sys.stdout is not handle:
+        try:
+            handle.write(text + "\n")
+            handle.flush()
+        except OSError:
+            pass
+
+
+def _header(handle, port: int) -> None:
+    """
+    Lo que hace falta saber para entender un arranque fallido, sin
+    tener que pedirlo por chat.
+    """
+    try:
+        version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        version = "(sin VERSION)"
+
+    _note(handle, "-" * 60)
+    _note(handle, f"QA2 {version} arrancando  {datetime.now():%Y-%m-%d %H:%M:%S}")
+    _note(handle, f"  carpeta      {ROOT}")
+    _note(handle, f"  interprete   {sys.executable}")
+    _note(handle, f"  python       {sys.version.split()[0]}")
+    _note(handle, f"  python\\      {'si' if (ROOT / 'python').is_dir() else 'NO'}")
+    _note(handle, f"  browsers\\    {'si' if (ROOT / 'browsers').is_dir() else 'NO'}")
+    _note(handle, f"  puerto       {port}")
+    _note(handle, "-" * 60)
+
+
 def main() -> int:
     port = DEFAULT_PORT
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         port = int(sys.argv[1])
 
     log = ROOT / "logs" / "qa2_startup.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
+    handle = _open_log(log)
+    _header(handle, port)
+
+    try:
+        return _start(port, log, handle)
+    except BaseException:
+        # Cualquier cosa: un import que falta, un permiso, un archivo
+        # que no llego en el .zip. Sin esto, con pythonw.exe no se ve
+        # nada de nada y la app "no abre" sin mas.
+        _note(handle, "")
+        _note(handle, traceback.format_exc())
+        _tell(
+            "QA2 no pudo arrancar.\n\n"
+            f"Lo que paso quedo escrito en:\n{log}\n\n"
+            "Mandale ese archivo a quien te compartio QA2."
+        )
+        return 1
+    finally:
+        if handle is not None:
+            try:
+                handle.close()
+            except OSError:
+                pass
+
+
+def _start(port: int, log: Path, handle) -> int:
+    from core.innovid_login import ensure_browser_path
+    from core.pidfile import clear_pid, is_running, write_pid
+
+    # El navegador del paquete. El chequeo contra Innovid abre
+    # Chromium dentro de ESTE proceso, asi que la variable tiene que
+    # quedar puesta aqui: pasarsela a un subproceso no alcanza.
+    ensure_browser_path(ROOT)
 
     if _answers(port):
         # Hay algo en el puerto. La pregunta es de QUIEN.
@@ -125,6 +216,7 @@ def main() -> int:
         # en vez de pelear por el puerto: sin eso Streamlit se iba al
         # 8502 y cada vuelta dejaba un proceso mas vivo.
         if is_running(ROOT):
+            _note(handle, "Ya habia un QA2 de esta carpeta abierto.")
             webbrowser.open(f"http://localhost:{port}")
             return 0
 
@@ -141,19 +233,14 @@ def main() -> int:
                 'con "Stop QA2.bat" y vuelve a intentarlo.'
             )
             return 1
+        _note(
+            handle,
+            f"El puerto {port} lo tiene otra copia de QA2. "
+            f"Esta arranca en el {libre}.",
+        )
         port = libre
 
     write_pid(ROOT)
-
-    # Sin consola, stdout va al vacio. Al archivo si sirve de algo.
-    handle = None
-    if sys.stdout is None or not sys.stdout.isatty():
-        try:
-            handle = log.open("w", encoding="utf-8", errors="replace")
-            sys.stdout = handle
-            sys.stderr = handle
-        except OSError:
-            handle = None
 
     threading.Thread(target=_watch, args=(port, log), daemon=True).start()
 
@@ -178,8 +265,6 @@ def main() -> int:
         # Que no quede un PID apuntando a un proceso muerto: el
         # siguiente arranque lo leeria y creeria que QA2 sigue abierto.
         clear_pid(ROOT)
-        if handle is not None:
-            handle.close()
 
 
 if __name__ == "__main__":
