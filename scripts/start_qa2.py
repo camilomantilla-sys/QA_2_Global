@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.innovid_login import ensure_browser_path  # noqa: E402
-from core.pidfile import clear_pid, write_pid  # noqa: E402
+from core.pidfile import clear_pid, is_running, write_pid  # noqa: E402
 
 # El navegador del paquete, antes de que arranque nada.
 #
@@ -73,6 +73,28 @@ def _tell(message: str) -> None:
         pass
 
 
+#: Cuantos puertos se prueban despues del suyo antes de rendirse.
+PORT_TRIES = 20
+
+
+def _free_port(start: int) -> int | None:
+    """
+    El primer puerto que nadie tenga, a partir del siguiente al suyo.
+
+    Se comprueba intentando ATARLO, no preguntando si contesta: un
+    puerto tomado por algo que no responde se ve libre desde fuera y
+    Streamlit se estrellaria contra el.
+    """
+    for candidate in range(start + 1, start + 1 + PORT_TRIES):
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        return candidate
+    return None
+
+
 def _watch(port: int, log: Path) -> None:
     deadline = time.monotonic() + STARTUP_TIMEOUT
     while time.monotonic() < deadline:
@@ -97,11 +119,29 @@ def main() -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
 
     if _answers(port):
-        # Ya hay uno. Abrir el navegador al que esta en vez de pelear
-        # por el puerto: sin esto Streamlit se iba al 8502 y cada
-        # vuelta dejaba un proceso mas vivo.
-        webbrowser.open(f"http://localhost:{port}")
-        return 0
+        # Hay algo en el puerto. La pregunta es de QUIEN.
+        #
+        # Si es el QA2 de ESTA carpeta, se abre el navegador sobre el
+        # en vez de pelear por el puerto: sin eso Streamlit se iba al
+        # 8502 y cada vuelta dejaba un proceso mas vivo.
+        if is_running(ROOT):
+            webbrowser.open(f"http://localhost:{port}")
+            return 0
+
+        # Pero si es OTRO --la carpeta de una version vieja que
+        # alguien conservo, y la gente las conserva-- abrir ahi
+        # enseñaba una version distinta de la que se habia abierto,
+        # sin decir nada. Camilo: "intenté correr esa version vieja y
+        # me corre la mas reciente". Esta arranca en su propio puerto.
+        libre = _free_port(port)
+        if libre is None:
+            _tell(
+                "QA2 no encontro un puerto libre.\n\n"
+                "Cierra las otras copias de QA2 que tengas abiertas "
+                'con "Stop QA2.bat" y vuelve a intentarlo.'
+            )
+            return 1
+        port = libre
 
     write_pid(ROOT)
 

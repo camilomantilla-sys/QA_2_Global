@@ -73,6 +73,34 @@ Sale en la app, en el Excel y en el PDF, con las mismas palabras — las
 etiquetas de veredicto viven ahora en un solo sitio (`core/verdict.py`)
 en vez de estar copiadas en tres.
 
+### Dos carpetas de QA2, y la que se veia no era la que abriste
+
+    "intenté correr esa version vieja que nunca la borré y me corre la
+     mas reciente"
+
+La gente conserva la carpeta de la version anterior. Al arrancar, QA2
+miraba si **alguien** contestaba en el puerto 8501 y, si si, abria el
+navegador ahi y se salia — sin comprobar **de quien** era ese puerto.
+
+Asi que si tenias abierta una version y hacias doble clic en otra
+carpeta, se abria la primera. Sin un aviso. La carpeta que abriste
+nunca arranco, y la version que estabas mirando no era la que creias.
+
+Ahora se pregunta de quien es el puerto: cada carpeta deja escrito su
+PID, y eso lo responde.
+
+- Es **el nuestro** → se abre el navegador sobre el, como antes.
+- Es **de otra carpeta** → QA2 arranca en su propio puerto y abre ese.
+
+**Y `run_qa2.bat` ya no abre el navegador.** Lo hacia a los 6 segundos
+y siempre en el 8501: antes de que el servidor contestara, y sobre la
+copia de otra carpeta si esa tenia el puerto. Lo abre la app, cuando el
+servidor responde de verdad y en el puerto que de verdad tomo.
+
+> **Para saber que version estas viendo:** el numero esta en la barra
+> lateral, abajo. Si no coincide con la carpeta que abriste, estabas
+> mirando otra.
+
 ### Los pixeles oficiales de Adobe, ya cargados
 
 La tabla venia vacia y habia que escribirla a mano. Ahora trae los

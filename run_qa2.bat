@@ -86,10 +86,13 @@ echo Keep this window open while you work - closing it stops QA2.
 echo.
 
 :run
-REM Streamlit ya no abre el navegador (headless, ver
-REM .streamlit\config.toml), asi que se abre aqui unos segundos
-REM despues -- lo que tarda el servidor en levantar.
-start "" /min powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep 6; Start-Process 'http://localhost:8501'"
+REM El navegador lo abre start_qa2.py, y no aqui.
+REM
+REM Aqui se abria a los 6 segundos y SIEMPRE en el 8501. Dos
+REM problemas: se abria antes de que el servidor contestara, y si el
+REM 8501 lo tenia la copia de otra carpeta, esa era la que se
+REM enseñaba. start_qa2.py espera a que el servidor responda de
+REM verdad y abre el puerto que de verdad tomo.
 
 "%QA2_PYTHON%" scripts\start_qa2.py 8501
 

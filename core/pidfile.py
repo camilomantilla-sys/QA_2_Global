@@ -20,6 +20,8 @@ PID sea todavia un python antes de matarlo.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -63,3 +65,46 @@ def clear_pid(root: Path | None = None) -> None:
         pid_path(root).unlink()
     except OSError:
         pass
+
+
+def is_running(root: Path | None = None) -> bool:
+    """
+    ¿El QA2 de ESTA carpeta sigue vivo?
+
+    Hace falta para no confundirlo con el de otra. Quien tiene el
+    puerto 8501 puede ser cualquiera: si alguien conserva la carpeta
+    de una version vieja --y la gente las conserva-- arrancar una
+    abria el navegador sobre la OTRA, sin decir nada, y la version que
+    se veia no era la que se habia abierto.
+    """
+    pid = read_pid(root)
+    return pid is not None and _alive(pid)
+
+
+def _alive(pid: int) -> bool:
+    """
+    Si ese PID sigue siendo un python.
+
+    En Windows se pregunta con `tasklist`, como los .bat: es parte del
+    sistema desde siempre y la directiva de IT no lo bloquea. NUNCA
+    con os.kill(pid, 0), que en Windows no pregunta -- termina el
+    proceso.
+    """
+    if sys.platform == "win32":
+        try:
+            done = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                capture_output=True, text=True, timeout=5,
+                # Sin esto, el lanzador silencioso parpadea una
+                # consola negra al arrancar.
+                creationflags=0x08000000,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return "python" in (done.stdout or "").lower()
+
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
