@@ -138,7 +138,7 @@ Tres niveles de edición, de menor a mayor:
 3. **El motor** — `core/matching.py` y `parsers/ts_parser.py`. También
    documentados en la guía.
 
-Hay 39 archivos de pruebas automáticas. Cualquier cambio se valida con
+Hay más de 60 archivos de pruebas automáticas. Cualquier cambio se valida con
 `pytest tests/` antes de distribuirse.
 
 ## 7. Inteligencia artificial
@@ -182,7 +182,7 @@ sistema.
 | ¿Amplía los permisos de alguien? | No. Lee Innovid con la sesión del usuario. |
 | ¿Tiene telemetría? | No, desactivada explícitamente. |
 | ¿Usa IA en ejecución? | No. Reglas deterministas en Python. |
-| ¿Se puede auditar? | Sí. Código fuente completo, 39 archivos de pruebas. |
+| ¿Se puede auditar? | Sí. Código fuente completo, más de 60 archivos de pruebas. |
 | ¿Quién lo mantiene? | El equipo, con la guía técnica en `docs/GUIA_TECNICA.md`. |
 
 ---
