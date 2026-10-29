@@ -1,0 +1,86 @@
+"""
+El 403 que salio en pruebas: sesion valida, token ausente.
+"""
+import json, sys, tempfile, threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _browser import fail, patch_launch, require_browser  # noqa: E402
+
+require_browser()
+patch_launch()
+import core.innovid_api as api  # noqa: E402
+from core.innovid_api import _csrf_from_cookies, fetch_campaign  # noqa: E402
+
+COOKIE_TOKEN = "tok-from-cookie-123"
+mode = {"csrf_in_cookie": True}
+
+# La app NO llama a su API al cargar, asi que la cabecera nunca aparece.
+APP = "<!doctype html><body><h1>Campaign Manager</h1></body>"
+
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _send(self, body, code=200, ctype="text/html", cookie=None):
+        b = body.encode()
+        self.send_response(code); self.send_header("Content-Type", ctype)
+        if cookie: self.send_header("Set-Cookie", cookie)
+        self.send_header("Content-Length", str(len(b))); self.end_headers()
+        self.wfile.write(b)
+    def do_GET(self):
+        if "/ui/" in self.path:
+            self._send("{}", 200, "application/json")
+        else:
+            c = f"XSRF-TOKEN={COOKIE_TOKEN}; Path=/" if mode["csrf_in_cookie"] else None
+            self._send(APP, cookie=c)
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0); self.rfile.read(n)
+        if self.headers.get("X-Csrf-Token") == COOKIE_TOKEN:
+            self._send(json.dumps({"page":1,"totalPages":1,"items":[
+                {"placementId": 11102546, "level": "PLACEMENT",
+                 "startDate": "2026-09-10", "endDate": "2026-12-31"}]}),
+                200, "application/json")
+        else:
+            self._send('{"error":"forbidden"}', 403, "application/json")
+
+srv = HTTPServer(("127.0.0.1", 0), H)
+base = f"http://127.0.0.1:{srv.server_port}"
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+# These modules are scripts: everything below runs at import, so the
+# rebinding is on the real module and stays there. Under `pytest
+# tests/` that leaked -- a later module asked redact_url() about a
+# genuine api.flashtalking.net URL and got "" back, because by then
+# _API_HOST said 127.0.0.1. The originals are kept here and put back
+# once the fake server is down.
+_REAL_ENDPOINTS = (api.APP_ORIGIN, api.CM_BASE, api.DT_BASE, api._API_HOST)
+api.APP_ORIGIN = base; api.CM_BASE = f"{base}/cm/v1/ui"
+api.DT_BASE = f"{base}/dt/v1/ui"; api._API_HOST = "127.0.0.1"
+
+# Un temporal, no la raiz del repo: un test no debe dejar
+# basura en el arbol de trabajo.
+sess = Path(tempfile.mkdtemp()) / "csrf.json"; sess.write_text(json.dumps({"cookies": [], "origins": []}), encoding="utf-8")
+fails = []
+def check(label, got, want):
+    if got != want: fails.append(label); print(f"  FAIL {label}: {got!r} != {want!r}")
+    else: print(f"  ok   {label}")
+
+print("the token is taken from the cookie when no request carries it")
+res = fetch_campaign("328634", credentials=None, headless=True,
+                     timeout_ms=25_000, session_path=sess)
+check("no errors", res.errors, [])
+check("the campaign was read", len(res.placements), 1)
+
+print("\nwithout any token, the run says so before it fails")
+mode["csrf_in_cookie"] = False
+res2 = fetch_campaign("328634", credentials=None, headless=True,
+                      timeout_ms=25_000, session_path=sess)
+joined = " ".join(res2.errors)
+check("warns about the missing token", "never handed over" in joined, True)
+check("403 blames the token, not the sign-in",
+      "refused the request (HTTP 403)" in joined, True)
+check("does not tell them the session is invalid",
+      "no longer valid" in joined, False)
+
+srv.shutdown()
+(api.APP_ORIGIN, api.CM_BASE, api.DT_BASE, api._API_HOST) = _REAL_ENDPOINTS
+print()
+fail(fails, "CSRF handling")

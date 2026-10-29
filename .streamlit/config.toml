@@ -1,0 +1,41 @@
+[theme]
+base = "light"
+primaryColor = "#4B5EEA"
+backgroundColor = "#F5F7FD"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#171B2E"
+font = "sans serif"
+
+[server]
+maxUploadSize = 500
+
+# La primera vez, Streamlit pide un correo por consola y SE QUEDA
+# BLOQUEADO hasta que alguien pulse Enter:
+#
+#     Welcome to Streamlit!
+#     ... please enter your email address below.
+#     Email: _
+#
+# En la ventana negra se ve y confunde; en el lanzador silencioso no
+# hay ventana donde escribir y QA2 nunca arranca. En las pruebas con
+# el equipo, una analista espero diez minutos por esto.
+#
+# headless lo salta. A cambio Streamlit ya no abre el navegador solo,
+# asi que lo abren los lanzadores -- que ademas es mejor, porque
+# esperan a que el servidor responda de verdad.
+headless = true
+
+# QA2 is a desktop tool that happens to be drawn in a browser. Binding to
+# localhost means the port is reachable from this machine only: nobody
+# else on the corporate network can open someone's QA session, and there
+# is no listener exposed to it. Streamlit leaves this unset by default,
+# which listens on every interface -- so it is set here on purpose.
+address = "localhost"
+
+# Belt and braces; both are Streamlit defaults, pinned so an upgrade
+# can't quietly turn them off.
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false

@@ -1,0 +1,890 @@
+"""
+La Traffic Sheet contra lo que Innovid realmente tiene.
+
+Los casos vienen de las dos campanas verificadas a mano:
+  323492 -- placement del 20 de julio con creativo que arranca el 24
+  327957 -- rotacion secuencial correcta, que no debe generar nada
+
+Run with pytest, or directly:
+    python tests/test_innovid_reconciliation.py
+"""
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from core.colors import GREEN, RED, WHITE  # noqa: E402
+from core.findings import FindingsBuffer  # noqa: E402
+from core.innovid_api import (  # noqa: E402
+    InnovidFetchResult,
+    parse_dset_response,
+    parse_summary_response,
+)
+from core.innovid_reconciliation import (  # noqa: E402
+    AMBIGUOUS,
+    EXTRA_IN_INNOVID,
+    MATCHED,
+    MISSING_IN_INNOVID,
+    reconcile,
+)
+from core.matching import ExpectedCreative, ExpectedPlacement  # noqa: E402
+from rules import innovid as innovid_rules  # noqa: E402
+
+
+# --- lo minimo de un match_result para estas pruebas -------------
+
+@dataclass
+class FakeMatch:
+    placement_id: str
+    expected: ExpectedPlacement
+
+
+@dataclass
+class FakeMatchResult:
+    matched: list = field(default_factory=list)
+
+
+def _ts(placement_id: str, creatives: list[ExpectedCreative],
+        fmt: str = "display", dims: str = "300x600",
+        vendors: str = "DV Monitoring / Blocking") -> FakeMatchResult:
+    # Por defecto una TS que SI pide DV Blocking: es lo unico que se
+    # implementa con un Verification Partner, y sin eso la mayoria de
+    # estas pruebas no tendrian nada que comprobar.
+    expected = ExpectedPlacement(
+        placement_id=placement_id,
+        start=date(2026, 9, 14),
+        end=date(2026, 10, 31),
+        creatives=creatives,
+        fmt=fmt,
+        dims=dims,
+        vendors=vendors,
+    )
+    return FakeMatchResult(matched=[FakeMatch(placement_id, expected)])
+
+
+def _innovid(placement_id: str, dset_id: int, nodes: list,
+             partner: str = "DoubleVerify") -> InnovidFetchResult:
+    rows = parse_summary_response({"items": [
+        {"placementId": placement_id, "level": "PLACEMENT",
+         "startDate": "2026-09-14", "endDate": "2026-10-31",
+         "verificationPartner": partner or None,
+         "verificationStatus": "Applied" if partner else None},
+        {"placementId": placement_id, "level": "PLACEMENT-CREATIVE",
+         "decisionSetId": dset_id, "decisionSetName": "Display 300x600"},
+    ]})
+    dset = {"id": dset_id, "name": "Display 300x600",
+            "servingMethod": "Weighted Rotation", "nodes": nodes}
+    return InnovidFetchResult(
+        campaign_id="327957", placements=rows,
+        creative_nodes=parse_dset_response(dset),
+    )
+
+
+def _node(name, start, end, weight=1, node_id=1, creative_id=6389150):
+    return {"id": node_id,
+            "serving": {"id": creative_id, "name": name},
+            "startTimestamp": f"{start} 00:00:00",
+            "endTimestamp": f"{end} 23:59:00" if end else None,
+            "weight": weight}
+
+
+V1 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V1_300x600.jpg"
+V2 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V2_300x600.jpg"
+V3 = "PC_40938_TARG_DMC_Naturals_PbR_Banners_V3_300x600.jpg"
+
+
+def _findings(reconciliation):
+    buffer = FindingsBuffer()
+    innovid_rules.evaluate(reconciliation, buffer)
+    return buffer
+
+
+def _by_rule(buffer, rule_id):
+    return [f for f in buffer.findings if f.rule_id == rule_id]
+
+
+# --- fechas de vuelo ---------------------------------------------
+
+def test_matching_dates_pass():
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 9, 26)),
+        ExpectedCreative(name=V1, intent=GREEN,
+                         start=date(2026, 9, 27), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-09-26", node_id=3),
+        _node(V1, "2026-09-27", "2026-10-31", node_id=4),
+    ])
+
+    rec = reconcile(ts, got)
+    assert len(rec.flights) == 2
+    assert all(c.status == MATCHED for c in rec.flights)
+
+    findings = _by_rule(_findings(rec), "INV-001")
+    assert all(f.status.name == "PASS" for f in findings)
+
+
+def test_a_creative_flighting_late_needs_review():
+    """
+    El caso del Frosty: la TS pide el 14, Innovid lo tiene el 27.
+
+    Sale como REVIEW y no como FAIL por decision del equipo: han
+    tenido problemas con las fechas y prefieren mirarlas y firmarlas
+    antes que confiar en la comparacion. Un FAIL no se firma tan
+    facil, y firmar es justo lo que quieren hacer.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    reviews = [f for f in findings if f.status.name == "REVIEW"]
+
+    assert len(reviews) == 1
+    assert "2026-09-14" in reviews[0].expected
+    assert "2026-09-27" in reviews[0].actual
+
+
+def test_a_creative_the_ts_asks_for_and_innovid_lacks_fails():
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V1, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-14", "2026-10-31")])
+
+    rec = reconcile(ts, got)
+    statuses = {c.creative_name: c.status for c in rec.flights}
+
+    assert statuses[V1] == MISSING_IN_INNOVID
+    assert statuses[V2] == EXTRA_IN_INNOVID
+
+
+def test_a_white_creative_is_context_and_makes_no_finding():
+    # Convencion del proyecto: los WHITE se matchean pero no generan
+    # hallazgos. Sin esto, el contenido preexistente del decision set
+    # llenaria el reporte de ruido.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=WHITE,
+                         start=date(2026, 9, 14), end=date(2026, 9, 26)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-10-01", "2026-10-31")])
+
+    rec = reconcile(ts, got)
+    assert rec.flights[0].intent == WHITE
+    assert _by_rule(_findings(rec), "INV-001") == []
+
+
+def test_a_ts_without_creative_dates_is_not_verified_not_passed():
+    """
+    Lo mas importante de esta regla.
+
+    Una TS que no declara fechas por creativo no prueba que Innovid
+    este bien. Decir PASS ahi seria aprobar una comparacion que nunca
+    ocurrio.
+    """
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-27", "2026-10-31")])
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+
+    assert len(findings) == 1
+    assert findings[0].status.name == "NOT_VERIFIED"
+
+
+def test_a_duplicate_creative_is_not_verified_rather_than_guessed():
+    """Elegir mal daria un veredicto sin fundamento."""
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 9, 26)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-09-26", node_id=1),
+        _node(V2, "2026-10-01", "2026-10-31", node_id=2),
+    ])
+
+    rec = reconcile(ts, got)
+    assert rec.flights[0].status == AMBIGUOUS
+    assert rec.flights[0].candidates == 2
+
+    findings = _by_rule(_findings(rec), "INV-001")
+    assert findings[0].status.name == "NOT_VERIFIED"
+
+
+def test_a_placement_innovid_never_returned_is_unchecked():
+    ts = _ts("99999999", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-14", "2026-10-31")])
+
+    rec = reconcile(ts, got)
+    assert rec.flights == []
+    assert rec.unchecked and rec.unchecked[0][0] == "99999999"
+
+    findings = _by_rule(_findings(rec), "INV-001")
+    assert findings[0].status.name == "NOT_VERIFIED"
+
+
+def test_the_default_creative_is_not_compared():
+    # Su timestamp es cuando se adjunto, no un vuelo.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31"),
+        {"id": 99, "serving": {"id": 6389150, "name": V2},
+         "startTimestamp": "2026-08-31 10:07:12", "endTimestamp": None,
+         "isDefault": True},
+    ])
+
+    rec = reconcile(ts, got)
+    assert len(rec.flights) == 1, "el default no entra como duplicado"
+    assert rec.flights[0].status == MATCHED
+
+
+def test_filename_differences_do_not_break_the_match():
+    # La TS escribe el nombre sin extension y con espacios.
+    ts = _ts("11087616", [
+        ExpectedCreative(name="PC_40938_TARG_DMC_Naturals_PbR_Banners_V2_300x600",
+                         intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-14", "2026-10-31")])
+
+    rec = reconcile(ts, got)
+    assert rec.flights[0].status == MATCHED
+
+
+# --- peso de rotacion --------------------------------------------
+
+def test_matching_weight_passes_and_a_different_one_fails():
+    # Un peso de rotacion es relativo, asi que se compara el reparto,
+    # no el numero suelto: la TS trae fracciones de Excel y en Innovid
+    # se escriben porcentajes enteros.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="0.25",
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="0.75",
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=25),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=75),
+    ])
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+    got_swapped = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=75),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=25),
+    ])
+    assert "FAIL" in {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got_swapped)), "INV-002")
+    }
+
+
+def test_innovids_whole_percent_is_not_a_failure_against_excels_decimals():
+    # Innovid solo admite enteros en el decision set: un 13,33% de la
+    # TS se traduce a 13%. Exigir el decimal marcaria como error algo
+    # que nadie puede corregir.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         rotation_weight="0.13333333333333333"),
+        ExpectedCreative(name=V3, intent=GREEN,
+                         rotation_weight="0.8666666666666667"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=13),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=87),
+    ])
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+
+def test_a_lone_creative_takes_the_whole_rotation_whatever_is_written():
+    # Consecuencia deliberada de comparar el reparto: si el decision
+    # set tiene un solo creativo, se lleva el 100% diga 50 o diga 5.
+    # No es un peso mal puesto -- no hay con quien repartir. Que
+    # falten los demas creativos lo reporta INV-001, que es la
+    # pregunta de verdad en ese caso.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="50"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=5),
+    ])
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+
+def test_even_becomes_the_share_it_means():
+    # "Even" es que roten por igual. Con el grupo entero en Even, cada
+    # creativo se lleva 100/N y ya se puede comparar contra Innovid,
+    # que es lo que pidio AdOps.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="Even"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="Even"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=50),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=50),
+    ])
+    statuses = {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+    assert statuses == {"PASS"}
+
+
+def test_even_against_an_uneven_rotation_fails():
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="Even"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="Even"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=90),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2, creative_id=6389151, weight=10),
+    ])
+    assert "FAIL" in {
+        f.status.name
+        for f in _by_rule(_findings(reconcile(ts, got)), "INV-002")
+    }
+
+
+def test_a_rotation_mismatch_fails_the_whole_qa():
+    """
+    Regla de AdOps: "si la rotacion no hace match, debe marcar failed
+    el QA porque es un error significativo".
+
+    Un creativo rotando al peso equivocado entrega impresiones que no
+    son las que se compraron, y eso no es una nota al pie.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN, rotation_weight="0.25"),
+        ExpectedCreative(name=V3, intent=GREEN, rotation_weight="0.75"),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=75),
+        _node(V3, "2026-09-14", "2026-10-31", node_id=2,
+              creative_id=6389151, weight=25),
+    ])
+    assert _findings(reconcile(ts, got)).scorecard().verdict == "FAILED"
+
+
+def test_a_creative_date_mismatch_holds_the_qa_for_review():
+    # Las fechas del creativo importan, a diferencia de las del
+    # placement, pero se firman a mano: el veredicto queda en revision,
+    # no en fallo.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    assert _findings(reconcile(ts, got)).scorecard().verdict == "NEEDS_REVIEW"
+
+
+def test_an_ongoing_creative_against_a_dated_ts_is_signed_off():
+    """
+    Cambio de criterio, pedido por AdOps sobre la campaña de
+    Vaseline.
+
+    Antes esto pasaba en verde: "si la TS cierra el 31 de diciembre,
+    que Innovid diga ongoing esta bien; sin fecha en Innovid no hay
+    nada que contradiga a la TS". Pero el Excel SI pintaba el par en
+    naranja, asi que el reporte marcaba una diferencia que no se podia
+    firmar -- y, sobre todo, un creativo sin fecha de fin sigue
+    sirviendo cuando el vuelo acaba, que son impresiones despues del
+    cierre.
+
+    Ahora es REVIEW: se ve, se firma, y las dos caras dicen lo mismo.
+    No es FAIL, porque firmarlo es justo lo que se quiere poder hacer.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 12, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["REVIEW"]
+    assert "ongoing" in findings[0].actual
+
+
+def test_it_says_no_end_date_and_not_other_dates():
+    """
+    Su propio motivo, porque la firma se hace en bloque por motivo:
+    con el mensaje generico estos quedaban revueltos con los
+    creativos que corren desplazados un dia.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 12, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    message = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0].message
+    assert "no end date in Innovid" in message
+    # El hecho y la fecha que la TS pide, no la consecuencia: si el
+    # placement cierra ese mismo dia, lo para igual.
+    assert "2026-12-31" in message
+    assert "keeps serving" not in message
+
+
+def test_a_ts_with_no_dates_at_all_is_still_nothing_to_compare():
+    # Sin fecha pedida no hay diferencia posible: eso sigue siendo
+    # NOT_VERIFIED, no una revision que firmar.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["NOT_VERIFIED"]
+
+
+# --- verification partner ----------------------------------------
+
+def test_a_configured_verification_partner_passes():
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-14", "2026-10-31")])
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings[0].status.name == "PASS"
+    assert "DoubleVerify" in findings[0].message
+
+
+def test_monitoring_only_needs_no_verification_partner():
+    # BlackRock: "DV Event Monitoring, Dynata". El partner es como
+    # Innovid implementa DV Blocking; sin Blocking no hay nada que
+    # configurar y pedir revision era ruido sobre algo bien puesto.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)],
+             vendors="DV Event Monitoring, Dynata")
+    got = _innovid("11087616", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings and findings[0].status.name == "PASS"
+
+
+def test_a_missing_verification_partner_is_a_review_not_a_failure():
+    # Cuando la TS SI pide DV Blocking. No se afirma que este mal:
+    # se afirma que no esta puesto, que es un hecho.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings[0].status.name == "REVIEW"
+
+
+# --- sin Innovid --------------------------------------------------
+
+def test_no_innovid_result_means_no_findings_at_all():
+    # QA2 tiene que seguir corriendo cuando Innovid no responde.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    rec = reconcile(ts, None)
+
+    assert rec.flights == [] and rec.partners == []
+    assert _findings(rec).findings == []
+
+def test_a_request_with_no_creatives_makes_no_extra_noise():
+    """
+    Caso real: TS_3360_UNIC_US_MDS declara 15 placements de default
+    web ads y ningun creativo en Creative Rotations.
+
+    Sin esto, cada creativo que Innovid tenga se reportaba como
+    "extra", llenando el reporte de hallazgos sobre creativos que
+    nadie pidio revisar.
+    """
+    ts = _ts("11087616", [])
+    got = _innovid("11087616", 40316, [
+        _node(V1, "2026-09-14", "2026-10-31", node_id=1),
+        _node(V2, "2026-09-27", "2026-10-31", node_id=2),
+    ])
+
+    rec = reconcile(ts, got)
+
+    assert rec.flights == [], "nada que comparar es nada que reportar"
+    assert len(rec.unchecked) == 1
+    assert "declares no creatives" in rec.unchecked[0][1]
+
+    # Pero el Verification Partner si se revisa: no depende de que la
+    # TS declare creativos.
+    assert len(rec.partners) == 1
+    findings = _by_rule(_findings(rec), "INV-003")
+    assert findings and findings[0].status.name == "PASS"
+
+
+def test_extra_creatives_are_still_reported_when_the_ts_declares_some():
+    # La regla anterior no debe silenciar el caso legitimo.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V1, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V1, "2026-09-14", "2026-10-31", node_id=1),
+        _node(V2, "2026-09-27", "2026-10-31", node_id=2),
+    ])
+
+    rec = reconcile(ts, got)
+    extras = [c for c in rec.flights if c.status == EXTRA_IN_INNOVID]
+    assert len(extras) == 1 and extras[0].creative_name == V2
+
+def test_a_1x1_is_not_asked_for_a_verification_partner():
+    """
+    Regla del negocio, de AdOps: a los 1x1 no se les valida
+    Verification Partner. El sitio sirve el creativo y no hay nada
+    que verificar, asi que pedir revision seria ruido sobre
+    placements correctos.
+    """
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="1x1", dims="1x1")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    rec = reconcile(ts, got)
+    assert rec.partners[0].site_served_1x1 is True
+    assert _by_rule(_findings(rec), "INV-003") == []
+
+
+def test_a_1x1_recognised_by_dimensions_alone():
+    # El formato puede no venir derivado; las dimensiones bastan.
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="", dims="1x1")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    assert _by_rule(_findings(reconcile(ts, got)), "INV-003") == []
+
+
+def test_a_display_placement_is_still_checked():
+    # La exencion no puede tragarse el caso normal.
+    ts = _ts("11102553", [ExpectedCreative(name=V2, intent=GREEN)],
+             fmt="display", dims="300x600")
+    got = _innovid("11102553", 40316,
+                   [_node(V2, "2026-09-14", "2026-10-31")], partner="")
+
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-003")
+    assert findings and findings[0].status.name == "REVIEW"
+
+
+
+
+# ---------------------------------------------------------------- sello de subida
+
+DOVE_TS = (
+    "Scent-and-Softness-Your-Skin-Deserves-Both_Scrapbook_Core-Body-Wash"
+    "_Renew_NONE_NA_160x600-NA_DISP_08s_BYNW_EN_STP_MikMak_MOD_BASE_003"
+    "_Green-v01"
+)
+DOVE_INNOVID = (
+    DOVE_TS
+    + "__38383730-3934-5731-b931-623638616639__145194828.zip"
+)
+
+
+def test_innovids_upload_stamp_does_not_break_the_match():
+    """
+    Al subir el archivo Innovid le pega "__<uuid>__<id>.zip". La TS
+    nunca lo lleva, asi que el mismo creativo llegaba con dos nombres
+    y se reportaba a la vez como "no esta en Innovid" y "no esta en la
+    Traffic Sheet". Se vio en pruebas con este creativo exacto.
+    """
+    from core.matching import norm_creative
+    assert norm_creative(DOVE_TS) == norm_creative(DOVE_INNOVID)
+
+
+def test_the_variant_at_the_end_of_the_name_still_tells_them_apart():
+    # Estos creativos se distinguen por el ultimo tramo: _Renew,
+    # _Refresh, _Uplift. Recortar de mas los volveria el mismo.
+    from core.matching import norm_creative
+    assert norm_creative(DOVE_TS) != norm_creative(
+        DOVE_TS.replace("_Renew_", "_Refresh_")
+    )
+
+
+def test_only_a_full_uuid_is_stripped():
+    # Recortar cualquier "__loquesea" final se llevaria nombres reales.
+    from core.matching import norm_creative
+    for tail in ("__final_v2", "__2026", "__base", "__38383730-3934"):
+        name = "banner_300x250" + tail
+        assert norm_creative(name) == name.lower(), tail
+
+
+# --- renombrado en Innovid, mismo id ------------------------------
+
+TS_NAME = (
+    "Luxurious-Culture_Luxe-Fragrances_Premium-Body-Wash_Serum-Dewy_NONE_NA"
+    "_728x90_DISP_NONE_SHNW_EN_STP_MikMak_STA-BASE_011_NA-v01"
+)
+INNOVID_NAME = (
+    "Luxurious-Culture_Luxe-Fragrances_Premium-Body-Wash_Serum-Dewy_NONE_NA"
+    "_728x90_DISP_NONE_SHNW_EN_STP_MikMak_STA-R1_011_NA.zip"
+)
+
+
+def _renamed():
+    """El caso real del placement 10738915: mismo id, otro nombre."""
+    ts = _ts("10738915", [
+        ExpectedCreative(name=TS_NAME, creative_id="6115782", intent=GREEN,
+                         rotation_weight="1",
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("10738915", 40316, [
+        _node(INNOVID_NAME, "2026-09-14", "2026-10-31",
+              creative_id=6115782, weight=100),
+    ])
+    return reconcile(ts, got)
+
+
+def test_a_creative_renamed_in_innovid_is_found_by_its_id():
+    # Buscar solo por nombre lo daba por ausente.
+    rec = _renamed()
+    assert len(rec.flights) == 1
+    assert rec.flights[0].status == MATCHED
+    assert rec.flights[0].matched_by == "creative_id"
+
+
+def test_a_renamed_creative_still_gets_its_dates_and_rotation_checked():
+    # Lo importante: darlo por ausente dejaba sin revisar justo lo que
+    # habia que mirar.
+    findings = _findings(_renamed())
+    assert [f.status.name for f in _by_rule(findings, "INV-001")] == ["PASS"]
+    assert [f.status.name for f in _by_rule(findings, "INV-002")] == ["PASS"]
+
+
+def test_the_different_name_is_still_called_out():
+    # Encontrarlo no es taparlo: alguien tiene que decidir si el
+    # renombrado fue intencional.
+    findings = _by_rule(_findings(_renamed()), "INV-004")
+    assert len(findings) == 1
+    assert findings[0].status.name == "REVIEW"
+    assert "STA-BASE" in findings[0].expected
+    assert "STA-R1" in findings[0].actual
+
+
+def test_the_renamed_node_is_not_also_reported_as_extra():
+    # Contarlo dos veces -- ausente de un lado y sobrante del otro --
+    # es lo que hacia antes.
+    statuses = [c.status for c in _renamed().flights]
+    assert EXTRA_IN_INNOVID not in statuses
+    assert MISSING_IN_INNOVID not in statuses
+
+
+def test_the_same_name_is_never_reported_as_a_rename():
+    # Emparejar por id es el camino normal, no la excepcion, asi que
+    # INV-004 tiene que mirar si el nombre difiere de verdad. Sin eso
+    # saltaria en todos los creativos.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, creative_id="6389150", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    rec = reconcile(ts, got)
+    assert rec.flights[0].matched_by == "creative_id"
+    assert _by_rule(_findings(rec), "INV-004") == []
+
+
+def test_innovids_upload_stamp_is_not_a_rename_either():
+    # El nombre del decision set arrastra "__<uuid>__<id>.zip". Eso no
+    # es un renombrado.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=DOVE_TS, creative_id="6115782", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(DOVE_INNOVID, "2026-09-14", "2026-10-31", creative_id=6115782),
+    ])
+    assert _by_rule(_findings(reconcile(ts, got)), "INV-004") == []
+
+
+def test_a_creative_with_no_id_is_still_found_by_its_name():
+    # Hay TS que no declaran creative id y tienen que seguir
+    # funcionando.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    rec = reconcile(ts, got)
+    assert rec.flights[0].matched_by == "name"
+    assert rec.flights[0].status == MATCHED
+
+
+def test_a_creative_with_neither_name_nor_id_in_innovid_is_still_missing():
+    # El respaldo por id no puede convertir un ausente real en un
+    # match: seria aprobar algo que no existe.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V1, creative_id="9999999", intent=GREEN),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", creative_id=6389150),
+    ])
+    statuses = {c.creative_name: c.status for c in reconcile(ts, got).flights}
+    assert statuses[V1] == MISSING_IN_INNOVID
+
+# --- la celda pintada manda ---------------------------------------
+
+def test_dates_nobody_asked_to_change_still_need_review():
+    """
+    El caso real: en una solicitud de cambio de rotacion, la TS
+    repite las fechas del creativo sin pintarlas. Son contexto. Los
+    creativos que arrancan un dia antes para poder testearlos salian
+    como fallo de una solicitud que solo cambiaba pesos.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-13", "2026-10-31", weight=100),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["REVIEW"]
+
+
+def test_the_difference_is_still_reported_just_not_as_a_failure():
+    # Callarlo del todo seria perder el dato.
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-13", "2026-10-31", weight=100),
+    ])
+    finding = _by_rule(_findings(reconcile(ts, got)), "INV-001")[0]
+    assert "didn't ask to change them" in finding.message
+    assert "2026-09-13" in finding.actual
+    assert finding.status.name == "REVIEW"
+
+
+def test_dates_that_agree_pass_instead_of_needing_review():
+    """
+    Si coinciden no hay nada que firmar. Sale PASS y no REVIEW: se
+    comparo y esta bien, que es distinto de no haberlo mirado.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN, rotation_weight="1",
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"rotation_weight"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-14", "2026-10-31", weight=100),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
+
+
+def test_dates_the_request_did_paint_are_reviewed_without_the_caveat():
+    # Lo pedido se sigue mirando; el mensaje no lleva la coletilla de
+    # "nadie pidio cambiarlas".
+    ts = _ts("11087616", [
+        ExpectedCreative(
+            name=V2, intent=GREEN,
+            start=date(2026, 9, 14), end=date(2026, 10, 31),
+            intent_fields=frozenset({"start_date", "end_date"}),
+        ),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["REVIEW"]
+    assert "didn't ask" not in findings[0].message
+
+
+def test_a_sheet_with_no_colour_still_validates_its_dates():
+    # Las TS viejas no traen esta informacion y no pueden quedarse
+    # sin validar por eso.
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [
+        _node(V2, "2026-09-27", "2026-10-31"),
+    ])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["REVIEW"]
+
+
+if __name__ == "__main__":
+    passed = failed = 0
+    for name, fn in sorted(globals().items()):
+        if not name.startswith("test_") or not callable(fn):
+            continue
+        try:
+            fn()
+        except AssertionError as exc:
+            failed += 1
+            print(f"FAIL {name}: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"ERROR {name}: {type(exc).__name__}: {exc}")
+        else:
+            passed += 1
+            print(f"ok   {name}")
+
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)
+
+
+# --- el 1x1 que Innovid ni devuelve --------------------------------
+
+def test_a_site_served_1x1_missing_from_the_api_is_not_an_alert():
+    """
+    Un 1x1 site-served no tiene decision set, y la API a veces ni
+    devuelve el placement: no hay arbol que pedir. Eso salia como
+    "Creative dates were not checked: Innovid did not return this
+    placement", que es un aviso sobre algo que no existe.
+
+    El creativo va asignado DIRECTO al placement y corre con SUS
+    fechas, que ya se comparan arriba. AdOps, sobre los 1x1 de
+    Adobe: "aca adopta las fechas del placement entonces es como una
+    falsa alerta".
+    """
+    ts = _ts("11154704", [], fmt="1x1", dims="1x1", vendors="")
+    # La API contesta, pero sin este placement.
+    got = _innovid("99999999", 40316, [])
+
+    out = reconcile(ts, got)
+    assert out.site_served == ["11154704"]
+    assert out.unchecked == []
+
+    findings = _by_rule(_findings(out), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
+    assert "runs on its dates" in findings[0].message
+
+
+def test_a_display_placement_missing_from_the_api_still_says_so():
+    # Ahi si falta algo: un display corre por decision set, y sin el
+    # no se pudieron mirar las fechas.
+    ts = _ts("11087616", [ExpectedCreative(name=V2, intent=GREEN)])
+    got = _innovid("99999999", 40316, [])
+
+    out = reconcile(ts, got)
+    assert out.site_served == []
+    assert [pid for pid, _ in out.unchecked] == ["11087616"]
+
+    findings = _by_rule(_findings(out), "INV-001")
+    assert [f.status.name for f in findings] == ["NOT_VERIFIED"]

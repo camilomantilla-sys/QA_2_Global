@@ -1,0 +1,501 @@
+"""
+QA2 rules for tag files.
+
+Initial validations:
+  TAG-001 File Campaign ID.
+  TAG-002 Placement ID exists in Innovid.
+  TAG-003 Placement ID belongs to the worked scope.
+  TAG-004 Placement Name.
+  TAG-005 Dimensions.
+  TAG-006 (retired) Third Party ID in the tag file.
+  TAG-007 (disabled) Placement ID embedded in the tag.
+  TAG-008 Campaign ID embedded in the tag.
+  TAG-009 Embedded dimensions.
+  TAG-010 Empty tag.
+  TAG-011 Duplicate placement within the file.
+  TAG-014 Landing page carried inside a 1x1 click tag.
+"""
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from core.findings import (
+    Domain,
+    EntityType,
+    FindingsBuffer,
+    Severity,
+)
+from core.normalize import norm_compare, norm_dims
+from core.tag_matching import TagMatchResult
+
+
+AUXILIARY_PIXEL_TYPES = {
+    "PIXEL",
+    "PIXEL_HTML",
+    "1X1_IMPRESSION",
+    "DV_VAST",
+    "DV_HTML",
+}
+
+
+def _date_text(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+
+    if isinstance(value, date):
+        return value.isoformat()
+
+    return str(value or "").strip()
+
+
+def evaluate(
+    tag_match: TagMatchResult,
+    buffer: FindingsBuffer,
+) -> None:
+    # ------------------------------------------------ TAG-001 Campaign ID
+
+    expected_campaign = (
+        tag_match.campaign_id_innovid
+        or tag_match.campaign_id_ts
+    )
+
+    if not tag_match.campaign_id_tags:
+        buffer.not_verified(
+            rule_id="TAG-001",
+            domain=Domain.TAG,
+            message="The tag file does not declare a Campaign ID.",
+            entity_type=EntityType.FILE,
+            expected=expected_campaign,
+            actual="",
+            recommended_action=(
+                "Re-export the tags including the Campaign ID."
+            ),
+        )
+
+    elif (
+        expected_campaign
+        and tag_match.campaign_id_tags != expected_campaign
+    ):
+        buffer.blocker(
+            rule_id="TAG-001",
+            domain=Domain.TAG,
+            message=(
+                "The tag file belongs to a different campaign."
+            ),
+            entity_type=EntityType.FILE,
+            expected=expected_campaign,
+            actual=tag_match.campaign_id_tags,
+            reason=(
+                "Tag file Campaign ID differs from the Traffic "
+                "Sheet or Innovid Campaign ID."
+            ),
+            recommended_action=(
+                "Upload the tag file for the correct campaign."
+            ),
+        )
+
+    else:
+        buffer.pass_(
+            rule_id="TAG-001",
+            domain=Domain.TAG,
+            message="Tag file Campaign ID is correct.",
+            entity_type=EntityType.FILE,
+            expected=expected_campaign,
+            actual=tag_match.campaign_id_tags,
+        )
+
+    # ------------------------------------------------ TAG-011 duplicates
+
+    for placement_id, count in (
+        tag_match.duplicate_placement_ids.items()
+    ):
+        buffer.review(
+            rule_id="TAG-011",
+            domain=Domain.CARDINALITY,
+            message=(
+                "Placement ID repeated within the tag file."
+            ),
+            entity_type=EntityType.PLACEMENT,
+            placement_id=placement_id,
+            expected="1 row",
+            actual=f"{count} rows",
+            count=count,
+            recommended_action=(
+                "Confirm whether the rows represent different tags "
+                "or an accidental duplication."
+            ),
+        )
+
+    # ------------------------------------------------ placement rows
+
+    for link in tag_match.links:
+        row = link.tag_row
+
+        # TAG-002: the placement must exist in the loaded export.
+
+        if link.actual is None:
+            buffer.review(
+                rule_id="TAG-002",
+                domain=Domain.TAG,
+                message=(
+                    "Tag file placement was not found in the "
+                    "loaded Innovid export."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+                expected="Placement present in Innovid",
+                actual="Not found",
+                recommended_action=(
+                    "Confirm the Innovid export includes this "
+                    "placement, or upload the correct export."
+                ),
+            )
+        else:
+            buffer.pass_(
+                rule_id="TAG-002",
+                domain=Domain.TAG,
+                message="Tag placement found in Innovid.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+            )
+
+        # TAG-003: flag when the tag doesn't belong to the worked scope.
+        # Not a FAIL because a tag file may represent only part of the
+        # campaign or include additional deliverables.
+
+        if link.expected is None:
+            buffer.info(
+                rule_id="TAG-003",
+                domain=Domain.SCOPE,
+                message=(
+                    "Tag file placement is outside the worked scope "
+                    "detected in the Traffic Sheet."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+                recommended_action=(
+                    "Confirm whether the tag file belongs to a "
+                    "different request or additional context."
+                ),
+            )
+        else:
+            buffer.pass_(
+                rule_id="TAG-003",
+                domain=Domain.SCOPE,
+                message=(
+                    "Tag placement belongs to the worked scope."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+            )
+
+        # TAG-004: Placement Name.
+        # Compared against Innovid first, then against the TS.
+
+        expected_name = ""
+
+        if link.actual is not None:
+            expected_name = (
+                link.actual.name_norm
+                or link.actual.name
+            )
+        elif link.expected is not None:
+            expected_name = link.expected.name
+
+        if not expected_name or not row.placement_name:
+            buffer.not_verified(
+                rule_id="TAG-004",
+                domain=Domain.IDENTITY,
+                message=(
+                    "Placement Name is not verifiable in the tag file."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                expected=expected_name,
+                actual=row.placement_name,
+            )
+
+        elif (
+            norm_compare(expected_name)
+            == norm_compare(row.placement_name)
+        ):
+            buffer.pass_(
+                rule_id="TAG-004",
+                domain=Domain.IDENTITY,
+                message="Tag Placement Name is correct.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+                expected=expected_name,
+                actual=row.placement_name,
+            )
+
+        else:
+            buffer.fail(
+                rule_id="TAG-004",
+                domain=Domain.IDENTITY,
+                message="Tag Placement Name doesn't match.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+                expected=expected_name,
+                actual=row.placement_name,
+                recommended_action=(
+                    "Regenerate the tags using the correct placement."
+                ),
+            )
+
+        # TAG-005: dimensions.
+        #
+        # DISABLED:
+        # Dimensions embedded in tracking tags don't represent the
+        # placement's actual dimensions. A pixel can declare 0x0 or 1x1
+        # even when the placement is 1920x1080, display, or video.
+        #
+        # Real dimensions are validated exclusively via:
+        # Traffic Sheet vs Innovid Export.
+        #
+        # This rule emits no PASS, FAIL, REVIEW, or NOT_VERIFIED.
+
+        # TAG-006: Third Party ID -- retirada.
+        #
+        # Criterio de AdOps: "eso no lo tenemos que validar en los archivos de
+        # tags, solo que esten los placements correctos."
+        #
+        # El Third Party ID de un archivo de tags no es el CGEN ni
+        # tiene que cuadrar con nada: lo que se revisa de un archivo
+        # de tags es que traiga los placements de la solicitud y que
+        # cada fila lleve las columnas que le tocan. La regla marcaba
+        # en fallo archivos correctos -- seis FAIL y seis NOT_VERIFIED
+        # en una sola solicitud de Adobe -- y cada uno se llevaba por
+        # delante una revision que no existia.
+
+        _landing_page_in_click_tag(link, buffer)
+
+        # TAG-010: the row must contain at least one tag.
+
+        if row.tag_count == 0:
+            buffer.fail(
+                rule_id="TAG-010",
+                domain=Domain.TAG,
+                message=(
+                    "Placement has no materialized tags."
+                ),
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                placement_name=row.placement_name,
+                expected="At least one tag",
+                actual="0 tags",
+            )
+        else:
+            buffer.pass_(
+                rule_id="TAG-010",
+                domain=Domain.TAG,
+                message="Placement contains tags.",
+                entity_type=EntityType.PLACEMENT,
+                placement_id=row.placement_id,
+                actual=f"{row.tag_count} tags",
+            )
+
+        # ------------------------------------------------ tag content
+
+        for tag in row.tags:
+            tag_source = (
+                f"{row.placement_id} | {tag.column_name}"
+            )
+
+            # TAG-007: embedded Placement ID.
+            #
+            # DISABLED per AdOps: don't check the tag's own pixel
+            # content at all -- what matters is that the file's
+            # Placement_ID column carries every ID the request asks
+            # for (TAG-002/003, and the new coverage check TAG-013)
+            # and that the vendor-required column is populated
+            # (TAG-012). Comparing embedded macros inside the tag's
+            # own code added noise without a corresponding action a
+            # trafficker could take. This rule emits no PASS, FAIL,
+            # REVIEW, or NOT_VERIFIED.
+
+            # TAG-008: embedded Campaign ID.
+
+            if tag.campaign_ids:
+                if (
+                    tag_match.campaign_id_tags
+                    in tag.campaign_ids
+                ):
+                    buffer.pass_(
+                        rule_id="TAG-008",
+                        domain=Domain.TAG,
+                        message=(
+                            "Embedded Campaign ID in the tag is correct."
+                        ),
+                        entity_type=EntityType.TAG,
+                        placement_id=row.placement_id,
+                        expected=tag_match.campaign_id_tags,
+                        actual=", ".join(tag.campaign_ids),
+                        reason=tag_source,
+                    )
+                else:
+                    buffer.fail(
+                        rule_id="TAG-008",
+                        domain=Domain.TAG,
+                        message=(
+                            "Embedded Campaign ID in the tag doesn't "
+                            "match the file."
+                        ),
+                        entity_type=EntityType.TAG,
+                        placement_id=row.placement_id,
+                        expected=tag_match.campaign_id_tags,
+                        actual=", ".join(tag.campaign_ids),
+                        reason=tag_source,
+                    )
+
+            # TAG-009: embedded dimensions.
+            # Skipped for auxiliary pixels since they may use 0x0.
+
+            if tag.tag_type not in AUXILIARY_PIXEL_TYPES:
+                width_mismatch = (
+                    bool(tag.widths)
+                    and row.width not in tag.widths
+                )
+
+                height_mismatch = (
+                    bool(tag.heights)
+                    and row.height not in tag.heights
+                )
+
+                if width_mismatch or height_mismatch:
+                    buffer.fail(
+                        rule_id="TAG-009",
+                        domain=Domain.DIMENSIONS,
+                        message=(
+                            "Embedded dimensions in the tag don't "
+                            "match the row."
+                        ),
+                        entity_type=EntityType.TAG,
+                        placement_id=row.placement_id,
+                        expected=row.dimensions,
+                        actual=(
+                            f"width={tag.widths or '-'}; "
+                            f"height={tag.heights or '-'}"
+                        ),
+                        reason=tag_source,
+                    )
+                elif tag.widths or tag.heights:
+                    buffer.pass_(
+                        rule_id="TAG-009",
+                        domain=Domain.DIMENSIONS,
+                        message=(
+                            "Embedded dimensions in the tag are correct."
+                        ),
+                        entity_type=EntityType.TAG,
+                        placement_id=row.placement_id,
+                        expected=row.dimensions,
+                        actual=(
+                            f"width={tag.widths}; "
+                            f"height={tag.heights}"
+                        ),
+                        reason=tag_source,
+                    )
+
+
+# ------------------------------------------------------------------
+# TAG-014: la landing page va dentro del click tag de un 1x1
+# ------------------------------------------------------------------
+
+
+def _clicked_url(raw: str) -> str:
+    """
+    A donde manda un click tag de 1x1.
+
+    Flashtalking lo cierra con `&url=<landing page>` y la landing page
+    ocupa el resto de la cadena -- con sus propios `?` y `&` dentro,
+    asi que no se puede leer como un parametro cualquiera: es la cola.
+
+        .../click/8/328665;11103057;6403794;211;0/?gdpr=${GDPR}
+        &us_privacy=${US_PRIVACY}&force_transparent=true
+        &url=https://www.martinsfoods.com/?999=SplashPage&997=...
+
+    `Update_Clicktag1` usa el mismo parametro para otra cosa --
+    `&url=45754586`, un identificador -- asi que solo cuenta cuando lo
+    que hay detras es de verdad una URL. Eso deja fuera esa columna
+    sola, sin tener que nombrarla.
+    """
+    text = str(raw or "").strip()
+    if "&url=" not in text:
+        return ""
+    tail = text.rsplit("&url=", 1)[1].strip()
+    return tail if tail.lower().startswith(("http://", "https://")) else ""
+
+
+def _landing_page_in_click_tag(link, buffer: FindingsBuffer) -> None:
+    """
+    TAG-014 -- el tag dice a donde va el click, y la TS tambien.
+
+    Idea del equipo de AdOps: "en el static clicktag para 1x1 siempre
+    va a estar la lp que viene en la ts". Es la unica comprobacion que
+    mira el DESTINO dentro del archivo entregado: las demas miran
+    campaign id, placement id y dimensiones. Y es independiente de los
+    exports de Innovid -- valida el artefacto que se manda al sitio.
+    """
+    from core.urls import URL_MATCH, compare_urls
+
+    row = link.tag_row
+    expected = getattr(link, "expected", None)
+    expected_url = str(getattr(expected, "url", "") or "").strip()
+
+    for tag in row.tags:
+        actual_url = _clicked_url(tag.raw)
+        if not actual_url:
+            continue
+
+        common = {
+            "rule_id": "TAG-014",
+            "domain": Domain.URL,
+            "entity_type": EntityType.PLACEMENT,
+            "placement_id": row.placement_id,
+            "expected": expected_url,
+            "actual": actual_url,
+        }
+
+        if not expected_url:
+            # Sin landing page declarada no hay nada contra que
+            # comparar. Se dice cual lleva el tag, que es lo unico
+            # que se sabe.
+            buffer.not_verified(
+                message=(
+                    f"The {tag.column_name} tag clicks through to a "
+                    "landing page, but the Traffic Sheet declares "
+                    "none for this placement."
+                ),
+                **common,
+            )
+            continue
+
+        comparison = compare_urls(expected_url, actual_url)
+
+        if comparison.result == URL_MATCH:
+            buffer.pass_(
+                message=(
+                    f"The {tag.column_name} tag clicks through to the "
+                    "landing page the Traffic Sheet asks for."
+                ),
+                **common,
+            )
+        else:
+            buffer.fail(
+                message=(
+                    f"The {tag.column_name} tag clicks through to "
+                    "another landing page."
+                ),
+                reason=comparison.note,
+                recommended_action=(
+                    "Regenerate the tag from the placement with the "
+                    "landing page the Traffic Sheet declares."
+                ),
+                **common,
+            )

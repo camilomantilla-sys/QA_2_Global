@@ -1,0 +1,134 @@
+[
+  {
+    "account": "",
+    "name": "DV Monitoring",
+    "ts_terms": [
+      "dv",
+      "doubleverify"
+    ],
+    "host_terms": [
+      "doubleverify.com"
+    ],
+    "column": "third_party_survey",
+    "formats": [
+      "display"
+    ],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": "Placement-level pixel, Display only. On 1x1, Monitoring is delivered as a wrapped tag from DV Pinnacle (DV-001) instead -- no pixel to compare here."
+  },
+  {
+    "account": "",
+    "name": "DV Blocking",
+    "ts_terms": [],
+    "host_terms": [],
+    "column": "third_party_impression",
+    "formats": [],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": "Column in the tag file (doubleverify_html for Display), not a placement pixel -- checked by DV-003, not here. Paste the reference tag/wrapper content, not just a URL."
+  },
+  {
+    "account": "",
+    "name": "DV Integration",
+    "ts_terms": [],
+    "host_terms": [],
+    "column": "third_party_impression",
+    "formats": [],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": "No Pinnacle wrapping, no placement pixel, no tag-file column -- just needs the regular tags delivered (TAG-013 checks that). Nothing to validate here."
+  },
+  {
+    "account": "",
+    "name": "DV Omni",
+    "ts_terms": [],
+    "host_terms": [],
+    "column": "third_party_impression",
+    "formats": [],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": "Column in the tag file (doubleverify_vast), not a placement pixel -- checked by DV-003, not here."
+  },
+  {
+    "account": "",
+    "name": "Dynata",
+    "ts_terms": [
+      "dynata"
+    ],
+    "host_terms": [
+      "researchnow.com",
+      "dynata.com"
+    ],
+    "column": "third_party_impression",
+    "formats": [
+      "1x1",
+      "display",
+      "video"
+    ],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": ""
+  },
+  {
+    "account": "",
+    "name": "Kantar / Flex Tag",
+    "ts_terms": [
+      "kantar",
+      "flex tag",
+      "flextag"
+    ],
+    "host_terms": [
+      "insightexpressai.com"
+    ],
+    "column": "third_party_impression",
+    "formats": [
+      "1x1",
+      "display",
+      "video"
+    ],
+    "site_exceptions": [],
+    "official_pixel": "",
+    "note": ""
+  },
+  {
+    "account": "Wendy's",
+    "name": "Inmarket",
+    "ts_terms": [
+      "inmarket"
+    ],
+    "host_terms": [
+      "ninthdecimal.com"
+    ],
+    "column": "third_party_impression",
+    "formats": [
+      "display",
+      "video"
+    ],
+    "site_exceptions": [
+      "vevo"
+    ],
+    "official_pixel": "",
+    "note": ""
+  },
+  {
+    "account": "Wendy's",
+    "name": "DISQO",
+    "ts_terms": [
+      "disqo"
+    ],
+    "host_terms": [
+      "activemetering.com"
+    ],
+    "column": "third_party_impression",
+    "formats": [
+      "display",
+      "video"
+    ],
+    "site_exceptions": [
+      "netflix"
+    ],
+    "official_pixel": "",
+    "note": ""
+  }
+]

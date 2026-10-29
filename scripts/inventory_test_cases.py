@@ -1,0 +1,208 @@
+"""
+Inventario automático de fixtures QA2 reales.
+
+No modifica archivos.
+Detecta:
+  - Traffic Sheets
+  - Placement-Creative Views
+  - Placement Views
+  - Archivos de Tags
+  - Archivos todavía no reconocidos
+"""
+from __future__ import annotations
+
+import warnings
+from pathlib import Path
+
+from parsers.innovid_export import parse_innovid_export
+from parsers.innovid_tags import parse_innovid_tags
+from parsers.ts_parser import detect_profile, parse_ts
+
+
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    module="openpyxl",
+)
+
+
+TESTS_ROOT = Path("tests")
+SUPPORTED = {".xlsx", ".xlsm"}
+
+
+def short_error(error: Exception) -> str:
+    return f"{type(error).__name__}: {error}"[:180]
+
+
+def fatal_messages(result) -> str:
+    messages = [
+        f"{item.code}: {item.message}"
+        for item in getattr(result, "anomalies", [])
+        if item.severity == "FATAL"
+    ]
+    return " | ".join(messages)[:220]
+
+
+def try_tags(path: Path) -> dict | None:
+    try:
+        result = parse_innovid_tags(path)
+    except Exception:
+        return None
+
+    if result.fatal or not result.rows:
+        return None
+
+    return {
+        "type": "TAGS",
+        "detail": (
+            f"sheet={result.sheet}; "
+            f"placements={result.distinct_placements}; "
+            f"tags={result.total_tags}; "
+            f"campaign={result.campaign_id or '-'}"
+        ),
+    }
+
+
+def try_export(path: Path) -> dict | None:
+    try:
+        result = parse_innovid_export(path)
+    except Exception:
+        return None
+
+    if result.fatal or not result.level:
+        return None
+
+    return {
+        "type": (
+            "PLACEMENT_CREATIVE_VIEW"
+            if result.level == "placement_creative"
+            else "PLACEMENT_VIEW"
+        ),
+        "detail": (
+            f"sheet={result.sheet}; "
+            f"level={result.level}; "
+            f"rows={len(result.rows)}; "
+            f"placements={result.distinct_placements}; "
+            f"campaign={result.metadata.get('campaignid', '-')}"
+        ),
+    }
+
+
+def try_ts(path: Path) -> dict | None:
+    try:
+        detected, evidence = detect_profile(path)
+        result = parse_ts(path)
+    except Exception:
+        return None
+
+    if result.fatal or result.placements is None:
+        return None
+
+    return {
+        "type": "TRAFFIC_SHEET",
+        "detail": (
+            f"profile={result.profile}; "
+            f"detected={detected}; "
+            f"worked={len(result.worked)}; "
+            f"placement_rows={len(result.placements.rows)}; "
+            f"evidence={evidence}"
+        ),
+    }
+
+
+def classify(path: Path) -> dict:
+    """
+    Orden de detección:
+      1. Tags, porque pueden tener hoja Import.
+      2. Export Innovid.
+      3. Traffic Sheet.
+    """
+    for detector in (try_tags, try_export, try_ts):
+        detected = detector(path)
+        if detected is not None:
+            return detected
+
+    diagnostics = []
+
+    try:
+        tag_result = parse_innovid_tags(path)
+        message = fatal_messages(tag_result)
+        if message:
+            diagnostics.append(f"tags=[{message}]")
+    except Exception as error:
+        diagnostics.append(f"tags=[{short_error(error)}]")
+
+    try:
+        export_result = parse_innovid_export(path)
+        message = fatal_messages(export_result)
+        if message:
+            diagnostics.append(f"export=[{message}]")
+    except Exception as error:
+        diagnostics.append(f"export=[{short_error(error)}]")
+
+    try:
+        ts_result = parse_ts(path)
+        message = fatal_messages(ts_result)
+        if message:
+            diagnostics.append(f"ts=[{message}]")
+    except Exception as error:
+        diagnostics.append(f"ts=[{short_error(error)}]")
+
+    return {
+        "type": "UNRECOGNIZED",
+        "detail": " | ".join(diagnostics)[:600],
+    }
+
+
+def main() -> None:
+    if not TESTS_ROOT.exists():
+        raise SystemExit("ERROR: tests/ does not exist.")
+
+    files = sorted(
+        path
+        for path in TESTS_ROOT.rglob("*")
+        if path.is_file()
+        and path.suffix.casefold() in SUPPORTED
+        and not path.name.startswith("~$")
+    )
+
+    print("=" * 120)
+    print("QA2 REAL TEST CASE INVENTORY")
+    print("=" * 120)
+    print(f"Root: {TESTS_ROOT.resolve()}")
+    print(f"Files: {len(files)}")
+    print()
+
+    current_folder = None
+    totals: dict[str, int] = {}
+
+    for path in files:
+        relative = path.relative_to(TESTS_ROOT)
+        folder = str(relative.parent)
+
+        if folder != current_folder:
+            current_folder = folder
+            print()
+            print("-" * 120)
+            print(f"CASE: {folder}")
+            print("-" * 120)
+
+        detected = classify(path)
+        detected_type = detected["type"]
+        totals[detected_type] = totals.get(detected_type, 0) + 1
+
+        print(f"FILE   : {relative.name}")
+        print(f"TYPE   : {detected_type}")
+        print(f"DETAIL : {detected['detail']}")
+        print()
+
+    print("=" * 120)
+    print("TOTALS")
+    print("=" * 120)
+
+    for detected_type, total in sorted(totals.items()):
+        print(f"{detected_type:28}: {total}")
+
+
+if __name__ == "__main__":
+    main()

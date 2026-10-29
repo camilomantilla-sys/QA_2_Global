@@ -1,0 +1,12 @@
+streamlit>=1.63.0
+pandas>=2.2.0
+openpyxl>=3.1.2
+rich>=13.7.0
+typer>=0.12.0
+reportlab>=4.2.0
+fonttools>=4.53.0
+brotli>=1.1.0
+# Innovid API client: drives a real browser to log in, then reuses that
+# session. Needs its browser too, once per machine:
+#   python -m playwright install chromium
+playwright>=1.40.0
