@@ -14,7 +14,10 @@ python scripts/generate_code_map.py        # mapa del código al día
 python scripts/export_copilot_context.py   # arma los archivos para el agente
 ```
 
-Quedan en `dist/copilot_context/`, que está fuera de Git. Son 12 archivos
+Quedan **fuera del proyecto**, en la carpeta `QA2_contexto_copilot`
+que se crea al lado de la carpeta de QA2 (si quieres otra ruta:
+`python scripts/export_copilot_context.py --out "C:/otra/carpeta"`).
+Así no se mezclan con el código ni con los paquetes de `dist/`. Son 12 archivos
 `.md` (1,7 MB en total). Cada uno junta documentación o código por tema,
 y cada archivo del proyecto va con su ruta como título
 (`## ARCHIVO: core/urls.py`). El script se niega a terminar si se cuela
@@ -48,7 +51,7 @@ cambiar según la versión):
    el funcionamiento de QA2, y propone cambios listos para pegar en VS Code.
 3. **Instrucciones:** pega el bloque de
    [`INSTRUCCIONES_AGENTE.md`](INSTRUCCIONES_AGENTE.md).
-4. **Conocimiento:** sube los archivos de `dist/copilot_context/`.
+4. **Conocimiento:** sube los archivos de `QA2_contexto_copilot`.
 5. Si el agente tiene la opción de usar solo el conocimiento cargado (y
    no la web), actívala. Las respuestas salen más precisas.
 

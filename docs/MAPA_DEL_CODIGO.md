@@ -1073,7 +1073,7 @@ Diagnóstico de resolución URL para Traffic Sheets WPP. *(248 lineas)*
 
 ### `scripts/export_copilot_context.py`
 
-Arma los archivos de conocimiento para un agente de Copilot sin acceso al repo. *(188 lineas)*
+Arma los archivos de conocimiento para un agente de Copilot sin acceso al repo. *(196 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |

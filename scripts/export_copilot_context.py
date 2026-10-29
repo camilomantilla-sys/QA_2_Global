@@ -11,18 +11,22 @@ Nunca incluye la sesion ni las credenciales de Innovid, ni hojas de
 calculo, ni la carpeta de logs: se niega a terminar si alguna se cuela.
 
     python scripts/export_copilot_context.py
+    python scripts/export_copilot_context.py --out "C:/ruta/que/quieras"
 
-Deja los archivos en dist/copilot_context/ (fuera de Git). Se vuelve a
-correr despues de cada cambio y se reemplazan los del agente.
+Por defecto deja los archivos FUERA del proyecto, en la carpeta
+QA2_contexto_copilot junto a la del proyecto, para no mezclarlos con el
+codigo ni con los paquetes de dist/. Se vuelve a correr despues de cada
+cambio y se reemplazan los del agente.
 """
 from __future__ import annotations
 
+import argparse
 import fnmatch
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "dist" / "copilot_context"
+OUT = ROOT.parent / "QA2_contexto_copilot"
 
 sys.path.insert(0, str(ROOT))
 from core.paths import LOCAL_ONLY_FILES  # noqa: E402
@@ -166,9 +170,13 @@ def build() -> dict[str, list[str]]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument("--out", type=Path, default=OUT,
+                        help="carpeta de salida (por defecto, fuera del proyecto)")
+    out = parser.parse_args().out.resolve()
     groups = build()
-    OUT.mkdir(parents=True, exist_ok=True)
-    for old in OUT.glob("*.md"):
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("QA2_*.md"):
         old.unlink()
     titles = {name: title for name, title, _ in GROUPS}
     total = 0
@@ -176,11 +184,11 @@ def main() -> None:
         if not files:
             continue
         text = render(titles[name], files)
-        (OUT / name).write_text(text, encoding="utf-8")
+        (out / name).write_text(text, encoding="utf-8")
         size = len(text.encode("utf-8"))
         total += size
         print(f"  {name:40s} {len(files):3d} archivos  {size / 1024:7.0f} KB")
-    print(f"\n  {OUT.relative_to(ROOT)}  ({total / 1024 / 1024:.1f} MB en total)")
+    print(f"\n  {out}  ({total / 1024 / 1024:.1f} MB en total)")
     print("  checked: no credentials, no session, no spreadsheets.")
 
 
