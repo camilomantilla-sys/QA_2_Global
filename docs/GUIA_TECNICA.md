@@ -150,11 +150,11 @@ pidió:
 
 | Color | Intención |
 |---|---|
-| Verde | Ya implementado / confirmado |
-| Blanco | Pedido actual |
-| Rojo | Quitar |
-| Gris | Fuera de alcance (`"SCOPE_EXCLUDED"`) |
-| Amarillo | Revisar |
+| Verde | Nuevo, o valor nuevo de un cambio: debe existir y estar activo |
+| Rojo | Quitar, o valor viejo de un cambio: debe estar desasignado |
+| Amarillo | En espera: fuera de alcance (`"SCOPE_EXCLUDED"`) |
+| Gris | No trabajado: fuera de alcance (`"SCOPE_EXCLUDED"`) |
+| Blanco | Contexto existente: se muestra, no se juzga |
 
 Ojo con el nombre: `"SCOPE_EXCLUDED"` en `ts_parser` es una cadena, y
 `core.colors.SCOPE_EXCLUDED` es un **conjunto de colores**. No son lo
@@ -405,10 +405,10 @@ RULE_ID = "XXX-001"
 
 
 def evaluate(match_result, buffer):
-    for pm in match_result.placements:
+    for pm in match_result.matched:
         common = dict(
             rule_id=RULE_ID,
-            domain=Domain.PLACEMENT,
+            domain=Domain.SCOPE,
             entity_type=EntityType.PLACEMENT,
             placement_id=pm.placement_id,
             placement_name=pm.expected.name,

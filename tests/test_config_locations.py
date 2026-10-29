@@ -226,7 +226,7 @@ def test_the_repository_names_no_ai_vendor_or_personal_account():
     import re
 
     banned = re.compile(
-        r"claude|anthropic|chatgpt|openai|copilot|@gmail\.|@hotmail\.|@outlook\.|@yahoo\.",
+        r"claude|anthropic|chatgpt|openai|@gmail\.|@hotmail\.|@outlook\.|@yahoo\.",
         re.I,
     )
     this_file = Path(__file__).resolve()

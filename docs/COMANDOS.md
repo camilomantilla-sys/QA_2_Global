@@ -184,12 +184,15 @@ echo 1.1.0 > VERSION
 #  2. anotar que cambio, arriba del todo
 notepad docs/CHANGELOG.md
 
-#  3. commit y push
+#  3. actualizar el mapa del codigo (docs/MAPA_DEL_CODIGO.md)
+python scripts/generate_code_map.py
+
+#  4. commit y push
 git add -A
 git commit -m "Version 1.1.0"
 git push -u origin main
 
-#  4. armar y repartir
+#  5. armar y repartir
 #     un arreglo de reglas o de la interfaz: basta el parche
 python scripts/package_release.py --update
 

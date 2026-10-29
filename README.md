@@ -87,6 +87,9 @@ Traffic Sheet (.xlsx)      Innovid exports         Tag files
 | `rules/*.py` | One family of rules per file (catalogue in `docs/GUIA_TECNICA.md` section 4) |
 
 Every module opens with a docstring that explains what it does and why.
+The full index of functions is in [`docs/MAPA_DEL_CODIGO.md`](docs/MAPA_DEL_CODIGO.md),
+and `.github/copilot-instructions.md` gives code assistants the project's
+ground rules.
 
 ## Security at a glance
 
@@ -121,6 +124,8 @@ The full review is in [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md). In short:
 |---|---|
 | [`docs/COMANDOS.md`](docs/COMANDOS.md) | The copy-paste reference: which package to build for a given change, and how to publish a release |
 | [`docs/INSTALACION.md`](docs/INSTALACION.md) | Whoever is installing QA2 for the first time: download, first run, connecting Innovid, and what to do when something fails |
+| [`docs/REFERENCIA_TECNICA.md`](docs/REFERENCIA_TECNICA.md) | Developers and code assistants: how every part works, key functions with code, the JSON tables, the Innovid connection and Playwright, tests, recipes and a technical FAQ |
+| [`docs/MAPA_DEL_CODIGO.md`](docs/MAPA_DEL_CODIGO.md) | Where everything is: every module, class and function with its signature, and every test file. Generated from the code by `scripts/generate_code_map.py` |
 | [`docs/GUIA_TECNICA.md`](docs/GUIA_TECNICA.md) | Whoever maintains QA2: every rule, the key functions of each file, and the traps that cost a debugging session |
 | [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) | IT / information-security review before rollout |
 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | The whole team: what changed in each release. Also shown inside the app, under **What's new** in the sidebar |
