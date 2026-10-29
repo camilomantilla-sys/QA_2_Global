@@ -671,7 +671,7 @@ descarga el analista donde elija.
 ## 15. Pruebas
 
 ```bash
-python -m pytest tests/                       # todas (662)
+python -m pytest tests/                       # todas
 python -m pytest tests/test_innovid_api.py    # un archivo
 python -m pytest tests/ -k "csrf"             # por palabra en el nombre
 ```

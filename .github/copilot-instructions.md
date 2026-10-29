@@ -69,6 +69,6 @@ local, en Windows, desde un paquete portátil.
 2. Escribe o ajusta la prueba en `tests/` (un archivo por
    comportamiento; el nombre del test afirma algo en palabras).
 3. Haz el cambio.
-4. Corre `python -m pytest tests/`. Las 662 pruebas deben pasar.
+4. Corre `python -m pytest tests/`. Todas las pruebas deben pasar.
 5. Corre `python scripts/generate_code_map.py` para actualizar el mapa.
 6. Anota el cambio arriba de `docs/CHANGELOG.md`.

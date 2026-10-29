@@ -1071,6 +1071,19 @@ Diagnóstico de resolución URL para Traffic Sheets WPP. *(248 lineas)*
 | funcion | `find_traffic_sheet() -> Path` |  |
 | funcion | `main() -> None` |  |
 
+### `scripts/export_copilot_context.py`
+
+Arma los archivos de conocimiento para un agente de Copilot sin acceso al repo. *(188 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `candidates() -> list[str]` |  |
+| funcion | `assign(paths: list[str]) -> dict[str, list[str]]` |  |
+| funcion | `render(title: str, files: list[str]) -> str` |  |
+| funcion | `guard(groups: dict[str, list[str]]) -> None` |  |
+| funcion | `build() -> dict[str, list[str]]` |  |
+| funcion | `main() -> None` |  |
+
 ### `scripts/generate_code_map.py`
 
 Genera docs/MAPA_DEL_CODIGO.md: el indice de todo el codigo de QA2. *(153 lineas)*
@@ -1197,6 +1210,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
+| `test_copilot_export.py` | 3 | The Copilot knowledge export carries all the code and never a secret |
 | `test_creative_dimensions.py` | 9 | El tamano al que se sirve un creativo, y por que no se veia |
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
@@ -1250,4 +1264,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 662 funciones de prueba en 59 archivos (algunas se parametrizan y corren varias veces).
+Total: 665 funciones de prueba en 60 archivos (algunas se parametrizan y corren varias veces).

@@ -124,6 +124,8 @@ The full review is in [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md). In short:
 |---|---|
 | [`docs/COMANDOS.md`](docs/COMANDOS.md) | The copy-paste reference: which package to build for a given change, and how to publish a release |
 | [`docs/INSTALACION.md`](docs/INSTALACION.md) | Whoever is installing QA2 for the first time: download, first run, connecting Innovid, and what to do when something fails |
+| [`docs/LEEME_PRIMERO.md`](docs/LEEME_PRIMERO.md) | Anyone opening the project for the first time: reading order, where everything is, and preparation for security questions |
+| [`docs/copilot/`](docs/copilot/GUIA_AGENTE_COPILOT.md) | Setting up the Copilot agent: the instruction block, the knowledge files (`scripts/export_copilot_context.py`) and how to paste its changes safely |
 | [`docs/REFERENCIA_TECNICA.md`](docs/REFERENCIA_TECNICA.md) | Developers and code assistants: how every part works, key functions with code, the JSON tables, the Innovid connection and Playwright, tests, recipes and a technical FAQ |
 | [`docs/MAPA_DEL_CODIGO.md`](docs/MAPA_DEL_CODIGO.md) | Where everything is: every module, class and function with its signature, and every test file. Generated from the code by `scripts/generate_code_map.py` |
 | [`docs/GUIA_TECNICA.md`](docs/GUIA_TECNICA.md) | Whoever maintains QA2: every rule, the key functions of each file, and the traps that cost a debugging session |
@@ -247,7 +249,7 @@ cli/           Command-line tools for diagnosing a single file without the UI
 scripts/       One-off diagnostic and regression scripts
 config/        Editable tables (vendors, Adobe pixels, team roster). No secrets in Git
 tests/         Automated tests: run `python -m pytest tests/` before any release
-docs/          GUIA_TECNICA.md, SEGURIDAD.md, CHANGELOG.md, QA2_RULEBOOK.md
+docs/          LEEME_PRIMERO.md (start here), REFERENCIA_TECNICA.md, SEGURIDAD.md, MAPA_DEL_CODIGO.md, copilot/, ...
 ```
 
 ### Extending QA2
