@@ -161,7 +161,7 @@ Orquestador principal del Rule Engine QA2. *(140 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(625 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(626 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -375,7 +375,7 @@ Where QA2 reads and writes its own files. *(106 lineas)*
 
 ### `core/pdf_report.py`
 
-Branded PDF export of a QA2 run. *(734 lineas)*
+Branded PDF export of a QA2 run. *(738 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -443,6 +443,16 @@ Provenance: cada valor extraido conserva su origen exacto. *(66 lineas)*
 | clase | `CellRef` | Coordenada absoluta de una celda |
 | clase | `Cell` | Una celda leida, con todo lo necesario para auditarla |
 | clase | `Anomaly` | Problema de EXTRACCION, no de QA |
+
+### `core/qa1_trail.py`
+
+El rastro del QA1 dentro del session bundle (FB-18, FB-21). *(64 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `result_snapshot(verdict: str, errors: int, reviews: int, not_verified: int, at: str) -> dict` | Lo que dio la ultima corrida, para guardarlo en el bundle |
+| funcion | `describe_result(result: dict \| None) -> str` | 'REQUIRES CORRECTION (2 failed, 3 to review)' |
+| funcion | `describe_origin(manifest: dict) -> str` | Una frase sobre quien hizo el QA1, para mostrarla al abrir el bundle |
 
 ### `core/qa_export.py`
 
@@ -864,7 +874,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5847 lineas)*
+Interfaz de QA2 (Streamlit). *(5888 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1265,6 +1275,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
 | `test_portable_tests.py` | 8 | Las pruebas tienen que correr en la maquina de quien las corre |
+| `test_qa1_trail.py` | 4 | El bundle lleva el rastro del QA1 y el QA2 lo ve (FB-18, FB-21) |
 | `test_qa_export.py` | 24 | La hoja QA del entregable: una fila por creativo, TS contra Innovid |
 | `test_report_naming.py` | 9 | Como se llama el archivo que alguien se descarga, y que pestanas del Excel se ven |
 | `test_review_approve_buttons.py` | 15 | Como se firma el QA2, y por que ya no es un boton |
@@ -1289,4 +1300,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 682 funciones de prueba en 63 archivos (algunas se parametrizan y corren varias veces).
+Total: 686 funciones de prueba en 64 archivos (algunas se parametrizan y corren varias veces).

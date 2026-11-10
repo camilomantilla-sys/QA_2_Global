@@ -164,6 +164,7 @@ from rules import dv_omni as dv_omni_rules
 from rules import pixels as pixel_rules
 from rules import defaults as default_rules
 from ui.help_content import DOWNLOAD_PURPOSE, help_markdown
+from core.qa1_trail import describe_origin, describe_result, result_snapshot
 
 
 warnings.filterwarnings(
@@ -1847,6 +1848,7 @@ with st.sidebar:
                         ("qa2_record_request_type", "request_type"),
                         ("qa2_record_wrike", "wrike_id"),
                         ("qa2_record_impl_by", "implemented_by"),
+                        ("qa2_record_notes", "notes"),
                     ):
                         if _manifest.get(_meta_key):
                             st.session_state[_field_key] = (
@@ -1875,11 +1877,23 @@ with st.sidebar:
                     st.session_state["_session_bundle_source"] = (
                         _bundle_source
                     )
+                    st.session_state["qa2_bundle_origin"] = {
+                        key: _manifest.get(key)
+                        for key in (
+                            "implemented_by", "implementation_date",
+                            "wrike_id", "saved_at", "qa1_result",
+                        )
+                    }
 
             st.success(
                 f"Loaded session bundle -- {len(_restored)} file "
                 "slot(s) restored below."
             )
+            if st.session_state.get("qa2_bundle_origin"):
+                st.info(
+                    describe_origin(st.session_state["qa2_bundle_origin"])
+                    + " You are doing QA2: fill in QA2 By below."
+                )
         except Exception as exc:
             st.error(f"Couldn't read this session bundle: {exc}")
 
@@ -2370,6 +2384,8 @@ with st.sidebar:
                     record_implementation_date.isoformat()
                     if record_implementation_date else ""
                 ),
+                "notes": record_notes,
+                "qa1_result": st.session_state.get("qa2_last_result"),
                 "saved_at": datetime.now().isoformat(timespec="seconds"),
                 "files": _files_manifest,
             }
@@ -3458,6 +3474,16 @@ if True:
 
         show_verdict(scorecard.verdict, findings_buffer.findings)
 
+        # Lo que dio esta corrida viaja en el session bundle, para que
+        # quien haga el QA2 vea que encontro el QA1 (FB-18).
+        st.session_state["qa2_last_result"] = result_snapshot(
+            scorecard.verdict,
+            scorecard.errors,
+            scorecard.reviews,
+            scorecard.not_verified,
+            datetime.now().isoformat(timespec="seconds"),
+        )
+
         st.markdown(
             f"""
             <div class="profile-card">
@@ -3478,7 +3504,14 @@ if True:
             ("Campaign", record_campaign),
             ("Request Type", record_request_type),
             ("Wrike ID", record_wrike_id),
-            ("Implemented By", record_implemented_by),
+            ("Implemented By (QA1)", record_implemented_by),
+            (
+                "QA1 Result (from bundle)",
+                describe_result(
+                    (st.session_state.get("qa2_bundle_origin") or {})
+                    .get("qa1_result")
+                ),
+            ),
             (
                 "Implementation Date",
                 (
@@ -3969,6 +4002,10 @@ if True:
                 request_type=record_request_type,
                 wrike_id=record_wrike_id,
                 implemented_by=record_implemented_by,
+                qa1_result=describe_result(
+                    (st.session_state.get("qa2_bundle_origin") or {})
+                    .get("qa1_result")
+                ),
                 implementation_date=record_implementation_date,
                 qa2_by=record_qa2_by,
                 qa2_date=record_qa2_date,
@@ -4097,6 +4134,10 @@ if True:
                 request_type=record_request_type,
                 wrike_id=record_wrike_id,
                 implemented_by=record_implemented_by,
+                qa1_result=describe_result(
+                    (st.session_state.get("qa2_bundle_origin") or {})
+                    .get("qa1_result")
+                ),
                 implementation_date=record_implementation_date,
                 qa2_by=record_qa2_by,
                 qa2_date=record_qa2_date,

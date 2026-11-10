@@ -306,7 +306,8 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         ("Campaign", meta.campaign),
         ("Request Type", meta.request_type),
         ("Wrike ID", meta.wrike_id),
-        ("Implemented By", meta.implemented_by),
+        ("Implemented By (QA1)", meta.implemented_by),
+        ("QA1 Result (from bundle)", meta.qa1_result),
         (
             "Implementation Date",
             meta.implementation_date.isoformat()

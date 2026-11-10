@@ -151,6 +151,8 @@ class ReportMeta:
     wrike_id: str = ""
     implemented_by: str = ""
     implementation_date: date | None = None
+    # Lo que vio el QA1 al guardar el bundle; vacio si no vino de uno.
+    qa1_result: str = ""
     qa2_by: str = ""
     qa2_date: date | None = None
     qa3_by: str = ""
@@ -370,10 +372,12 @@ def _record_flowable(meta: ReportMeta, styles):
         f"<b>Campaign:</b> {_blank(meta.campaign, 34)}",
         f"<b>Request Type:</b> {_blank(meta.request_type, 34)}",
         f"<b>Wrike ID:</b> {_blank(meta.wrike_id, 20)}",
-        f"<b>Implemented By:</b> {_blank(meta.implemented_by, 24)}",
+        f"<b>Implemented By (QA1):</b> {_blank(meta.implemented_by, 24)}",
         f"<b>Implementation Date:</b> "
         f"{_blank_date(meta.implementation_date)}",
     ]
+    if meta.qa1_result:
+        left.append(f"<b>QA1 Result:</b> {_esc(meta.qa1_result)}")
     right = [
         f"<b>QA2 By:</b> {_blank(meta.qa2_by, 24)}",
         f"<b>QA2 Date:</b> {_blank_date(meta.qa2_date)}",
