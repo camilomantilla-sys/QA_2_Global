@@ -874,7 +874,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5888 lineas)*
+Interfaz de QA2 (Streamlit). *(5927 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -919,6 +919,16 @@ El texto de ayuda dentro de la app (FB-05) y para que sirve cada archivo que se 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `help_markdown() -> str` | La ayuda completa, en Markdown, tal como se muestra en la app |
+
+### `ui/paste_image.py`
+
+Pegar capturas con Ctrl+V en la seccion de evidencia (FB-04). *(61 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| clase | `PastedImage` | Se comporta como un archivo subido: .name, .size y .getvalue() |
+| funcion | `decode(value) -> list[PastedImage]` | Lo que manda el componente, a archivos |
+| funcion | `paste_images(key: str, reset_token: int) -> list[PastedImage]` | La zona para pegar |
 
 ## `cli/` — Herramientas de linea de comandos
 
@@ -1274,6 +1284,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
+| `test_paste_image.py` | 4 | Las capturas pegadas (FB-04) entran como cualquier archivo subido, y viajan en el session bundle |
 | `test_portable_tests.py` | 8 | Las pruebas tienen que correr en la maquina de quien las corre |
 | `test_qa1_trail.py` | 4 | El bundle lleva el rastro del QA1 y el QA2 lo ve (FB-18, FB-21) |
 | `test_qa_export.py` | 24 | La hoja QA del entregable: una fila por creativo, TS contra Innovid |
@@ -1300,4 +1311,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 686 funciones de prueba en 64 archivos (algunas se parametrizan y corren varias veces).
+Total: 690 funciones de prueba en 65 archivos (algunas se parametrizan y corren varias veces).

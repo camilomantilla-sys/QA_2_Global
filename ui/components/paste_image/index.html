@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  Pegar capturas con Ctrl+V (FB-04).
+
+  Componente de Streamlit sin compilar: habla el protocolo de
+  componentes con postMessage, a mano. Todo queda en este navegador y
+  en el servidor local de QA2; no carga nada de internet.
+-->
+<style>
+  body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;color:#000050}
+  .zone{border:2px dashed #788BFF;border-radius:10px;padding:10px 12px;background:#F1F4FC;outline:none;cursor:text}
+  .zone:focus{border-color:#5465FF;background:#fff}
+  .zone b{display:block;font-size:13px}
+  .zone span{color:#6B7194;font-size:12px}
+  .list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .thumb{position:relative;width:64px;height:48px;border-radius:6px;overflow:hidden;border:1px solid #DDE2F3;background:#fff}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb button{position:absolute;top:1px;right:1px;border:0;border-radius:50%;width:18px;height:18px;line-height:16px;font-size:12px;background:#000050;color:#fff;cursor:pointer;padding:0}
+  .msg{color:#C62828;font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="zone" id="zone" tabindex="0" role="button" aria-label="Paste a screenshot here">
+  <b>Click here and press Ctrl+V to paste a screenshot</b>
+  <span>PNG or JPG from the clipboard. Each paste adds one.</span>
+</div>
+<div class="list" id="list"></div>
+<div class="msg" id="msg" hidden></div>
+<script>
+const MAX_BYTES = 8 * 1024 * 1024;
+let images = [];
+let count = 0;
+
+function send(type, data) {
+  window.parent.postMessage(Object.assign({isStreamlitMessage: true, type}, data), "*");
+}
+function height() { send("streamlit:setFrameHeight", {height: document.body.scrollHeight + 4}); }
+function publish() { send("streamlit:setComponentValue", {value: images, dataType: "json"}); }
+
+function render() {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  images.forEach((img, i) => {
+    const box = document.createElement("div");
+    box.className = "thumb";
+    box.title = img.name;
+    const pic = document.createElement("img");
+    pic.src = "data:" + img.type + ";base64," + img.data;
+    pic.alt = img.name;
+    const del = document.createElement("button");
+    del.textContent = "×";
+    del.setAttribute("aria-label", "Remove " + img.name);
+    del.onclick = () => { images.splice(i, 1); render(); publish(); };
+    box.append(pic, del);
+    list.append(box);
+  });
+  height();
+}
+
+function warn(text) {
+  const m = document.getElementById("msg");
+  m.textContent = text; m.hidden = !text; height();
+}
+
+document.addEventListener("paste", (e) => {
+  const items = Array.from((e.clipboardData || {}).items || []);
+  const files = items.filter(it => it.kind === "file" && /^image\/(png|jpeg)$/.test(it.type));
+  if (!files.length) { warn("The clipboard has no PNG or JPG image. Take the screenshot again and paste."); return; }
+  e.preventDefault();
+  files.forEach(it => {
+    const file = it.getAsFile();
+    if (!file) return;
+    if (file.size > MAX_BYTES) { warn("That image is over 8 MB. Crop it and paste again."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = String(reader.result).split(",")[1];
+      count += 1;
+      const ext = it.type === "image/png" ? "png" : "jpg";
+      images.push({name: "pasted_screenshot_" + count + "." + ext, type: it.type, data});
+      warn(""); render(); publish();
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "streamlit:render") {
+    const args = event.data.args || {};
+    if (args.reset_token !== undefined && args.reset_token !== window._token) {
+      if (window._token !== undefined) { images = []; count = 0; render(); }
+      window._token = args.reset_token;
+    }
+    height();
+  }
+});
+
+send("streamlit:componentReady", {apiVersion: 1});
+height();
+</script>
+</body>
+</html>

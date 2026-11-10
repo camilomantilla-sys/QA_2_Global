@@ -164,6 +164,7 @@ from rules import dv_omni as dv_omni_rules
 from rules import pixels as pixel_rules
 from rules import defaults as default_rules
 from ui.help_content import DOWNLOAD_PURPOSE, help_markdown
+from ui.paste_image import paste_images
 from core.qa1_trail import describe_origin, describe_result, result_snapshot
 
 
@@ -1825,6 +1826,20 @@ with st.sidebar:
                 if _restored_tags:
                     _restored["tags"] = _restored_tags
 
+                _restored_evidence = []
+                for _entry in _manifest_files.get("evidence", []):
+                    _stored_as = _entry.get("stored_as")
+                    _orig_name = _entry.get("name")
+                    if not _stored_as or not _orig_name:
+                        continue
+                    _data = _read_bundle_file(f"files/evidence/{_stored_as}")
+                    if _data is not None:
+                        _restored_evidence.append(
+                            _RestoredUpload(_orig_name, _data)
+                        )
+                if _restored_evidence:
+                    _restored["evidence"] = _restored_evidence
+
                 if _is_new_bundle:
                     if _manifest.get("profile") in PROFILE_LABELS:
                         st.session_state["qa2_profile_select"] = (
@@ -1979,18 +1994,28 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    uploaded_evidence = st.file_uploader(
+    uploaded_evidence = list(st.file_uploader(
         "5. Upload evidence screenshots",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key=f"qa2_evidence_{upload_nonce()}",
+    ) or [])
+    # FB-04: tambien se pueden pegar con Ctrl+V. Van al mismo sitio.
+    uploaded_evidence += paste_images(
+        key=f"qa2_paste_{upload_nonce()}", reset_token=upload_nonce()
     )
+    uploaded_evidence += list(_restored.get("evidence", []))
+    if uploaded_evidence:
+        st.caption(
+            f"{len(uploaded_evidence)} screenshot(s) will go into the "
+            "reports and the session bundle."
+        )
 
     st.markdown(
         """
         <div class="upload-help">
-            Optional. Included as an Implementation Evidence
-            section in the PDF report.
+            Optional. Upload them or paste with Ctrl+V. They go into
+            the PDF, the Excel and the session bundle.
         </div>
         """,
         unsafe_allow_html=True,
@@ -2372,6 +2397,20 @@ with st.sidebar:
                 )
             if _tag_entries:
                 _files_manifest["tags"] = _tag_entries
+
+            # FB-04: las capturas (subidas o pegadas) viajan tambien,
+            # para que quien haga el QA2 vea la misma evidencia.
+            _evidence_entries = []
+            for _index, _image in enumerate(uploaded_evidence or [], start=1):
+                _stored_as = f"{_index}_{Path(_image.name).name}"
+                _zf.writestr(
+                    f"files/evidence/{_stored_as}", _image.getvalue()
+                )
+                _evidence_entries.append(
+                    {"name": Path(_image.name).name, "stored_as": _stored_as}
+                )
+            if _evidence_entries:
+                _files_manifest["evidence"] = _evidence_entries
 
             _manifest_out = {
                 "profile": selected_profile,
