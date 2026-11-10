@@ -163,6 +163,7 @@ from rules import dv_tags as dv_rules
 from rules import dv_omni as dv_omni_rules
 from rules import pixels as pixel_rules
 from rules import defaults as default_rules
+from ui.help_content import DOWNLOAD_PURPOSE, help_markdown
 
 
 warnings.filterwarnings(
@@ -1483,6 +1484,9 @@ st.markdown(
 # Kantar, Inmarket, DISQO)
 # ============================================================
 
+with st.expander("❓ Help: how to use QA2 and read the results"):
+    st.markdown(help_markdown())
+
 with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     st.caption(
         "Vendor pixel rules PIX-002/DV-001/DV-003 check against "
@@ -2388,6 +2392,7 @@ with st.sidebar:
                 "to reviewing and checking QA2 Sign-off."
             ),
         )
+        st.caption(DOWNLOAD_PURPOSE["bundle"])
     else:
         st.caption(
             "Upload the Traffic Sheet and Placement-Creative View "
@@ -4135,6 +4140,7 @@ if True:
             mime="application/pdf",
             use_container_width=True,
         )
+        download_columns[0].caption(DOWNLOAD_PURPOSE["pdf"])
 
         download_columns[1].download_button(
             "Download Excel Report",
@@ -4146,6 +4152,7 @@ if True:
             ),
             use_container_width=True,
         )
+        download_columns[1].caption(DOWNLOAD_PURPOSE["excel"])
 
         # Una seccion a la vez, y solo esa se dibuja.
         #

@@ -864,7 +864,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5840 lineas)*
+Interfaz de QA2 (Streamlit). *(5847 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -901,6 +901,14 @@ Interfaz de QA2 (Streamlit). *(5840 lineas)*
 | funcion | `render_status_badge(status: str) -> None` |  |
 | funcion | `show_verdict(verdict: str, findings=None) -> None` |  |
 | funcion | `brand_font_css() -> str` | @font-face rules for the WPP typeface, embedded as base64 so Streamlit doesn't need to serve the files |
+
+### `ui/help_content.py`
+
+El texto de ayuda dentro de la app (FB-05) y para que sirve cada archivo que se descarga (FB-19). *(103 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `help_markdown() -> str` | La ayuda completa, en Markdown, tal como se muestra en la app |
 
 ## `cli/` — Herramientas de linea de comandos
 
@@ -1236,6 +1244,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
 | `test_group_colour_does_not_decide.py` | 12 | El color de la celda del grupo no decide el de un creativo |
+| `test_help_content.py` | 4 | La ayuda dentro de la app (FB-05, FB-19) dice lo mismo que la pantalla |
 | `test_hidden_landing_page_chain.py` | 12 | La tabla que dice a que landing page apunta un grupo puede estar oculta |
 | `test_hidden_rotations.py` | 6 | Una hoja de rotaciones filtrada sigue siendo una hoja con datos |
 | `test_innovid_api.py` | 8 | Parser tests for core/innovid_api |
@@ -1280,4 +1289,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 678 funciones de prueba en 62 archivos (algunas se parametrizan y corren varias veces).
+Total: 682 funciones de prueba en 63 archivos (algunas se parametrizan y corren varias veces).
