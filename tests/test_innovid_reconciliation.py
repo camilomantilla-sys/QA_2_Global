@@ -462,6 +462,18 @@ def test_ongoing_is_fine_when_the_placement_closes_on_the_ts_date():
     assert "placement closes on 2026-10-31" in findings[0].message
 
 
+def test_the_decision_set_hours_are_kept():
+    """FB-11: la hora del DS viaja con el chequeo, para mostrarla."""
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 9, 14), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-09-14", "2026-10-31")])
+    [check] = reconcile(ts, got).flights
+    assert check.actual_start_time == "00:00"
+    assert check.actual_end_time == "23:59"
+
+
 def test_a_ts_with_no_dates_at_all_is_still_nothing_to_compare():
     # Sin fecha pedida no hay diferencia posible: eso sigue siendo
     # NOT_VERIFIED, no una revision que firmar.

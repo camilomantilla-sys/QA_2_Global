@@ -4643,6 +4643,13 @@ if True:
                         # estado normal de un creativo abierto.
                         return f"{start or '?'} \u2192 {end or 'ongoing'}"
 
+                    def _with_time(day, clock: str) -> str:
+                        # FB-11: la hora del decision set al lado de la
+                        # fecha, para no abrir cada DS a mirarla.
+                        if not day:
+                            return ""
+                        return f"{day} {clock}" if clock else str(day)
+
                     def _innovid_cell(check, value: str) -> str:
                         """
                         Una celda vacia se lee como "no tiene". Cada
@@ -4767,8 +4774,14 @@ if True:
                                     "Innovid Dates": _innovid_cell(
                                         _check,
                                         _dates(
-                                            _check.actual_start,
-                                            _check.actual_end,
+                                            _with_time(
+                                                _check.actual_start,
+                                                _check.actual_start_time,
+                                            ),
+                                            _with_time(
+                                                _check.actual_end,
+                                                _check.actual_end_time,
+                                            ),
                                         ) if _check else "",
                                     ),
                                     "TS Rotation": _ts_weights.get(

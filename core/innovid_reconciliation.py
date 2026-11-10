@@ -75,6 +75,10 @@ class CreativeFlightCheck:
     # fin ("ongoing") deja de servir cuando cierra su placement, asi que
     # si el placement cierra cuando dice la TS, el creativo tambien.
     placement_end: date | None = None
+    # La hora del decision set, "HH:MM" (FB-11). Las fechas se comparan
+    # con la TS; la hora se muestra para no tener que abrir cada DS.
+    actual_start_time: str = ""
+    actual_end_time: str = ""
 
     expected_weight: str = ""
     actual_weight: str = ""
@@ -484,6 +488,8 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
             expected_end=creative.end,
             actual_start=_node_date(node.start_timestamp),
             actual_end=_node_date(node.end_timestamp),
+            actual_start_time=_node_time(node.start_timestamp),
+            actual_end_time=_node_time(node.end_timestamp),
             expected_weight=creative.rotation_weight,
             actual_weight=node.weight,
             dset_id=node.dtree_id,
@@ -506,10 +512,21 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
                 status=EXTRA_IN_INNOVID,
                 actual_start=_node_date(node.start_timestamp),
                 actual_end=_node_date(node.end_timestamp),
+                actual_start_time=_node_time(node.start_timestamp),
+                actual_end_time=_node_time(node.end_timestamp),
                 actual_weight=node.weight,
                 dset_id=node.dtree_id,
                 dset_name=node.dtree_name,
             ))
+
+
+def _node_time(value: str) -> str:
+    """'2026-09-14 06:30:00' -> '06:30'. Vacio si no trae hora."""
+    text = str(value or "").strip()
+    if len(text) < 16 or text[10] not in (" ", "T"):
+        return ""
+    clock = text[11:16]
+    return clock if clock[:2].isdigit() and clock[3:].isdigit() else ""
 
 
 def _node_date(value: str) -> date | None:

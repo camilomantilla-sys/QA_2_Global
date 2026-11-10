@@ -67,6 +67,7 @@ def test_everything_read_from_innovid_is_in_the_excel():
                 dset_id="555", dset_name="DS Spring", actual_name="Spring A concept",
                 expected_start=date(2027, 1, 6), actual_start=date(2027, 1, 6),
                 expected_weight_pct="50%", actual_weight_pct="50%",
+                actual_start_time="06:30",
             ),
             CreativeFlightCheck(placement_id="900101", creative_name="Old_B",
                                 status=EXTRA_IN_INNOVID, dset_id="555"),
@@ -83,6 +84,7 @@ def test_everything_read_from_innovid_is_in_the_excel():
     assert first["Decision Set Name"] == "DS Spring"
     assert first["Creative Name in DS"] == "Spring A concept"
     assert first["Innovid End"] == "ongoing"
+    assert first["Innovid Start Time"] == "06:30"
     results = [r["Result"] for r in rows]
     assert "Not in the Traffic Sheet" in results
     assert "Duplicated in DS (x2)" in results

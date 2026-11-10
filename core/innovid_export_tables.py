@@ -51,10 +51,12 @@ def decision_set_table(reconciliation) -> pd.DataFrame:
             "Default Ad": "Yes" if check.is_default else "",
             "TS Start": _date(check.expected_start),
             "Innovid Start": _date(check.actual_start),
+            "Innovid Start Time": getattr(check, "actual_start_time", ""),
             "TS End": _date(check.expected_end),
             "Innovid End": _date(check.actual_end) or (
                 "ongoing" if check.actual_start else ""
             ),
+            "Innovid End Time": getattr(check, "actual_end_time", ""),
             "TS Rotation %": check.expected_weight_pct,
             "Innovid Rotation %": check.actual_weight_pct,
             "Innovid Weight": check.actual_weight,
@@ -73,7 +75,8 @@ def decision_set_table(reconciliation) -> pd.DataFrame:
     columns = [
         "Placement ID", "Decision Set ID", "Decision Set Name", "TS Creative",
         "Creative Name in DS", "Creative Name in Export", "Default Ad",
-        "TS Start", "Innovid Start", "TS End", "Innovid End",
+        "TS Start", "Innovid Start", "Innovid Start Time", "TS End",
+        "Innovid End", "Innovid End Time",
         "TS Rotation %", "Innovid Rotation %", "Innovid Weight", "Result",
     ]
     return pd.DataFrame(rows, columns=columns).fillna("")
