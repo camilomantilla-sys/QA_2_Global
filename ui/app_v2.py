@@ -463,6 +463,49 @@ def clear_signatures() -> None:
     trace("cleared every signature")
 
 
+#: Lo que "Start over" NO borra: la cuenta, quien hace el QA2, las
+#: tablas editables y los contadores internos. Todo lo demas es de la
+#: solicitud anterior.
+KEEP_ON_START_OVER = (
+    "qa2_account_select",
+    "qa2_record_qa2_by",
+    "qa2_vendor_editor",
+    "qa2_adobe_vendor_editor",
+    "qa2_team_editor",
+    "qa2_script_runs",
+    "qa2_upload_nonce",
+    "qa2_start_over",
+)
+
+
+def upload_nonce() -> int:
+    """
+    Sufijo de las claves de los cargadores de archivos.
+
+    Streamlit no deja vaciar un file_uploader desde el codigo. Cambiarle
+    la clave lo convierte en uno nuevo, vacio, y eso es lo que hace
+    "Start over" (FB-06).
+    """
+    return int(st.session_state.get("qa2_upload_nonce", 0))
+
+
+def start_over() -> None:
+    """
+    Deja la app lista para otra solicitud sin refrescar la pagina.
+
+    Se llama arriba del todo, antes del primer widget, en la pasada que
+    abre el clic: el boton deja su True en session_state y ahi se lee.
+    Sin on_click ni st.rerun(), que en algunas maquinas del equipo no
+    llegaban (ver tests/test_review_approve_buttons.py), y los widgets
+    se crean ya vacios en esa misma pasada.
+    """
+    nonce = upload_nonce() + 1
+    for key in list(st.session_state.keys()):
+        if not str(key).startswith(KEEP_ON_START_OVER):
+            del st.session_state[key]
+    st.session_state["qa2_upload_nonce"] = nonce
+
+
 def reuse(slot: str, signature, build):
     """
     Construye algo caro una sola vez por cada estado distinto.
@@ -1037,6 +1080,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# "Start over" (FB-06): se atiende aqui, antes del primer widget.
+if st.session_state.get("qa2_start_over"):
+    start_over()
 
 
 FONT_DIR = PROJECT_ROOT / "ui" / "assets" / "fonts"
@@ -1702,7 +1749,7 @@ with st.sidebar:
         uploaded_bundle = st.file_uploader(
             "Session bundle (.zip)",
             type=["zip"],
-            key="qa2_session_bundle",
+            key=f"qa2_session_bundle_{upload_nonce()}",
         )
 
     _restored: dict = {}
@@ -1836,7 +1883,7 @@ with st.sidebar:
         "1. Upload Traffic Sheet",
         type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
-        key="qa2_ts",
+        key=f"qa2_ts_{upload_nonce()}",
     ) or _restored.get("ts")
 
     if uploaded_ts is not None:
@@ -1865,7 +1912,7 @@ with st.sidebar:
         "2. Upload Innovid Placement-Creative View",
         type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
-        key="qa2_pc",
+        key=f"qa2_pc_{upload_nonce()}",
     ) or _restored.get("pc")
 
     st.markdown(
@@ -1882,7 +1929,7 @@ with st.sidebar:
         "3. Upload Innovid Placement View",
         type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=False,
-        key="qa2_pl",
+        key=f"qa2_pl_{upload_nonce()}",
     ) or _restored.get("pl")
 
     st.markdown(
@@ -1899,7 +1946,7 @@ with st.sidebar:
         "4. Upload Tag files",
         type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=True,
-        key="qa2_tags",
+        key=f"qa2_tags_{upload_nonce()}",
     )
     if not uploaded_tags and _restored.get("tags"):
         uploaded_tags = _restored["tags"]
@@ -1918,7 +1965,7 @@ with st.sidebar:
         "5. Upload evidence screenshots",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key="qa2_evidence",
+        key=f"qa2_evidence_{upload_nonce()}",
     )
 
     st.markdown(
@@ -1938,7 +1985,7 @@ with st.sidebar:
         "6. Upload DV Pinnacle Tags",
         type=["xlsx", "xlsm", "xls"],
         accept_multiple_files=True,
-        key="qa2_dv",
+        key=f"qa2_dv_{upload_nonce()}",
     )
     if not uploaded_dv and _restored.get("dv"):
         uploaded_dv = _restored["dv"]
@@ -2209,6 +2256,16 @@ with st.sidebar:
         "Run QA",
         type="primary",
         use_container_width=True,
+    )
+    st.button(
+        "Start over",
+        key="qa2_start_over",
+        use_container_width=True,
+        help=(
+            "Clears the files, the record and the results of this "
+            "request so you can start the next one. Keeps your account "
+            "and the QA2 By name."
+        ),
     )
 
     # st.button() only returns True on the single rerun triggered by

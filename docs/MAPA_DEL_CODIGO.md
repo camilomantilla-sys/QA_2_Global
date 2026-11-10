@@ -864,7 +864,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5783 lineas)*
+Interfaz de QA2 (Streamlit). *(5840 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -879,6 +879,8 @@ Interfaz de QA2 (Streamlit). *(5783 lineas)*
 | funcion | `trace(stage: str) -> None` | Una linea por etapa, en disco |
 | funcion | `sign_findings(findings, note: str) -> int` | Marca como firmado todo lo que se le pase |
 | funcion | `clear_signatures() -> None` | Lo mismo al reves |
+| funcion | `upload_nonce() -> int` | Sufijo de las claves de los cargadores de archivos |
+| funcion | `start_over() -> None` | Deja la app lista para otra solicitud sin refrescar la pagina |
 | funcion | `reuse(slot: str, signature, build)` | Construye algo caro una sola vez por cada estado distinto |
 | funcion | `cached_fetch_innovid(campaign_id: str, placement_ids: tuple[str, ...], refresh: bool=False)` | Reads the campaign from Innovid, reusing a good answer |
 | funcion | `cached_parse_innovid_export(file_bytes: bytes, file_name: str)` |  |
