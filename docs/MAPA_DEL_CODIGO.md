@@ -161,7 +161,7 @@ Orquestador principal del Rule Engine QA2. *(140 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(626 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(639 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ Branded multi-tab Excel export of a QA2 run. *(626 lineas)*
 | funcion | `_colour_legend(ws, row: int) -> None` | Que significa cada color, debajo de la tabla |
 | funcion | `_tags_sheet(wb, summary_rows, tags_df, coverage) -> None` | Los tags como se importarian, con el veredicto delante |
 | funcion | `_evidence_sheet(wb: Workbook, images: list[tuple[str, bytes]]) -> None` | Los pantallazos de que los tags sirven, dentro del entregable |
-| funcion | `build_excel_report(meta, findings_df, rules_df, files_df, placements_df, tag_coverage_df, logo_path, qa_rows, tags_df, tag_summary_rows, tag_coverage_counts, dv_tags_df, evidence_images) -> bytes` | Render the full branded QA2 workbook and return it as XLSX bytes |
+| funcion | `build_excel_report(meta, findings_df, rules_df, files_df, placements_df, tag_coverage_df, logo_path, qa_rows, tags_df, tag_summary_rows, tag_coverage_counts, dv_tags_df, evidence_images, innovid_reconciliation) -> bytes` | Render the full branded QA2 workbook and return it as XLSX bytes |
 
 ### `core/extraction.py`
 
@@ -273,6 +273,16 @@ Innovid Campaign Manager API client (the UI-only fields). *(2135 lineas)*
 | funcion | `_describe_inputs(page) -> str` | Lists the input boxes on the page by their identifying attributes |
 | funcion | `_first_visible(page, selectors)` |  |
 | funcion | `_api_get_json(page, url: str, csrf_token: str, method: str='GET', body=None, _retried: bool=False)` | Runs the API call inside the logged-in page, so the session cookie rides along automatically and we only have to add the CSRF header |
+
+### `core/innovid_export_tables.py`
+
+Lo que QA2 leyo de Innovid, en tablas para el Excel (FB-17). *(96 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `_date(value) -> str` |  |
+| funcion | `decision_set_table(reconciliation) -> pd.DataFrame` | Una fila por creativo leido de cada decision set, mas lo no leido |
+| funcion | `partner_table(reconciliation) -> pd.DataFrame` | El Verification Partner de cada placement, como lo devolvio Innovid |
 
 ### `core/innovid_login.py`
 
@@ -874,7 +884,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5927 lineas)*
+Interfaz de QA2 (Streamlit). *(5929 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -914,7 +924,7 @@ Interfaz de QA2 (Streamlit). *(5927 lineas)*
 
 ### `ui/help_content.py`
 
-El texto de ayuda dentro de la app (FB-05) y para que sirve cada archivo que se descarga (FB-19). *(103 lineas)*
+El texto de ayuda dentro de la app (FB-05) y para que sirve cada archivo que se descarga (FB-19). *(104 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1261,6 +1271,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
 | `test_dv_multiple_partners.py` | 12 | Una campana puede tener mas de un partner, y DV entrega un archivo por cada uno |
+| `test_excel_innovid_sheets.py` | 2 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
 | `test_group_colour_does_not_decide.py` | 12 | El color de la celda del grupo no decide el de un creativo |
@@ -1311,4 +1322,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 690 funciones de prueba en 65 archivos (algunas se parametrizan y corren varias veces).
+Total: 692 funciones de prueba en 66 archivos (algunas se parametrizan y corren varias veces).

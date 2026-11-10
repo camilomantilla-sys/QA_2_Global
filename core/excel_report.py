@@ -579,6 +579,7 @@ def build_excel_report(
     tag_coverage_counts: dict | None = None,
     dv_tags_df: pd.DataFrame | None = None,
     evidence_images: list[tuple[str, bytes]] | None = None,
+    innovid_reconciliation=None,
 ) -> bytes:
     """Render the full branded QA2 workbook and return it as XLSX bytes."""
     wb = Workbook()
@@ -618,6 +619,18 @@ def build_excel_report(
         ws = wb.create_sheet("Tag Coverage")
         _write_table(ws, tag_coverage_df)
         _audit_tab(ws)
+
+    # FB-17: lo leido de Innovid, completo, y no solo lo que cabe en
+    # la hoja QA. Sin conexion a Innovid no hay nada que poner.
+    if innovid_reconciliation is not None:
+        from core.innovid_export_tables import decision_set_table, partner_table
+
+        ws = wb.create_sheet("Innovid Decision Sets")
+        _write_table(ws, decision_set_table(innovid_reconciliation))
+        partners = partner_table(innovid_reconciliation)
+        if not partners.empty:
+            ws = wb.create_sheet("Innovid Partners")
+            _write_table(ws, partners)
 
     _evidence_sheet(wb, evidence_images or [])
 

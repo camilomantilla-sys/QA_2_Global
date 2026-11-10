@@ -20,7 +20,8 @@ DOWNLOAD_PURPOSE = {
     "excel": (
         "The detailed working file: one tab per area (QA, Tags, "
         "Findings, Worked Placements, Rules Executed...). Made to "
-        "filter and dig into a finding."
+        "filter and dig into a finding. With Innovid connected it also "
+        "carries everything read from the decision sets."
     ),
     "bundle": (
         "The exact files of this request in one .zip, so the next "

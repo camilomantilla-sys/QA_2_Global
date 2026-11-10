@@ -3998,6 +3998,7 @@ if True:
             record_qa2_by, record_qa2_date,
             record_qa3_by, record_qa3_date, record_notes,
             len(evidence_images),
+            len(getattr(innovid_reconciliation, "flights", None) or ()),
         )
 
         trace("building the PDF")
@@ -4203,6 +4204,7 @@ if True:
                 if dv_rows_for_excel else None
             ),
             evidence_images=evidence_images,
+            innovid_reconciliation=innovid_reconciliation,
             logo_path=logo_path(),
             qa_rows=build_qa_rows(
                 match_result,
