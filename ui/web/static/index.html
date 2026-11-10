@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QA2</title>
+<link rel="icon" href="/assets/logo.png">
+<style>
+@font-face{font-family:"WPP";src:url(/assets/fonts/WPP-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"WPP";src:url(/assets/fonts/WPP-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"WPP";src:url(/assets/fonts/WPP-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
+/* Layout: guided workspace. Fixed step rail on the left, one working canvas, a "what QA2 is thinking" side note on wide screens. */
+:root{
+  --navy:#000050; --cornflower:#5465FF; --lime:#B0F467; --mint:#93DFE3; --peri:#788BFF;
+  --bg:#F1F4FC; --surface:#FBFBFD; --card:#FFFFFF; --line:#DDE2F3; --ink:#0B0B3B; --muted:#5B6190;
+  --accent:#5465FF; --accent-ink:#FFFFFF; --rail:#000050; --rail-ink:#E6E8FF;
+  --pass:#0E8F6A; --fail:#C62828; --review:#B86A00; --nv:#5B6190; --info:#3949C8;
+  --int-new:#2E9E4F; --int-new-bg:#E3F6E8; --int-rem:#C62828; --int-rem-bg:#FBE4E4; --int-out:#9A7B00; --int-out-bg:#FFF6CC; --int-ctx:#5B6190; --int-ctx-bg:#FFFFFF;
+  --font:"WPP","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#05052B; --surface:#0A0A3A; --card:#10104A; --line:#262A6B; --ink:#EEF0FF; --muted:#A7ADE0;
+  --accent:#8C98FF; --accent-ink:#000050; --rail:#000030; --rail-ink:#E6E8FF;
+  --pass:#5FD6A8; --fail:#FF7B7B; --review:#F2B54A; --nv:#A7ADE0; --info:#9AA6FF;
+  --int-new:#7EE29A; --int-new-bg:#123A25; --int-rem:#FF8A8A; --int-rem-bg:#3E1520; --int-out:#F2D25C; --int-out-bg:#3A3210; --int-ctx:#A7ADE0; --int-ctx-bg:#10104A;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#05052B; --surface:#0A0A3A; --card:#10104A; --line:#262A6B; --ink:#EEF0FF; --muted:#A7ADE0;
+  --accent:#8C98FF; --accent-ink:#000050; --rail:#000030; --rail-ink:#E6E8FF;
+  --pass:#5FD6A8; --fail:#FF7B7B; --review:#F2B54A; --nv:#A7ADE0; --info:#9AA6FF;
+  --int-new:#7EE29A; --int-new-bg:#123A25; --int-rem:#FF8A8A; --int-rem-bg:#3E1520; --int-out:#F2D25C; --int-out-bg:#3A3210; --int-ctx:#A7ADE0; --int-ctx-bg:#10104A;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5}
+button{font:inherit;cursor:pointer;appearance:none}
+:focus-visible{outline:3px solid var(--cornflower);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.app{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100%}
+/* ---------- rail ---------- */
+.rail{background:var(--rail);color:var(--rail-ink);padding-block:22px;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:18px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{height:22px;filter:brightness(0) invert(1)}
+.brand b{font-size:22px;letter-spacing:.02em}
+.brand span{font-size:11px;opacity:.7;margin-left:auto;border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:1px 8px}
+.local{font-size:12px;display:flex;align-items:center;gap:8px;opacity:.85}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 3px rgba(176,244,103,.25)}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.steps button{width:100%;display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;text-align:left;background:transparent;border:0;color:inherit;padding:9px 10px;border-radius:10px}
+.steps button:hover{background:rgba(255,255,255,.06)}
+.steps .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;border:1.5px solid rgba(255,255,255,.35)}
+.steps .t{font-size:14px;font-weight:500;line-height:1.2}
+.steps .s{display:block;font-size:11.5px;opacity:.65;font-weight:400;margin-top:2px}
+.steps li.on button{background:rgba(84,101,255,.28)}
+.steps li.on .n{background:var(--cornflower);border-color:var(--cornflower);color:#fff}
+.steps li.done .n{background:var(--lime);border-color:var(--lime);color:#000050}
+.steps li.locked button{opacity:.45;cursor:not-allowed}
+.rail .foot{margin-top:auto;font-size:12px;opacity:.8;display:flex;flex-direction:column;gap:10px}
+.toggle{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:9px 10px;color:inherit;text-align:left}
+.sw{width:34px;height:20px;border-radius:99px;background:rgba(255,255,255,.25);position:relative;flex:none;transition:background .2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle[aria-pressed="true"] .sw{background:var(--lime)}
+.toggle[aria-pressed="true"] .sw::after{transform:translateX(14px);background:#000050}
+
+/* ---------- main ---------- */
+main{min-width:0;padding-block:24px 60px;padding-left:max(16px,2.4vw);padding-right:max(16px,env(safe-area-inset-right,0px),2.4vw)}
+.proto{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-bottom:16px}
+.proto b{background:var(--lime);color:#000050;border-radius:6px;padding:2px 8px;font-size:11px;letter-spacing:.06em}
+.head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:clamp(24px,3vw,32px);line-height:1.15;margin:4px 0 0;font-weight:700;text-wrap:balance}
+h2{font-size:17px;margin:0;font-weight:700}
+h3{font-size:14px;margin:0;font-weight:700}
+.lead{color:var(--muted);max-width:66ch;margin:6px 0 0}
+.grid{display:grid;gap:16px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.hint{background:color-mix(in srgb,var(--mint) 22%,var(--card));border:1px solid color-mix(in srgb,var(--mint) 70%,var(--line));border-radius:14px;padding:14px 16px;font-size:13.5px}
+.hint h3{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.hint p{margin:0 0 8px}.hint p:last-child{margin:0}
+body.noguide .hint{display:none}
+body.noguide .cols{grid-template-columns:minmax(0,1fr)}
+.btn{border:0;border-radius:10px;padding:11px 18px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn.lime{background:var(--lime);color:#000050}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.tab{font-variant-numeric:tabular-nums}
+
+/* dropzone */
+.drop{border:2px dashed color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;padding:26px;display:grid;place-items:center;text-align:center;gap:8px;background:var(--surface)}
+.drop .ico{width:46px;height:46px;border-radius:12px;background:color-mix(in srgb,var(--accent) 14%,transparent);display:grid;place-items:center;color:var(--accent)}
+.file{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.file .x{margin-left:auto;font-size:12px;color:var(--pass);font-weight:700}
+
+/* understanding */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface)}
+.stat b{display:block;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.intent{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.int{border-radius:12px;padding:12px;border:1.5px solid;display:flex;flex-direction:column;gap:2px;text-align:left;color:var(--ink)}
+.int b{font-size:22px;font-variant-numeric:tabular-nums}
+.int small{font-size:12px;color:var(--muted)}
+.int.new{background:var(--int-new-bg);border-color:var(--int-new)}.int.new b{color:var(--int-new)}
+.int.rem{background:var(--int-rem-bg);border-color:var(--int-rem)}.int.rem b{color:var(--int-rem)}
+.int.out{background:var(--int-out-bg);border-color:var(--int-out)}.int.out b{color:var(--int-out)}
+.int.ctx{background:var(--int-ctx-bg);border-color:var(--line)}.int.ctx b{color:var(--int-ctx)}
+.int[aria-pressed="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 40%,transparent)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface);font-weight:700}
+tr:last-child td{border-bottom:0}
+td code,.code{font-family:var(--mono);font-size:12.5px}
+.sw-int{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle;border:1px solid var(--line)}
+.conf{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.bar{width:54px;height:6px;border-radius:9px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
+.fix{font-size:12px;color:var(--accent);background:none;border:0;padding:0;font-weight:700}
+
+/* exports */
+.slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.slot{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--card);display:flex;flex-direction:column;gap:8px}
+.slot .top{display:flex;gap:8px;align-items:center}
+.tag{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;letter-spacing:.03em}
+.tag.req{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.tag.opt{background:color-mix(in srgb,var(--muted) 14%,transparent);color:var(--muted)}
+.slot .what{font-size:13px;color:var(--muted);margin:0}
+.slot .state{font-size:12.5px;display:flex;align-items:center;gap:8px}
+.slot.ok{border-color:color-mix(in srgb,var(--pass) 50%,var(--line))}
+.slot.ok .state{color:var(--pass);font-weight:700}
+
+/* innovid */
+.conn{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.conn .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:99px;font-weight:700;font-size:13px}
+.pill.off{background:color-mix(in srgb,var(--muted) 14%,transparent);color:var(--muted)}
+.pill.on{background:color-mix(in srgb,var(--pass) 16%,transparent);color:var(--pass)}
+.reads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.reads div{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface);font-size:13px}
+.reads b{display:block;font-size:13.5px}
+.form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+label{font-size:12.5px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:5px}
+select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 10px}
+
+/* run */
+.runbox{display:flex;flex-direction:column;gap:6px}
+.stage{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);transition:border-color .3s,background .3s}
+.stage .i{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700}
+.stage.doing{border-color:var(--accent)}
+.stage.doing .i{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.stage.done .i{background:var(--lime);border-color:var(--lime);color:#000050}
+.stage small{color:var(--muted)}
+.stage .tm{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+@keyframes spin{to{transform:rotate(360deg)}}
+.prog{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:6px 0 14px}.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cornflower),var(--lime));transition:width .4s}
+
+/* results */
+.verdicts{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:12px}
+.vd{border-radius:14px;padding:16px;border:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;gap:4px}
+.vd .cap{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.vd .v{font-size:20px;font-weight:700;line-height:1.15}
+.vd.main{background:var(--navy);color:#fff;border-color:var(--navy)}
+.vd.main .cap{color:#C9CDF2}
+.vd.main .v{color:#FFB4B4}
+.vd .why{font-size:12.5px;color:var(--muted)}
+.vd.main .why{color:#C9CDF2}
+.vfail .v{color:var(--fail)}.vpass .v{color:var(--pass)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:6px 12px;font-size:13px;font-weight:700;display:inline-flex;gap:7px;align-items:center;color:var(--ink)}
+.chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--card))}
+.chip .c{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:500}
+.findings{display:flex;flex-direction:column;gap:8px}
+.f{border:1px solid var(--line);border-left:5px solid var(--sev,var(--line));border-radius:12px;background:var(--card)}
+.f>button{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:none;border:0;padding:12px 14px;color:inherit}
+.badge{font-size:11px;font-weight:700;border-radius:99px;padding:3px 9px;white-space:nowrap}
+.f .msg{font-weight:700;font-size:14px}
+.f .where{font-size:12.5px;color:var(--muted)}
+.f .chev{transition:transform .2s;color:var(--muted)}
+.f.open .chev{transform:rotate(90deg)}
+.f .body{display:none;padding:0 14px 14px;gap:12px}
+.f.open .body{display:grid}
+.ev{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ev div{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface);min-width:0}
+.ev small{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.ev code{word-break:break-all}
+.ev .exp{border-color:color-mix(in srgb,var(--pass) 45%,var(--line))}
+.ev .act{border-color:color-mix(in srgb,var(--fail) 45%,var(--line))}
+.explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;font-size:13px}
+.explain div{min-width:0}
+.explain b{display:block;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.override{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px}
+.override button{font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.sec{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+.sec .ln{flex:1;height:1px;background:var(--line)}
+.dl{display:flex;gap:10px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;opacity:0;transition:.25s;pointer-events:none;z-index:20;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.nav{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.view[hidden]{display:none!important}
+
+/* responsive */
+@media (max-width:980px){
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .verdicts{grid-template-columns:1fr}
+  .explain{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr}
+  .rail{position:sticky;top:0;height:auto;z-index:5;padding-block:12px;padding-right:max(16px,env(safe-area-inset-right,0px));padding-left:max(16px,env(safe-area-inset-left,0px));gap:10px}
+  .rail .foot,.local{display:none}
+  .steps{flex-direction:row;overflow-x:auto;gap:4px}
+  .steps button{grid-template-columns:24px;padding:6px}
+  .steps .t{display:none}
+  .steps .n{width:24px;height:24px;font-size:12px}
+  .stats,.intent{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slots,.reads,.form,.ev{grid-template-columns:1fr}
+}
+.alert{border-radius:12px;padding:12px 14px;font-size:13.5px;border:1px solid;display:flex;gap:10px;align-items:flex-start}
+.alert.bad{background:color-mix(in srgb,var(--fail) 10%,var(--card));border-color:color-mix(in srgb,var(--fail) 45%,var(--line))}
+.alert.warn{background:color-mix(in srgb,var(--review) 10%,var(--card));border-color:color-mix(in srgb,var(--review) 45%,var(--line))}
+.alert.info{background:var(--surface);border-color:var(--line)}
+.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.drop.busy{opacity:.7;pointer-events:none}
+.req{display:flex;flex-wrap:wrap;gap:8px}
+.req span{border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:12.5px;background:var(--surface)}
+.req b{font-variant-numeric:tabular-nums;margin-right:4px}
+.pct{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:34px;display:inline-block}
+.list{margin:0;padding-left:18px;font-size:13.5px}
+.soon .n{border-style:dashed!important}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="rail" aria-label="QA steps">
+    <div class="brand"><img src="/assets/logo.png" alt="WPP Media"><b>QA2</b><span id="ver">preview</span></div>
+    <div class="local"><span class="dot"></span>Running on this computer only</div>
+    <ol class="steps" id="steps"></ol>
+    <div class="foot">
+      <button class="toggle" id="guide" aria-pressed="true"><span class="sw"></span><span><b>Guidance</b><br><span style="opacity:.75">Explain each step as I go</span></span></button>
+    </div>
+  </aside>
+
+  <main>
+    <section class="view" data-view="ts">
+      <div class="head"><div><div class="eyebrow">Step 1</div><h1>Traffic Sheet</h1><p class="lead">Drop the Traffic Sheet for this request. QA2 shows you how it read it before anything runs, so you can catch a misread column early.</p></div></div>
+      <div class="cols">
+        <div class="grid">
+          <div id="tsDrop">
+            <label class="drop" id="drop" for="tsFile">
+              <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg></span>
+              <b id="dropTitle" style="color:var(--ink);font-size:15px">Drop the Traffic Sheet here, or click to choose it</b>
+              <span class="muted small" style="font-weight:400">.xlsx, .xlsm or .xls · read on this computer, then discarded</span>
+            </label>
+            <input type="file" id="tsFile" accept=".xlsx,.xlsm,.xls" hidden>
+          </div>
+          <div id="tsError" class="alert bad" hidden></div>
+          <div id="tsRead" class="grid" hidden>
+            <div class="file"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><div style="min-width:0"><b id="fName"></b><div class="small muted" id="fMeta"></div></div><span class="spacer"></span><button class="btn ghost" id="another" style="padding:7px 12px;font-size:13px">Use another file</button></div>
+            <div id="alerts" class="grid"></div>
+            <div class="card grid">
+              <h2>What QA2 understood</h2>
+              <div class="stats" id="stats"></div>
+              <div>
+                <h3 style="margin-bottom:8px">What each row asks for <span class="muted small" style="font-weight:400">· from the cell colour · tap to filter</span></h3>
+                <div class="intent" id="intent"></div>
+              </div>
+              <div><h3 style="margin-bottom:8px">Requests QA2 found, per placement</h3><div class="req" id="reqs"></div></div>
+              <div class="tablewrap"><table><thead><tr><th>Row</th><th>Placement ID</th><th>Placement name</th><th>Creative</th><th>Request</th></tr></thead><tbody id="tsRows"></tbody></table></div>
+              <p class="small muted" id="rowNote" style="margin:0"></p>
+            </div>
+            <div class="card grid">
+              <h2>How the columns were matched</h2>
+              <p class="small muted" style="margin:0">QA2 matches columns by their header name, never by position. “Filled” is the share of rows with a value.</p>
+              <div class="tablewrap"><table><thead><tr><th>QA2 needs</th><th>Column</th><th>Header in the sheet</th><th>Filled</th></tr></thead><tbody id="colMap"></tbody></table></div>
+              <div id="ignored"></div>
+            </div>
+          </div>
+        </div>
+        <aside class="hint">
+          <h3>Why this step matters</h3>
+          <p>Most wrong results start with a misread Traffic Sheet. Check the counts and the colours here first.</p>
+          <p><b>Colours drive the QA.</b> Green rows must exist in Innovid, red rows must be gone, and yellow or grey rows are left alone.</p>
+          <p>A column that is <b>missing</b> or barely filled is the first thing to check when a result looks wrong.</p>
+        </aside>
+      </div>
+      <div class="nav"><span class="spacer"></span><button class="btn" data-go="next" id="tsNext" disabled>Continue</button></div>
+    </section>
+
+    <section class="view" data-view="next" hidden>
+      <div class="head"><div><div class="eyebrow">Steps 2 to 5</div><h1>The rest of the QA, coming next</h1><p class="lead">Exports, the Innovid check, the run and the results are being moved to this new screen one by one. Until then, finish this request in the current QA2 window.</p></div></div>
+      <div class="card grid" style="max-width:640px">
+        <p style="margin:0">The current QA2 runs the full check with the same engine and the same rules. Load the same Traffic Sheet there.</p>
+        <div class="row"><a class="btn" href="http://localhost:8501/" target="_blank" rel="noopener" style="text-decoration:none">Open the current QA2</a><button class="btn ghost" data-go="ts">Back to the Traffic Sheet</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const STEPS=[
+ {k:"ts",t:"Traffic Sheet",s:"What QA2 understood"},
+ {k:"next",t:"Innovid exports",s:"Coming next",soon:1},
+ {k:"next",t:"Innovid check",s:"Coming next",soon:1},
+ {k:"next",t:"Run QA",s:"Coming next",soon:1},
+ {k:"next",t:"Results",s:"Coming next",soon:1}];
+const INTENT=[["new","New","green rows · will be checked","--int-new"],["remove","Remove","red rows · must be gone","--int-rem"],["swap","Swap","green and red in one row","--int-new",1],["review","Unclear colour","QA2 could not tell · check it","--review",1],["out","Out of scope","yellow/grey · skipped","--int-out"],["context","Context","white · reference only","--int-ctx"]];
+const CLS={new:"new",remove:"rem",swap:"new",out:"out",context:"ctx",review:"out"};
+const state={view:"ts",data:null,intent:null};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=n=>Number(n).toLocaleString("en-US");
+
+function renderSteps(){
+  $("#steps").innerHTML=STEPS.map((x,j)=>{
+    const on=(j===0&&state.view==="ts")||(j===1&&state.view==="next");
+    const cls=[on?"on":"",j===0&&state.data&&state.view!=="ts"?"done":"",x.soon?"soon":""].join(" ");
+    return `<li class="${cls}"><button data-go="${x.k}" aria-label="Step ${j+1}: ${x.t}"><span class="n">${j+1}</span><span class="t">${x.t}<span class="s">${x.s}</span></span></button></li>`}).join("");
+}
+function go(k){state.view=k;document.querySelectorAll(".view").forEach(v=>v.hidden=v.dataset.view!==k);renderSteps();window.scrollTo({top:0})}
+document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g&&!g.disabled)go(g.dataset.go)});
+$("#guide").onclick=e=>{const b=e.currentTarget;const on=b.getAttribute("aria-pressed")!=="true";b.setAttribute("aria-pressed",on);document.body.classList.toggle("noguide",!on);try{localStorage.setItem("qa2.guide",on?"1":"0")}catch(_){}};
+try{if(localStorage.getItem("qa2.guide")==="0")$("#guide").click()}catch(_){}
+
+/* ---------- upload ---------- */
+const drop=$("#drop"),input=$("#tsFile");
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)send(f)});
+input.addEventListener("change",()=>{if(input.files[0])send(input.files[0])});
+$("#another").onclick=()=>{state.data=null;$("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";input.click()};
+
+async function send(file){
+  $("#tsError").hidden=true;drop.classList.add("busy");$("#dropTitle").textContent="Reading "+file.name+"…";
+  const t0=performance.now();
+  try{
+    const r=await fetch("/api/traffic-sheet",{method:"POST",headers:{"X-QA2":"1","X-File-Name":encodeURIComponent(file.name),"Content-Type":"application/octet-stream"},body:file});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"QA2 could not read this file.");
+    d._secs=((performance.now()-t0)/1000).toFixed(1);
+    state.data=d;state.intent=null;show(d);
+  }catch(err){
+    const box=$("#tsError");box.textContent=err.message==="Failed to fetch"?"QA2 is not running. Start it again from QA2 and reload this page.":err.message;box.hidden=false;
+  }finally{drop.classList.remove("busy");$("#dropTitle").textContent="Drop the Traffic Sheet here, or click to choose it"}
+}
+
+/* ---------- step 1 render ---------- */
+function show(d){
+  $("#tsDrop").hidden=true;$("#tsRead").hidden=false;
+  $("#fName").textContent=d.file;
+  const pl=d.placements;
+  $("#fMeta").textContent=[d.profile_label,pl?`sheet “${pl.sheet}”, header on row ${pl.header_row}`:"",`read in ${d._secs} s`].filter(Boolean).join(" · ");
+  const al=[];
+  if(d.fatal)al.push(["bad","QA2 cannot run on this file yet: "+d.anomalies.filter(a=>a.severity==="FATAL").map(a=>esc(a.message)).join(" ")]);
+  if(pl&&pl.missing_required.length)al.push(["bad","Required columns not found: <b>"+pl.missing_required.map(esc).join(", ")+"</b>. Check the header names in the sheet."]);
+  const warns=d.anomalies.filter(a=>a.severity==="WARNING");
+  if(warns.length)al.push(["warn",`${warns.length} thing${warns.length>1?"s":""} to double-check: `+warns.slice(0,4).map(a=>esc(a.message)).join(" · ")+(warns.length>4?" …":"")]);
+  if(d.sheets&&d.sheets.hidden&&d.sheets.hidden.length)al.push(["info","Hidden sheets ignored: "+d.sheets.hidden.map(esc).join(", ")]);
+  $("#alerts").innerHTML=al.map(a=>`<div class="alert ${a[0]}">${a[1]}</div>`).join("");
+  const f=d.flight||{};
+  $("#stats").innerHTML=[[fmt(d.counts.placements),"placements"],[fmt(d.counts.creatives),"creatives"],[fmt(d.counts.sites),"sites"],f.weeks?[f.weeks+" week"+(f.weeks>1?"s":""),"flight · "+f.start+" – "+f.end]:["—","flight dates not found"]]
+    .map(s=>`<div class="stat"><b>${s[0]}</b><span>${esc(s[1])}</span></div>`).join("");
+  $("#intent").innerHTML=INTENT.filter(i=>!i[4]||d.intent[i[0]]).map(i=>`<button class="int ${CLS[i[0]]}" data-k="${i[0]}" aria-pressed="${state.intent===i[0]}"><b>${fmt(d.intent[i[0]]||0)}</b>${i[1]}<small>${i[2]}</small></button>`).join("");
+  $("#reqs").innerHTML=d.requests.length?d.requests.map(q=>`<span><b>${fmt(q.count)}</b>${esc(q.label)}</span>`).join(""):'<span class="muted">No placement is green or red in this sheet.</span>';
+  renderRows();
+  $("#colMap").innerHTML=pl?pl.columns.map(c=>{const p=Math.round(c.filled*100);const low=p<50;return `<tr><td><b>${esc(c.label)}</b></td><td><code>${esc(c.column)}</code></td><td>${esc(c.header)}</td><td><span class="conf"><span class="bar"><i style="width:${p}%;${low?"background:var(--review)":""}"></i></span><span class="pct">${p}%</span></span></td></tr>`}).join("")
+    +pl.missing_required.map(m=>`<tr><td><b>${esc(m)}</b></td><td colspan="3" style="color:var(--fail);font-weight:700">Not found · required</td></tr>`).join("")
+    +pl.missing_optional.map(m=>`<tr><td>${esc(m)}</td><td colspan="3" class="muted">Not in this sheet · optional</td></tr>`).join(""):"";
+  $("#ignored").innerHTML=pl&&pl.ignored.length?`<details><summary class="small" style="cursor:pointer;font-weight:700">${pl.ignored.length} column${pl.ignored.length>1?"s":""} QA2 did not use</summary><ul class="list">${pl.ignored.map(c=>`<li><code>${esc(c.column)}</code> ${esc(c.header)}</li>`).join("")}</ul></details>`:"";
+  $("#tsNext").disabled=!!d.fatal;
+  renderSteps();
+}
+function renderRows(){
+  const d=state.data;if(!d)return;
+  const rows=d.rows.filter(r=>!state.intent||r.intent===state.intent);
+  const label=Object.fromEntries(INTENT.map(i=>[i[0],[i[1],i[3]]]));
+  $("#tsRows").innerHTML=rows.length?rows.map(r=>`<tr><td class="tab">${r.row}</td><td><code>${esc(r.placement_id)}</code></td><td>${esc(r.placement_name)}</td><td>${esc(r.creative)}</td><td><span class="sw-int" style="background:var(${label[r.intent][1]})"></span>${label[r.intent][0]}</td></tr>`).join(""):'<tr><td colspan="5" class="muted">No rows of this kind.</td></tr>';
+  $("#rowNote").textContent=d.rows_total>d.rows.length?`Showing the first ${fmt(d.rows.length)} of ${fmt(d.rows_total)} rows.`:"";
+  document.querySelectorAll("#intent .int").forEach(x=>x.setAttribute("aria-pressed",x.dataset.k===state.intent));
+}
+$("#intent").addEventListener("click",e=>{const b=e.target.closest(".int");if(!b)return;state.intent=state.intent===b.dataset.k?null:b.dataset.k;renderRows()});
+
+fetch("/api/health").then(r=>r.json()).then(d=>{$("#ver").textContent=d.version}).catch(()=>{});
+renderSteps();
+</script>
+</body>
+</html>

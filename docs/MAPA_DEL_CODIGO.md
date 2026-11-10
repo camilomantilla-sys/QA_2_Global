@@ -1262,6 +1262,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_ui_stale_modules.py` | 0 | La app debe darse cuenta de que corre codigo viejo |
 | `test_unreadable_sheet.py` | 12 | Una hoja que no se pudo leer nunca puede acabar en PASSED |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
+| `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 665 funciones de prueba en 60 archivos (algunas se parametrizan y corren varias veces).
+Total: 674 funciones de prueba en 61 archivos (algunas se parametrizan y corren varias veces).
