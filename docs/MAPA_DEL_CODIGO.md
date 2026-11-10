@@ -953,6 +953,18 @@ CLI: Extraction Preview de Traffic Sheet. *(284 lineas)*
 
 Scripts de soporte: arranque, empaquetado y diagnosticos. *(13 lineas)*
 
+### `scripts/anonimizar_ts.py`
+
+Saca una copia ANONIMA de una Traffic Sheet (o de cualquier Excel de QA2) para poder compartir un caso de feedback sin compartir datos de cliente. *(252 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `build_vocab() -> set[str]` | Cada palabra que aparece en un texto del código de QA2 (sin docstrings) |
+| clase | `Anonymizer` | Cambia cada palabra o número sensible, siempre por el mismo valor |
+| funcion | `anonymize(source: Path, target: Path, vocab: set[str] \| None=None) -> Anonymizer` |  |
+| funcion | `compare(source: Path, target: Path) -> list[str]` | Qué entiende QA2 distinto entre la original y la copia |
+| funcion | `main(argv: list[str] \| None=None) -> int` |  |
+
 ### `scripts/build_bundle.py`
 
 Construye el paquete que se le entrega al equipo: QA2 con Python adentro. *(454 lineas)*
@@ -1205,6 +1217,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | --- | --- | --- |
 | `test_adobe_direct.py` | 8 | Adobe Direct / Site-Served: lo que se revisa cuando no hay creativos |
 | `test_adobe_official_pixels.py` | 9 | Los pixeles oficiales de Adobe: uno universal y uno por linea de negocio |
+| `test_anonimizar_ts.py` | 4 | La copia anónima de una TS sirve para reproducir un caso: QA2 la lee igual que la original, y no queda ningún nombre ni ID de la original |
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
@@ -1265,4 +1278,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 674 funciones de prueba en 61 archivos (algunas se parametrizan y corren varias veces).
+Total: 678 funciones de prueba en 62 archivos (algunas se parametrizan y corren varias veces).
