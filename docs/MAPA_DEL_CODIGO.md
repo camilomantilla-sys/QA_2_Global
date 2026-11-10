@@ -298,7 +298,7 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(534 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(543 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -795,7 +795,7 @@ DV-001 / DV-002 -- tags de DoubleVerify Pinnacle. *(61 lineas)*
 
 ### `rules/innovid.py`
 
-Hallazgos de lo que solo Innovid sabe. *(496 lineas)*
+Hallazgos de lo que solo Innovid sabe. *(520 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -837,7 +837,7 @@ PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(169 line
 
 ### `rules/rotation.py`
 
-ROT-001 -- la rotacion que se pidio cambiar. *(96 lineas)*
+ROT-001 -- la rotacion que se pidio cambiar. *(103 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1287,7 +1287,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_diagnose.py` | 0 | El diagnostico debe informar sin exponer nada |
 | `test_innovid_field_shapes.py` | 61 | Field shapes in Innovid's /summary response |
 | `test_innovid_login_start.py` | 17 | El boton de iniciar sesion tiene que decir cuando no arranco |
-| `test_innovid_reconciliation.py` | 46 | La Traffic Sheet contra lo que Innovid realmente tiene |
+| `test_innovid_reconciliation.py` | 47 | La Traffic Sheet contra lo que Innovid realmente tiene |
 | `test_innovid_rule_scope.py` | 11 | Dos cosas que QA marcaba y estaban bien traficadas |
 | `test_innovid_session.py` | 0 | El 401 que salio en pruebas con una sesion guardada |
 | `test_innovid_session_expiry.py` | 8 | Que exista el archivo de sesion no es que la sesion sirva |
@@ -1304,7 +1304,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_review_bulk_groups.py` | 7 | Aprobar en bloque lo que es una sola decision |
 | `test_review_panel_reasons.py` | 5 | "70 to review", y nada mas |
 | `test_review_panel_scope.py` | 7 | Que entra al panel de aprobacion y que no |
-| `test_rotation_not_verified.py` | 12 | Una rotacion que nadie comparo no puede salir en verde |
+| `test_rotation_not_verified.py` | 13 | Una rotacion que nadie comparo no puede salir en verde |
 | `test_row_scope_colour.py` | 6 | Que color deja una fila fuera de alcance, y cual no |
 | `test_run_trace.py` | 17 | El rastro en disco de cada pasada |
 | `test_scope_guard_verdict.py` | 13 | La implementacion y los tags no son lo mismo, y no pueden compartir veredicto |
@@ -1322,4 +1322,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 692 funciones de prueba en 66 archivos (algunas se parametrizan y corren varias veces).
+Total: 694 funciones de prueba en 66 archivos (algunas se parametrizan y corren varias veces).

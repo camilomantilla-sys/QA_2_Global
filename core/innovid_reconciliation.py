@@ -71,6 +71,10 @@ class CreativeFlightCheck:
     expected_end: date | None = None
     actual_start: date | None = None
     actual_end: date | None = None
+    # Cuando cierra el PLACEMENT en Innovid. Un creativo sin fecha de
+    # fin ("ongoing") deja de servir cuando cierra su placement, asi que
+    # si el placement cierra cuando dice la TS, el creativo tambien.
+    placement_end: date | None = None
 
     expected_weight: str = ""
     actual_weight: str = ""
@@ -263,6 +267,11 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
         }
 
         _compare_creatives(pid, expected, nodes, out, export_ids)
+
+        _placement_end = _node_date(innovid_placement.end_date)
+        for check in out.flights:
+            if check.placement_id == pid and check.placement_end is None:
+                check.placement_end = _placement_end
 
     _normalize_weights(out)
 

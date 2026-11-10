@@ -163,3 +163,22 @@ if __name__ == "__main__":
 
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+def test_a_site_served_1x1_has_no_rotation_to_review():
+    """FB-15: en un 1x1 no se configura rotacion; no hay nada que revisar."""
+
+    @dataclass
+    class _OneByOne:
+        fmt: str = "1x1"
+        dims: str = "1x1"
+
+    placement = _Matched(creative_links=[_creative()])
+    placement.expected = _OneByOne()
+    buffer = FindingsBuffer()
+    buffer.capabilities.declare(
+        Capability.ROTATION_WEIGHT, False,
+        "the rotation weight lives in the Innovid decision set",
+    )
+    rotation.evaluate(_MatchResult(matched=[placement]), buffer)
+    assert not [f for f in buffer.findings if f.rule_id == "ROT-001"]

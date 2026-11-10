@@ -447,6 +447,21 @@ def test_it_says_no_end_date_and_not_other_dates():
     assert "keeps serving" not in message
 
 
+def test_ongoing_is_fine_when_the_placement_closes_on_the_ts_date():
+    """
+    FB-01 / FB-28: ongoing en el decision set, y el placement cierra en
+    Innovid el mismo dia que la TS. El placement lo para: esta bien.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-22", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["PASS"]
+    assert "placement closes on 2026-10-31" in findings[0].message
+
+
 def test_a_ts_with_no_dates_at_all_is_still_nothing_to_compare():
     # Sin fecha pedida no hay diferencia posible: eso sigue siendo
     # NOT_VERIFIED, no una revision que firmar.

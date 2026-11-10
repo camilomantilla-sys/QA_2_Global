@@ -17,6 +17,7 @@ Cuando Innovid si esta conectado, quien compara es INV-002, y esta
 regla se calla para no duplicar el hallazgo.
 """
 from core.colors import RED, WHITE
+from core.matching import is_site_served_1x1
 from core.findings import Capability, Domain, EntityType, Status
 from core.normalize import normalize_weights
 
@@ -60,6 +61,12 @@ def evaluate(match_result, buffer):
         return
 
     for pm in match_result.matched:
+
+        # Un 1x1 site-served no tiene decision set ni rotacion que
+        # configurar: el creativo va directo al placement. Pedir revision
+        # ahi es pedir algo que no existe (FB-15).
+        if is_site_served_1x1(getattr(pm, "expected", None)):
+            continue
 
         requested = [
             cl.expected

@@ -233,6 +233,30 @@ def _flight_dates(reconciliation, buffer):
         start_off = _differs(check.expected_start, check.actual_start)
         end_off = _differs(check.expected_end, check.actual_end)
 
+        # Ongoing en el decision set, pero el placement cierra el dia
+        # que pide la TS: el placement lo para, y el creativo sale
+        # exactamente cuando debe. Pedir revision ahi era ruido que el
+        # equipo firmaba siempre (FB-01, FB-28).
+        _cerrado_por_placement = (
+            not start_off
+            and end_off
+            and check.expected_end is not None
+            and check.actual_end is None
+            and getattr(check, "placement_end", None) == check.expected_end
+        )
+        if _cerrado_por_placement:
+            buffer.pass_(
+                message=(
+                    f"{check.creative_name} is ongoing in the decision "
+                    "set, and its placement closes on "
+                    f"{check.expected_end} as the Traffic Sheet asks"
+                ),
+                expected=_span(check.expected_start, check.expected_end),
+                actual=_span(check.actual_start, check.actual_end),
+                **common,
+            )
+            continue
+
         if start_off or end_off:
             # "Sin fecha de fin" merece decirse aparte.
             #
