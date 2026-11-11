@@ -299,7 +299,7 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(560 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(585 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -310,6 +310,7 @@ Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(560 lineas
 | funcion | `reconcile(match_result, innovid_result) -> InnovidReconciliation` | Cruza los placements trabajados de la TS con lo que trajo Innovid |
 | funcion | `_normalize_weights(out: InnovidReconciliation) -> None` | Lleva los pesos de los dos lados a porcentajes, placement por placement |
 | funcion | `_asks_for_dv_blocking(pm) -> bool` | Si la TS pide DV Blocking en este placement |
+| funcion | `_partner_expected_for(pm) -> str` | Por que este placement debe llevar Verification Partner, o "" |
 | funcion | `_is_site_served_1x1(pm) -> bool` | Un 1x1 de tracking servido por el sitio |
 | funcion | `_expected_creatives(pm) -> list` | Los creativos que la TS declara para el placement |
 | funcion | `_compare_creatives(pid, expected, nodes, out, export_ids=None) -> None` |  |
@@ -423,7 +424,7 @@ QA2 deja escrito su numero de proceso, para que se le pueda encontrar. *(110 lin
 
 ### `core/pixel_reconciliation.py`
 
-Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(601 lineas)*
+Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(604 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -799,7 +800,7 @@ DV-001 / DV-002 -- tags de DoubleVerify Pinnacle. *(61 lineas)*
 
 ### `rules/innovid.py`
 
-Hallazgos de lo que solo Innovid sabe. *(520 lineas)*
+Hallazgos de lo que solo Innovid sabe. *(571 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1275,7 +1276,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
 | `test_dv_multiple_partners.py` | 12 | Una campana puede tener mas de un partner, y DV entrega un archivo por cada uno |
-| `test_dv_routing.py` | 6 | Donde se revisa DoubleVerify, segun lo que pide la TS y el formato |
+| `test_dv_routing.py` | 9 | Donde se revisa DoubleVerify, segun lo que pide la TS y el formato |
 | `test_excel_innovid_sheets.py` | 2 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
@@ -1328,4 +1329,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 703 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).
+Total: 706 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).

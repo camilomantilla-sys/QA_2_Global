@@ -158,3 +158,47 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
     print("ok")
+
+
+# ----------------------------------------------------------- INV-003
+
+def _partner(vendors, fmt, partner="", status=""):
+    from core.innovid_reconciliation import (
+        InnovidReconciliation, VerificationPartnerCheck, _partner_expected_for,
+    )
+    from rules import innovid
+
+    pm = SimpleNamespace(expected=SimpleNamespace(vendors=vendors, fmt=fmt))
+    reason = _partner_expected_for(pm)
+    rec = InnovidReconciliation()
+    rec.partners = [VerificationPartnerCheck(
+        placement_id="11315575", actual_partner=partner, actual_status=status,
+        configured=bool(partner), partner_expected=bool(reason),
+        expected_for=reason,
+    )]
+    buffer = FindingsBuffer()
+    innovid.evaluate(rec, buffer)
+    return [f.status.value for f in buffer.findings if f.rule_id == "INV-003"]
+
+
+def test_omni_video_needs_doubleverify_as_verification_partner():
+    assert _partner("Flashtalking/DV OMNI", "video", "DoubleVerify", "Applied") == ["PASS"]
+    assert _partner("Flashtalking/DV OMNI", "video") == ["FAIL"]
+    assert _partner("Flashtalking/DV OMNI", "video", "IAS", "Applied") == ["FAIL"]
+    assert _partner("Flashtalking/DV OMNI", "video", "DoubleVerify", "Pending") == ["REVIEW"]
+
+
+def test_omni_1x1_and_monitoring_need_no_partner():
+    assert _partner("DV Omni", "1x1") == ["PASS"]
+    assert _partner("Flashtalking, DV Monitoring", "display") == ["PASS"]
+
+
+def test_dv_pixel_macros_of_either_kind_compare_equal():
+    # El pixel que entrega DV trae macros de CM (%ebuy!, %25esid!); el
+    # cargado en Innovid, los de Innovid ([%campaignID%]). Son el mismo.
+    official = ("https://cdn.doubleverify.com/dvtp_src.js?ctx=1&cmp=%ebuy!"
+                "&sid=%25esid!&plc=%25epid!&num=")
+    loaded = ("https://cdn.doubleverify.com/dvtp_src.js?ctx=1&cmp=[%campaignID%]"
+              "&sid=[%siteID%]&plc=[%placementID%]&num=")
+    assert pixels.pixel_matches_official(loaded, official)
+    assert not pixels.pixel_matches_official(loaded.replace("ctx=1", "ctx=2"), official)

@@ -91,7 +91,7 @@ def partner_table(reconciliation) -> pd.DataFrame:
             "Verification Partner": check.actual_partner,
             "Partner Status": check.actual_status,
             "Configured": "Yes" if check.configured else "No",
-            "Expected by the TS": "Yes" if check.partner_expected else "No",
+            "Expected by the TS": (getattr(check, "expected_for", "") or "Yes") if check.partner_expected else "No",
             "1x1 Site-Served": "Yes" if check.site_served_1x1 else "",
         })
     columns = ["Placement ID", "Verification Partner", "Partner Status",

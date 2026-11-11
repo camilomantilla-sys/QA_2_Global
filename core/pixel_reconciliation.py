@@ -52,7 +52,10 @@ _PIXEL_MACRO = re.compile(
     r"\[%[^%\]]+%\]"
     r"|\$\{[^{}]+\}"
     r"|\[[A-Za-z_][A-Za-z0-9_]*\]"
-    r"|%%[^%]+%%",
+    r"|%%[^%]+%%"
+    # Macros de Flashtalking/CM en el pixel de DV: %ebuy!, %esid!,
+    # %epid!, a veces con el % codificado (%25esid!).
+    r"|%(?:25)?e[a-z0-9_]+!",
     re.IGNORECASE,
 )
 

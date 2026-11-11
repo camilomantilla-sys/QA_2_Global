@@ -127,9 +127,13 @@ class VerificationPartnerCheck:
     actual_status: str = ""
     configured: bool = False
 
-    # Si la TS pidio DV Blocking. Es lo unico que se implementa con un
-    # Verification Partner: sin eso, no tenerlo es lo correcto.
+    # Si la TS pide algo que se implementa con un Verification Partner:
+    # DV Blocking, o DV Omni en video (AdOps, 11-nov: en video el DV
+    # Omni se ve como Verification Partner = DoubleVerify, Applied).
+    # Sin eso, no tenerlo es lo correcto.
     partner_expected: bool = False
+    #: Que lo pide: "DV Omni on video" o "DV Blocking". Vacio si nada.
+    expected_for: str = ""
 
     # Los 1x1 site-served no llevan Verification Partner: el sitio
     # sirve el creativo y no hay nada que verificar. Pedir revision
@@ -216,7 +220,8 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             actual_partner=innovid_placement.verification_partner,
             actual_status=innovid_placement.verification_status,
             configured=bool(innovid_placement.verification_partner),
-            partner_expected=_asks_for_dv_blocking(pm),
+            partner_expected=bool(_partner_expected_for(pm)),
+            expected_for=_partner_expected_for(pm),
             site_served_1x1=_is_site_served_1x1(pm),
         ))
 
@@ -331,6 +336,26 @@ def _asks_for_dv_blocking(pm) -> bool:
     expected = getattr(pm, "expected", None)
     vendors = getattr(expected, "vendors", "") if expected else ""
     return dv_subtype(vendors) == MONITORING_BLOCKING
+
+
+def _partner_expected_for(pm) -> str:
+    """
+    Por que este placement debe llevar Verification Partner, o "".
+
+    DV Blocking siempre. DV Omni solo en video: en 1x1 va por la
+    columna doubleverify_vast del archivo de tags y no hay partner.
+    """
+    from core.dv_subtype import OMNI, dv_subtype
+    from core.ts_schema import FMT_VIDEO
+
+    if _asks_for_dv_blocking(pm):
+        return "DV Blocking"
+    expected = getattr(pm, "expected", None)
+    vendors = getattr(expected, "vendors", "") if expected else ""
+    fmt = getattr(expected, "fmt", "") if expected else ""
+    if dv_subtype(vendors) == OMNI and fmt == FMT_VIDEO:
+        return "DV Omni on video"
+    return ""
 
 
 def _is_site_served_1x1(pm) -> bool:

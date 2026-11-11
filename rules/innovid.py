@@ -372,10 +372,10 @@ def _rotation_weights(reconciliation, buffer):
 
 def _verification_partner(reconciliation, buffer):
     for check in reconciliation.partners:
-        # Solo DV Blocking se implementa con un Verification Partner
-        # en Innovid. Con DV Monitoring a secas -- o sin DV -- no hay
-        # nada que configurar, y pedir revision por cada placement era
-        # ruido sobre algo bien traficado.
+        # Solo DV Blocking, y DV Omni en video, se implementan con un
+        # Verification Partner en Innovid. Con DV Monitoring a secas
+        # -- o sin DV -- no hay nada que configurar, y pedir revision
+        # por cada placement era ruido sobre algo bien traficado.
         if not check.partner_expected and not check.configured:
             buffer.pass_(
                 rule_id="INV-003",
@@ -385,8 +385,8 @@ def _verification_partner(reconciliation, buffer):
                 reason="Innovid placement",
                 message=(
                     "No Verification Partner is needed: the Traffic "
-                    "Sheet doesn't ask for DV Blocking on this "
-                    "placement"
+                    "Sheet doesn't ask for DV Blocking or DV Omni on "
+                    "video on this placement"
                 ),
                 actual="(not set)",
             )
@@ -398,22 +398,73 @@ def _verification_partner(reconciliation, buffer):
         if check.site_served_1x1:
             continue
 
+        expected_for = getattr(check, "expected_for", "") or ""
         common = dict(
             rule_id="INV-003",
             domain=Domain.ATTRIBUTION,
             entity_type=EntityType.PLACEMENT,
             placement_id=check.placement_id,
-            reason="Innovid placement",
+            reason=(f"Innovid placement · the Traffic Sheet asks for {expected_for}"
+                    if expected_for else "Innovid placement"),
+        )
+        shown = (
+            f"{check.actual_partner}"
+            + (f" ({check.actual_status})" if check.actual_status else "")
         )
 
-        if check.configured:
+        if check.configured and check.partner_expected:
+            is_dv = "doubleverify" in check.actual_partner.casefold().replace(" ", "")
+            applied = (not check.actual_status
+                       or check.actual_status.strip().casefold() == "applied")
+            if not is_dv:
+                buffer.fail(
+                    message=(
+                        f"Verification Partner is set to {shown}, but the "
+                        f"Traffic Sheet asks for {expected_for}"
+                    ),
+                    expected="DoubleVerify (Applied)",
+                    actual=check.actual_partner,
+                    recommended_action="Set the Verification Partner to DoubleVerify.",
+                    **common,
+                )
+            elif not applied:
+                buffer.review(
+                    message=(
+                        f"Verification Partner is DoubleVerify, but its "
+                        f"status is {check.actual_status}, not Applied"
+                    ),
+                    expected="DoubleVerify (Applied)",
+                    actual=shown,
+                    recommended_action=(
+                        "Check in Innovid that DoubleVerify is applied "
+                        "to this placement."
+                    ),
+                    **common,
+                )
+            else:
+                buffer.pass_(
+                    message=f"Verification Partner is set to {shown}",
+                    expected="DoubleVerify (Applied)",
+                    actual=shown,
+                    **common,
+                )
+        elif check.configured:
             buffer.pass_(
-                message=(
-                    f"Verification Partner is set to "
-                    f"{check.actual_partner}"
-                    + (f" ({check.actual_status})" if check.actual_status else "")
-                ),
+                message=f"Verification Partner is set to {shown}",
                 actual=check.actual_partner,
+                **common,
+            )
+        elif expected_for == "DV Omni on video":
+            # Regla de AdOps (11-nov): en video, DV Omni se activa como
+            # Verification Partner. Sin el, DV no esta midiendo.
+            buffer.fail(
+                message=(
+                    "No Verification Partner is set, but the Traffic "
+                    "Sheet asks for DV Omni on this video placement"
+                ),
+                expected="DoubleVerify (Applied)",
+                actual="(not set)",
+                recommended_action="Set the Verification Partner to DoubleVerify.",
                 **common,
             )
         else:
