@@ -35,6 +35,12 @@ F_DISPLAY = "display"
 
 _VIDEO_DIMS = {"640x480", "1920x1080", "1280x720", "0x0"}
 
+#: Filas de DV que estan en la tabla como referencia, nunca como pixel
+#: de placement.
+DV_NOT_A_PLACEMENT_PIXEL = frozenset({"DV Omni", "DV Blocking", "DV Integration"})
+
+_COLUMN_LABEL = {SURVEY: "Third Party Survey", IMPRESSION: "Third Party Impression"}
+
 # Estados de Innovid en los que el placement no esta sirviendo.
 _NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
 
@@ -466,7 +472,21 @@ def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelRecon
         for vendor in load_vendors():
             if not _declared(vendor, vendor_raw):
                 continue
-            if fmt not in vendor.formats:
+            # Donde va DV es estructura, no una celda de la tabla
+            # editable (reglas de AdOps del 11-nov). Omni, Blocking e
+            # Integration no llevan pixel de placement: se revisan en el
+            # archivo de tags (DV-003) o no se revisan. DV Monitoring
+            # solo lleva pixel en Display: en 1x1 va el wrapping de DV
+            # Pinnacle (DV-001) y en video no existe (DV-003 lo dice).
+            # Sin esto, una fila de la tabla con formatos de mas hacia
+            # que FB-28 pidiera el pixel de DV Omni y el de DV
+            # Monitoring a placements que no lo llevan.
+            if vendor.name in DV_NOT_A_PLACEMENT_PIXEL:
+                continue
+            if vendor.name == "DV Monitoring":
+                if fmt != F_DISPLAY:
+                    continue
+            elif fmt not in vendor.formats:
                 continue
             if site_name in vendor.site_exceptions:
                 continue
@@ -572,7 +592,8 @@ def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelRecon
                     check.result = "FAIL"
                     check.message = (
                         f"The Traffic Sheet asks for {vendor.name}, but "
-                        "the placement carries no pixel in this column."
+                        "the placement carries no pixel in "
+                        f"{_COLUMN_LABEL.get(vendor.column, vendor.column)}."
                     )
 
             out.checks.append(check)

@@ -9,14 +9,18 @@ names one of three flavors, and each is verified in a different place.
         carry a column named doubleverify_vast with content.
 
     DV Monitoring (alone)  1x1, Display
-        1x1: a DV Pinnacle wrapped-tag file must be delivered.
-        Display: the placement's Third_Party_Survey must carry the
+        1x1: a DV Pinnacle wrapped-tag file must be delivered. The
+        wrapping applies to 1x1 only.
+        Display: the placement's Third Party Survey 1 must carry the
         DoubleVerify pixel. No column is expected in the tag file.
+        Video: DV Monitoring does not exist for video; a TS that asks
+        for it goes to a person (DV-003 REVIEW).
 
     DV Monitoring / Blocking   Display, (Video: unusual, callout)
-        Display: BOTH the tag file needs a doubleverify_html column
-        with content AND the placement needs the Third_Party_Survey
-        pixel.
+        Display: the placement needs the Third Party Survey 1 pixel
+        (PIX-002). A doubleverify_html column is checked only when the
+        tag file carries it (empty cell = incomplete wrapping), and is
+        never compared to an official pixel (AdOps, 11-nov; FB-22).
         Video: table says this combo "shouldn't normally show up" --
         treated as a callout, validated the same way as Omni Video.
 

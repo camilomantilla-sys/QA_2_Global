@@ -33,6 +33,13 @@ def evaluate(reconciliation, buffer):
                 **common,
             )
 
+        elif check.result == "REVIEW":
+            buffer.review(
+                message=check.message,
+                recommended_action=check.recommended_action,
+                **common,
+            )
+
         else:
             buffer.not_verified(
                 message=check.message,

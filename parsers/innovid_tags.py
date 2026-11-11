@@ -325,6 +325,14 @@ def _classify_tag_header(header: str) -> str:
     if key in TAG_HEADER_CLASSIFICATION:
         return TAG_HEADER_CLASSIFICATION[key]
 
+    # DV antes que "vast": "DoubleVerify VAST" es la columna de DV
+    # Omni, no un tag de video.
+    if "doubleverify" in key and "vast" in key:
+        return TAG_DV_VAST
+
+    if "doubleverify" in key and "html" in key:
+        return TAG_DV_HTML
+
     if "click" in key:
         return TAG_1X1_CLICK
 
@@ -336,12 +344,6 @@ def _classify_tag_header(header: str) -> str:
 
     if "async" in key:
         return TAG_DISPLAY_ASYNC
-
-    if "doubleverify" in key and "vast" in key:
-        return TAG_DV_VAST
-
-    if "doubleverify" in key and "html" in key:
-        return TAG_DV_HTML
 
     if "pixel" in key or "tracker" in key:
         return TAG_PIXEL

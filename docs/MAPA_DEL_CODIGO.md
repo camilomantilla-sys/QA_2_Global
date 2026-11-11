@@ -118,7 +118,7 @@ Consistencia del default ad. *(147 lineas)*
 
 ### `core/dv_omni_reconciliation.py`
 
-DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(278 lineas)*
+DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(325 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -126,6 +126,7 @@ DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(278 linea
 | clase | `DVOmniCheck` |  |
 | clase | `DVOmniReconciliation` |  |
 | funcion | `_column_content(inventory: TagInventory, placement_id: str, tag_type: str) -> str` | Raw content of the placement's doubleverify_vast/html cell, or "" |
+| funcion | `_file_has_column(inventory: TagInventory, placement_id: str, tag_type: str) -> bool` | True si algun archivo de tags que trae este placement tiene esa columna |
 | funcion | `_has_any_row(inventory: TagInventory, placement_id: str) -> bool` |  |
 | funcion | `reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) -> DVOmniReconciliation` |  |
 
@@ -142,7 +143,7 @@ DV Pinnacle site-served tag reconciliation (DV-001). *(177 lineas)*
 
 ### `core/dv_subtype.py`
 
-DV (DoubleVerify) sub-type detection, shared by every DV-related check. *(87 lineas)*
+DV (DoubleVerify) sub-type detection, shared by every DV-related check. *(91 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -422,7 +423,7 @@ QA2 deja escrito su numero de proceso, para que se le pueda encontrar. *(110 lin
 
 ### `core/pixel_reconciliation.py`
 
-Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(580 lineas)*
+Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(601 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -667,7 +668,7 @@ Parser del export de Innovid Campaign Manager. *(363 lineas)*
 
 ### `parsers/innovid_tags.py`
 
-Parser de archivos de tags exportados desde Innovid. *(572 lineas)*
+Parser de archivos de tags exportados desde Innovid. *(574 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -782,7 +783,7 @@ TRK-001 -- el Decision Tree asignado es el que pide la TS. *(38 lineas)*
 
 ### `rules/dv_omni.py`
 
-DV-003 -- columnas de DV Omni / Monitoring+Blocking en los tags. *(41 lineas)*
+DV-003 -- columnas de DV Omni / Monitoring+Blocking en los tags. *(48 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1274,6 +1275,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
 | `test_dv_multiple_partners.py` | 12 | Una campana puede tener mas de un partner, y DV entrega un archivo por cada uno |
+| `test_dv_routing.py` | 6 | Donde se revisa DoubleVerify, segun lo que pide la TS y el formato |
 | `test_excel_innovid_sheets.py` | 2 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
@@ -1326,4 +1328,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 697 funciones de prueba en 67 archivos (algunas se parametrizan y corren varias veces).
+Total: 703 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).

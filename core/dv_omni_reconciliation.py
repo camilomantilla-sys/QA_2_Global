@@ -93,6 +93,20 @@ def _column_content(inventory: TagInventory, placement_id: str, tag_type: str) -
     return ""
 
 
+def _file_has_column(inventory: TagInventory, placement_id: str, tag_type: str) -> bool:
+    """True si algun archivo de tags que trae este placement tiene esa columna."""
+    from parsers.innovid_tags import _classify_tag_header
+
+    for source in inventory.by_placement.get(placement_id, []):
+        for result in inventory.results:
+            if not any(row is source.row for row in result.rows):
+                continue
+            if any(_classify_tag_header(name) == tag_type
+                   for name in result.tag_columns):
+                return True
+    return False
+
+
 def _has_any_row(inventory: TagInventory, placement_id: str) -> bool:
     return bool(inventory.by_placement.get(placement_id))
 
@@ -154,6 +168,38 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
         # which TAG-013 (tag coverage) already checks. Nothing for
         # this module to add.
         if subtype == INTEGRATION:
+            continue
+
+        # DV Monitoring no existe para video (AdOps, 11-nov). Si la TS
+        # lo pide, el error esta en la TS: lo mira una persona.
+        if subtype == MONITORING and fmt == F_VIDEO:
+            seen.add(placement_id)
+            out.checks.append(
+                DVOmniCheck(
+                    result="REVIEW",
+                    message=(
+                        "The Traffic Sheet asks for DV Monitoring on a "
+                        "video placement, but DV Monitoring doesn't "
+                        "exist for video."
+                    ),
+                    recommended_action=(
+                        "Confirm with the requester which DV applies. "
+                        "Video usually takes DV Omni (doubleverify_vast "
+                        "column in the tag file)."
+                    ),
+                    **common,
+                )
+            )
+            continue
+
+        # Display: el pixel de DV vive en Third Party Survey 1 del
+        # placement y lo revisa PIX-002. Un archivo de tags de display
+        # normalmente no trae doubleverify_html (AdOps, 11-nov; FB-22).
+        # Solo si la columna viene, se revisa que no este vacia --
+        # una celda vacia ahi es un wrapping incompleto (FB-02) -- y
+        # nunca se compara contra un pixel oficial.
+        if (subtype == MONITORING_BLOCKING and fmt == F_DISPLAY
+                and not _file_has_column(tag_inventory, placement_id, _DV_HTML)):
             continue
 
         if subtype == OMNI and fmt in (F_1X1, F_VIDEO):
@@ -230,8 +276,9 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
         _content = _column_content(tag_inventory, placement_id, tag_type)
 
         if _content:
-            _official = official_pixel_for(
-                "DV Omni" if subtype == OMNI else "DV Blocking"
+            _official = (
+                "" if tag_type == _DV_HTML
+                else official_pixel_for("DV Omni" if subtype == OMNI else "DV Blocking")
             )
 
             if _official and not pixel_matches_official(_content, _official):
