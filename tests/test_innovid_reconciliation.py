@@ -462,6 +462,23 @@ def test_ongoing_is_fine_when_the_placement_closes_on_the_ts_date():
     assert "placement closes on 2026-10-31" in findings[0].message
 
 
+def test_ongoing_closed_by_the_placement_with_another_start_blames_the_start():
+    """
+    FB-28 (Vizio): el creativo arranco otro dia que la TS y queda
+    ongoing, pero el placement cierra el dia que pide la TS. El fin esta
+    bien; lo distinto es el inicio, y eso es lo que tiene que decir.
+    """
+    ts = _ts("11087616", [
+        ExpectedCreative(name=V2, intent=GREEN,
+                         start=date(2026, 4, 22), end=date(2026, 10, 31)),
+    ])
+    got = _innovid("11087616", 40316, [_node(V2, "2026-04-29", None)])
+    findings = _by_rule(_findings(reconcile(ts, got)), "INV-001")
+    assert [f.status.name for f in findings] == ["REVIEW"]
+    assert "starts on 2026-04-29" in findings[0].message
+    assert "no end date" not in findings[0].message
+
+
 def test_the_decision_set_hours_are_kept():
     """FB-11: la hora del DS viaja con el chequeo, para mostrarla."""
     ts = _ts("11087616", [

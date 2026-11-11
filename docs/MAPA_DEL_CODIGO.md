@@ -800,7 +800,7 @@ DV-001 / DV-002 -- tags de DoubleVerify Pinnacle. *(61 lineas)*
 
 ### `rules/innovid.py`
 
-Hallazgos de lo que solo Innovid sabe. *(571 lineas)*
+Hallazgos de lo que solo Innovid sabe. *(591 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1293,7 +1293,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_diagnose.py` | 0 | El diagnostico debe informar sin exponer nada |
 | `test_innovid_field_shapes.py` | 61 | Field shapes in Innovid's /summary response |
 | `test_innovid_login_start.py` | 17 | El boton de iniciar sesion tiene que decir cuando no arranco |
-| `test_innovid_reconciliation.py` | 48 | La Traffic Sheet contra lo que Innovid realmente tiene |
+| `test_innovid_reconciliation.py` | 49 | La Traffic Sheet contra lo que Innovid realmente tiene |
 | `test_innovid_rule_scope.py` | 11 | Dos cosas que QA marcaba y estaban bien traficadas |
 | `test_innovid_session.py` | 0 | El 401 que salio en pruebas con una sesion guardada |
 | `test_innovid_session_expiry.py` | 8 | Que exista el archivo de sesion no es que la sesion sirva |
@@ -1329,4 +1329,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 706 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).
+Total: 707 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).

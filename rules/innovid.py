@@ -237,14 +237,21 @@ def _flight_dates(reconciliation, buffer):
         # que pide la TS: el placement lo para, y el creativo sale
         # exactamente cuando debe. Pedir revision ahi era ruido que el
         # equipo firmaba siempre (FB-01, FB-28).
+        #
+        # El cierre se juzga aparte del inicio. Antes exigia ademas que
+        # el inicio coincidiera, y un creativo que arranco otro dia
+        # (por la fecha de implementacion) salia como "no end date in
+        # Innovid": el mensaje culpaba al fin, que estaba bien, y
+        # callaba el inicio, que era lo distinto (FB-28, Vizio).
         _cerrado_por_placement = (
-            not start_off
-            and end_off
+            end_off
             and check.expected_end is not None
             and check.actual_end is None
             and getattr(check, "placement_end", None) == check.expected_end
         )
         if _cerrado_por_placement:
+            end_off = False
+        if _cerrado_por_placement and not start_off:
             buffer.pass_(
                 message=(
                     f"{check.creative_name} is ongoing in the decision "
@@ -265,9 +272,22 @@ def _flight_dates(reconciliation, buffer):
             # firma se hace en bloque por motivo, asi que con el
             # mensaje generico estos quedaban revueltos con los
             # desplazamientos de un dia.
-            _sin_cierre = bool(check.expected_end) and not check.actual_end
+            _sin_cierre = end_off and bool(check.expected_end) and not check.actual_end
 
-            if _sin_cierre:
+            if _cerrado_por_placement:
+                message = (
+                    f"{check.creative_name} starts on "
+                    f"{check.actual_start or '?'} in Innovid, and the "
+                    f"Traffic Sheet starts it on {check.expected_start}. "
+                    "The end is fine: it is ongoing and its placement "
+                    f"closes on {check.expected_end}"
+                )
+                accion = (
+                    "Check the start date and sign this off (for example, "
+                    "if it went live on the implementation date), or "
+                    "correct it in the decision set."
+                )
+            elif _sin_cierre:
                 # El hecho, no la consecuencia.
                 #
                 # Decia "so it keeps serving after the flight closes",
