@@ -444,6 +444,7 @@ function show(d){
   if(pl&&pl.missing_required.length)al.push(["bad","Required columns not found: <b>"+pl.missing_required.map(esc).join(", ")+"</b>. Check the header names in the sheet."]);
   const warns=d.anomalies.filter(a=>a.severity==="WARNING");
   if(warns.length)al.push(["warn",`${warns.length} thing${warns.length>1?"s":""} to double-check: `+warns.slice(0,4).map(a=>esc(a.message)).join(" · ")+(warns.length>4?" …":"")]);
+  d.anomalies.filter(a=>a.severity==="INFO"&&a.code==="TS-LP-NEW-ONLY").forEach(a=>al.push(["info",esc(a.message)]));
   if(d.sheets&&d.sheets.hidden&&d.sheets.hidden.length)al.push(["info","Hidden sheets ignored: "+d.sheets.hidden.map(esc).join(", ")]);
   $("#alerts").innerHTML=al.map(a=>`<div class="alert ${a[0]}">${a[1]}</div>`).join("");
   const f=d.flight||{};

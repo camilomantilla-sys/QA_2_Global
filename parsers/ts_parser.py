@@ -801,6 +801,48 @@ def _build_lp_worked(sr: TSSheetResult | None) -> set[str]:
                 out.add(name)
     return out
 
+#: Una landing page verde que ya explican los placements nuevos.
+LP_CLAIMED_BY_NEW = "TS-LP-NEW-ONLY"
+
+
+def _lp_claimed_by_new(placements: TSSheetResult | None,
+                       landing_pages: TSSheetResult | None,
+                       lp_worked: set[str]) -> set[str]:
+    """
+    Landing pages verdes que son de los placements nuevos, no un swap.
+
+    Caso real (FB-07, Unilever Commerce): 8 placements nuevos en verde
+    y 7 existentes en blanco, todos con la misma landing page. La
+    landing page entra entera en verde porque la usan los nuevos. QA2
+    la propagaba a los 7 blancos y los leia como URL swap: 15
+    placements trabajados donde se pidieron 8.
+
+    Una landing page nueva (su NOMBRE en verde: principio 5, el color
+    en el nombre dice que entra) que un placement verde pinta en su
+    propia celda de Landing Page ya esta explicada: es la de los
+    nuevos. Un placement blanco que la comparte ya estaba traficado.
+
+    Un swap de URL de verdad no cae aqui: ahi el nombre se queda y lo
+    que cambia es la URL (rojo/verde en la URL), o ningun placement
+    verde la reclama, como en la cadena de BlackRock.
+    """
+    if placements is None or landing_pages is None or not lp_worked:
+        return set()
+    new_lps = {
+        norm_compare(str(row.values.get("lp_name") or ""))
+        for row in landing_pages.rows
+        if row.intent == GREEN
+        and (row.colors or {}).get("lp_name") == GREEN
+        and not any(c == RED for c in (row.colors or {}).values())
+    }
+    claimed = {
+        norm_compare(str(row.values.get("lp_ref") or ""))
+        for row in placements.rows
+        if row.intent in (GREEN, "SWAP") and "lp_ref" in row.intent_fields
+    }
+    return (new_lps & claimed & lp_worked) - {""}
+
+
 # ------------------------------------------------------------------ scope
 
 def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
@@ -1089,10 +1131,35 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     res.rotations_all = rotations_all_rows
     _merge_hidden_lp_refs(res.groups, rotations_all_rows)
     res.lp_worked = _build_lp_worked(res.landing_pages)
+    lp_new_only = _lp_claimed_by_new(res.placements, res.landing_pages,
+                                     res.lp_worked)
 
     if res.placements:
-        res.scope = _build_scope(res.placements, res.groups, res.lp_worked,
+        res.scope = _build_scope(res.placements, res.groups,
+                                 res.lp_worked - lp_new_only,
                                  propagate=profile.propagate_from_rotations)
+        if lp_new_only:
+            # Principio 8: el verde de la landing page no desaparece
+            # en silencio. Se dice a quien se le atribuyo.
+            sharing = sorted(
+                pid for pid, sc in res.scope.items()
+                if sc.request_type == REQ_NOT_WORKED
+                and any(g[6:] in lp_new_only for g in sc.groups
+                        if g.startswith("__lp__"))
+            )
+            if sharing:
+                names = ", ".join(sorted(
+                    str(r.values.get("lp_name"))
+                    for r in res.landing_pages.rows
+                    if norm_compare(str(r.values.get("lp_name") or "")) in lp_new_only))
+                res.anomalies.append(Anomaly(
+                    LP_CLAIMED_BY_NEW, "INFO",
+                    f"The landing page {names} is new in green and the new "
+                    f"placements use it. {len(sharing)} white placement(s) "
+                    "that share it were read as already trafficked, not as "
+                    "a URL swap.",
+                    detail={"placements": sharing},
+                ))
         for sc in res.scope.values():
             res.request_counts[sc.request_type] = \
                 res.request_counts.get(sc.request_type, 0) + 1

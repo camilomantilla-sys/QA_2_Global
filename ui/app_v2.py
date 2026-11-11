@@ -2856,6 +2856,8 @@ if True:
         for anomaly in getattr(ts_result, "anomalies", []):
             if anomaly.code in ("TS-ROW-UNREADABLE", "TS-RED-FIELDS-ONLY"):
                 st.warning(anomaly.message)
+            elif anomaly.code == "TS-LP-NEW-ONLY":
+                st.info(anomaly.message)
 
         # ----------------------------------------------------
         # Matching and rules

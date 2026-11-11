@@ -722,7 +722,7 @@ Parser de archivos de tags exportados desde Innovid. *(574 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(1108 lineas)*
+Parser de Traffic Sheets. *(1175 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -742,6 +742,7 @@ Parser de Traffic Sheets. *(1108 lineas)*
 | funcion | `_build_groups(sr: TSSheetResult \| None) -> dict[str, GroupScope]` | Agrupa creativos por rotacion y detecta que rotaciones se trabajaron |
 | funcion | `_merge_hidden_lp_refs(groups: dict[str, GroupScope], sr: TSSheetResult \| None) -> None` | Anade al mapa grupo -> landing page las filas ocultas de rotaciones |
 | funcion | `_build_lp_worked(sr: TSSheetResult \| None) -> set[str]` | Landing pages con color -> se trabajo su URL |
+| funcion | `_lp_claimed_by_new(placements: TSSheetResult \| None, landing_pages: TSSheetResult \| None, lp_worked: set[str]) -> set[str]` | Landing pages verdes que son de los placements nuevos, no un swap |
 | funcion | `_build_scope(sr, groups, lp_worked, propagate) -> dict[str, PlacementScope]` | El scope de QA2 = placements con color propio U placements que apuntan a grupos con color U placements que apuntan a landing pages con color |
 | funcion | `_surfaced(sr: TSSheetResult) -> list[Anomaly]` | Lo de una hoja que sube al resultado: lo fatal y las filas sin leer |
 | funcion | `parse_ts(path: Path, profile_name: str \| None=None) -> TSResult` |  |
@@ -922,7 +923,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5796 lineas)*
+Interfaz de QA2 (Streamlit). *(5798 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1332,6 +1333,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_session.py` | 0 | El 401 que salio en pruebas con una sesion guardada |
 | `test_innovid_session_expiry.py` | 8 | Que exista el archivo de sesion no es que la sesion sirva |
 | `test_intent_fields.py` | 10 | La celda pintada manda: se valida lo que se pidio |
+| `test_lp_new_placements.py` | 4 | Una landing page verde que es de los placements nuevos no es un URL swap |
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
@@ -1365,4 +1367,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 730 funciones de prueba en 71 archivos (algunas se parametrizan y corren varias veces).
+Total: 734 funciones de prueba en 72 archivos (algunas se parametrizan y corren varias veces).
