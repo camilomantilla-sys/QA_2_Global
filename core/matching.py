@@ -1015,6 +1015,8 @@ def _match_creatives(ep: ExpectedPlacement,
         for k in c.keys_norm:
             by_norm.setdefault(k, []).append(i)
 
+    matched_identity: dict[str, tuple[int, str]] = {}
+
     for ec in ep.creatives:
         t = MatchTrace(entity="creative", left=ec.name or ec.creative_id)
         hit = None
@@ -1051,8 +1053,23 @@ def _match_creatives(ep: ExpectedPlacement,
                 t.winner = "filename_or_name_norm (ambiguo)"
                 t.discarded = [f"{len(cands)} candidatos con el mismo nombre"]
 
+        # 4. el mismo creativo en otro tramo de fechas.
+        #
+        # Un cambio de fechas se pide con dos filas del mismo creativo,
+        # una por tramo (FB-13), y en el decision set son dos nodos;
+        # pero el export Placement-Creative lo lista UNA vez por
+        # placement. El segundo tramo no encontraba fila libre y salia
+        # como "variant with no individual match". Es la misma
+        # asignacion: comparte la fila del primero.
+        ident = str(ec.creative_id or "").strip() or ec.key_norm
+        if hit is None and ident and ident in matched_identity:
+            hit, conf = matched_identity[ident]
+            t.winner = "same creative, another date range"
+
         if hit is not None:
             used.add(hit)
+            if ident:
+                matched_identity.setdefault(ident, (hit, conf))
             ac = pool[hit]
             t.right = ac.filename or ac.name or ac.creative_id
             links.append(CreativeLink(expected=ec, actual=ac,

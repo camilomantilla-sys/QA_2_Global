@@ -167,3 +167,27 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
     print("ok")
+
+
+def test_the_second_date_range_shares_the_export_row():
+    # El export Placement-Creative lista el creativo una vez por
+    # placement; los dos tramos de la TS son la misma asignacion.
+    from core.matching import (
+        ActualCreative, ActualPlacement, ExpectedPlacement, _match_creatives,
+    )
+    ep = ExpectedPlacement(placement_id="11026729", creatives=[
+        ExpectedCreative(name=BASE, creative_id="6364777", intent=GREEN,
+                         start=date(2026, 8, 27), end=date(2026, 10, 18)),
+        ExpectedCreative(name=BASE, creative_id="6364777", intent=GREEN,
+                         start=date(2026, 11, 16), end=date(2026, 12, 31)),
+        ExpectedCreative(name=MVM, creative_id="6445526", intent=GREEN,
+                         start=date(2026, 10, 19), end=date(2026, 11, 15)),
+    ])
+    ap = ActualPlacement(placement_id="11026729", creatives=[
+        ActualCreative(creative_id="6364777", filename=BASE),
+        ActualCreative(creative_id="6445526", filename=MVM),
+    ])
+    links, extra = _match_creatives(ep, ap)
+    assert [l.actual.creative_id if l.actual else None for l in links] == [
+        "6364777", "6364777", "6445526"]
+    assert extra == []

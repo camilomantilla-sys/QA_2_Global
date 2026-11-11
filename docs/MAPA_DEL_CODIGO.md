@@ -330,7 +330,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1261 lineas)*
+Matching Engine. *(1278 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1276,7 +1276,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_creative_dimensions.py` | 9 | El tamano al que se sirve un creativo, y por que no se veia |
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
-| `test_date_change_rows.py` | 5 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
+| `test_date_change_rows.py` | 6 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
 | `test_default_ads_and_dims.py` | 8 | El default ad de BlackRock, y la rotacion que no es del tamano del placement |
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
@@ -1334,4 +1334,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 712 funciones de prueba en 69 archivos (algunas se parametrizan y corren varias veces).
+Total: 713 funciones de prueba en 69 archivos (algunas se parametrizan y corren varias veces).
