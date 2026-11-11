@@ -132,6 +132,9 @@ class ExpectedPlacement:
     #: vigentes. En la TS de Dove/Degree un mismo placement trae dos
     #: filas, una por marca, cada una con su decision set.
     group_keys: list[str] = field(default_factory=list)
+    #: Los decision sets cuya celda va en gris o amarillo: los de una
+    #: solicitud anterior. Ver _retire_old_groups.
+    retired_groups: set[str] = field(default_factory=set)
 
     # "Vendors / Pixels" tal cual lo escribio la TS. De ahi sale si la
     # solicitud pide DV Blocking, que es lo unico que se implementa
@@ -357,6 +360,34 @@ class MatchResult:
 
 # ------------------------------------------------------------------ Expected
 
+#: Los colores de lo que ya no es de esta solicitud.
+_OLD_COLORS = ("GREY", "YELLOW")
+
+
+def _retire_old_groups(out: dict, group_text: dict[str, str]) -> None:
+    """
+    Principio 4 y 6: en un swap de decision set, el viejo queda en gris.
+
+    Caso real (FB-10 y FB-13, Dove/Degree, celdas combinadas): un mismo
+    placement trae dos filas, una con el decision set de Dove con la
+    celda en gris y otra con el de Degree en blanco. El gris es el que
+    se desactivo en una solicitud anterior; el vigente es el blanco.
+    QA2 tomaba el primero y exigia en Innovid los creativos de Dove.
+
+    Solo se retira el gris cuando el placement tiene OTRO decision set
+    vigente. Si la celda gris es la unica, se queda: en otra TS de Dove
+    habia placements con SOLO la celda del grupo en gris, y sacarlos
+    dejaba el placement sin nada que revisar.
+    """
+    for ep in out.values():
+        live = [g for g in ep.group_keys if g not in ep.retired_groups]
+        if not live or len(live) == len(ep.group_keys):
+            continue
+        ep.group_keys = live
+        if norm_compare(ep.group_name) not in live:
+            ep.group_name = group_text.get(live[0], ep.group_name)
+
+
 def _inject_group(ep: "ExpectedPlacement", creatives: list,
                   have: set[str]) -> None:
     """
@@ -420,6 +451,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     from parsers.ts_parser import REQ_CREATIVE_REMOVE, REQ_NOT_WORKED
 
     out: dict[str, ExpectedPlacement] = {}
+    _group_text: dict[str, str] = {}
     if ts.placements is None:
         return out
 
@@ -614,6 +646,9 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
         _g_row = norm_compare(str(row.values.get("group_name") or ""))
         if _in_scope and _g_row and _g_row not in ep.group_keys:
             ep.group_keys.append(_g_row)
+            _group_text[_g_row] = str(row.values.get("group_name") or "")
+        if _g_row and (getattr(row, "colors", None) or {}).get("group_name") in _OLD_COLORS:
+            ep.retired_groups.add(_g_row)
         _prefer("cgen", row.values.get("cgen"))
         _prefer("vendors", row.values.get("vendors"))
 
@@ -642,6 +677,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # (8 conceptos x 5 tamanos = 40). Un placement de 160x600 solo sirve
     # los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
     # generando 32 falsos "creativo faltante" por placement (bug B39).
+    _retire_old_groups(out, _group_text)
+
     for ep in out.values():
         keys = ep.group_keys or (
             [norm_compare(ep.group_name)] if ep.group_name else [])

@@ -54,7 +54,10 @@ MVM = "MVM_728x90.jpg"
 LONE = "Lonely_728x90.jpg"
 
 
-def build() -> Path:
+GREY = PatternFill("solid", fgColor="FFBFBFBF")
+
+
+def build(grey_first_group: bool = False) -> Path:
     wb = Workbook()
     ws = wb.active
     ws.title = "Placements"
@@ -63,6 +66,10 @@ def build() -> Path:
     for group in ("728x90 Web Ad", "728x90 Web Ad Degree"):
         ws.append(["Site", 11026727, "P_728", date(2026, 8, 27),
                    date(2026, 12, 31), "728x90", group, "LP"])
+    if grey_first_group:
+        # FB-10: el decision set viejo, desactivado en una solicitud
+        # anterior, con su celda en gris.
+        ws.cell(2, 7).fill = GREY
 
     ws = wb.create_sheet("Creative Rotations")
     ws.append(ROT_HEADERS)
@@ -93,10 +100,10 @@ def build() -> Path:
     return target
 
 
-def parse():
+def parse(**kw):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return parse_ts(build())
+        return parse_ts(build(**kw))
 
 
 def test_red_dates_replaced_by_green_dates_is_a_date_change():
@@ -127,6 +134,13 @@ def test_a_placement_reads_every_decision_set_it_declares():
     assert not [c for c in expected.creatives
                 if c.name == BASE and (c.start, c.end)
                 == (date(2026, 8, 27), date(2026, 12, 31))]
+
+
+def test_a_grey_decision_set_is_the_old_one_when_another_is_live():
+    expected = build_expected(parse(grey_first_group=True))["11026727"]
+    assert expected.group_name == "728x90 Web Ad Degree"
+    names = {c.name for c in expected.creatives}
+    assert names == {"Degree_" + BASE}
 
 
 def test_two_slots_of_one_creative_pair_with_their_two_nodes():
