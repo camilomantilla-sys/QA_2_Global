@@ -128,6 +128,10 @@ class ExpectedPlacement:
     end: date | None = None
     cgen: str = ""
     group_name: str = ""
+    #: Todos los decision sets que el placement declara en sus filas
+    #: vigentes. En la TS de Dove/Degree un mismo placement trae dos
+    #: filas, una por marca, cada una con su decision set.
+    group_keys: list[str] = field(default_factory=list)
 
     # "Vendors / Pixels" tal cual lo escribio la TS. De ahi sale si la
     # solicitud pide DV Blocking, que es lo unico que se implementa
@@ -353,6 +357,54 @@ class MatchResult:
 
 # ------------------------------------------------------------------ Expected
 
+def _inject_group(ep: "ExpectedPlacement", creatives: list,
+                  have: set[str]) -> None:
+    """
+    Los creativos de un decision set que el placement declara, filtrados
+    por dimension.
+
+    Un grupo de Adobe contiene los creativos de todos los tamanos
+    (8 conceptos x 5 tamanos = 40). Un placement de 160x600 solo sirve
+    los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
+    generando 32 falsos "creativo faltante" por placement (bug B39).
+
+    Un mismo creativo puede venir dos veces en su grupo con fechas
+    distintas: es un cambio de fechas, que Innovid implementa
+    duplicando el creativo en el decision set (FB-13). Cada tramo es
+    su propia fila; solo se descarta la repeticion exacta.
+    """
+    from parsers.ts_parser import REQ_CREATIVE_REMOVE
+
+    slots: set[tuple] = set()
+    added: set[str] = set()
+    for c in creatives:
+        if not c.key_norm:
+            continue
+        slot = (c.key_norm, c.start, c.end)
+        if c.key_norm in have or slot in slots:
+            continue
+        slots.add(slot)
+        if not dims_match(ep.dims, c.dims):
+            if c.intent in (GREEN, RED, "SWAP"):
+                ep.dims_dropped.append((c.name, c.dims))
+            continue
+        # Si el placement entero va en rojo, lo que tenga asignado
+        # se va con el.
+        #
+        # BlackRock marca el placement en rojo -- desasignar -- y
+        # deja los creativos de su rotacion en blanco, porque esa
+        # rotacion la comparten otros placements que siguen
+        # corriendo. Mostrandolos como contexto, la fila del
+        # placement que hay que apagar se leia igual que una que
+        # no hay que tocar. Criterio de AdOps: "su placement 10657690 esta en
+        # rojo asi que toca desasignarlo".
+        if ep.request_type == REQ_CREATIVE_REMOVE and c.intent == WHITE:
+            c = replace(c, intent=RED)
+        ep.creatives.append(c)
+        added.add(c.key_norm)
+    have |= added
+
+
 def build_expected(ts) -> dict[str, ExpectedPlacement]:
     """
     Expected Model, solo con los placements TRABAJADOS.
@@ -559,6 +611,9 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             setattr(ep, flag, _in_scope)
 
         _prefer("group_name", row.values.get("group_name"))
+        _g_row = norm_compare(str(row.values.get("group_name") or ""))
+        if _in_scope and _g_row and _g_row not in ep.group_keys:
+            ep.group_keys.append(_g_row)
         _prefer("cgen", row.values.get("cgen"))
         _prefer("vendors", row.values.get("vendors"))
 
@@ -588,31 +643,11 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # los 8 de 160x600. Sin este filtro se esperan 40 y solo matchean 8,
     # generando 32 falsos "creativo faltante" por placement (bug B39).
     for ep in out.values():
-        g = norm_compare(ep.group_name)
-        if not g:
-            continue
+        keys = ep.group_keys or (
+            [norm_compare(ep.group_name)] if ep.group_name else [])
         have = {c.key_norm for c in ep.creatives}
-        for c in by_group.get(g, []):
-            if not c.key_norm or c.key_norm in have:
-                continue
-            if not dims_match(ep.dims, c.dims):
-                if c.intent in (GREEN, RED, "SWAP"):
-                    ep.dims_dropped.append((c.name, c.dims))
-                continue
-            # Si el placement entero va en rojo, lo que tenga asignado
-            # se va con el.
-            #
-            # BlackRock marca el placement en rojo -- desasignar -- y
-            # deja los creativos de su rotacion en blanco, porque esa
-            # rotacion la comparten otros placements que siguen
-            # corriendo. Mostrandolos como contexto, la fila del
-            # placement que hay que apagar se leia igual que una que
-            # no hay que tocar. Criterio de AdOps: "su placement 10657690 esta en
-            # rojo asi que toca desasignarlo".
-            if ep.request_type == REQ_CREATIVE_REMOVE and c.intent == WHITE:
-                c = replace(c, intent=RED)
-            ep.creatives.append(c)
-            have.add(c.key_norm)
+        for g in keys:
+            _inject_group(ep, by_group.get(g, []), have)
 
     # --- el default ad, enganchado por dimension.
     #
@@ -621,8 +656,18 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # Ad"). Sin engancharlo, el default que corre en la plataforma
     # aparecia como un extra sin nada contra que compararlo.
     default_by_dims: dict[str, list[ExpectedCreative]] = {}
+    # Un grupo que algun placement declara como su rotacion no es un
+    # default suelto: es un decision set normal que se llama "Default
+    # Web Ad". En la TS de Dove/Degree cada marca tiene el suyo, y
+    # engancharlos por dimension metia los creativos de Degree en los
+    # placements de Dove.
+    declared_groups = {g for ep in out.values() for g in ep.group_keys}
+    declared_groups |= {norm_compare(ep.group_name) for ep in out.values()
+                        if ep.group_name}
     for group_key, group_creatives in by_group.items():
         if not _IS_DEFAULT.search(group_key):
+            continue
+        if group_key in declared_groups:
             continue
         for creative in group_creatives:
             if creative.dims:

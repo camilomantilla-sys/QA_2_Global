@@ -84,6 +84,7 @@ INTENT_GROUP = {
     "YELLOW": "out",
     "GREY": "out",
     "REVIEW": "review",
+    "SUPERSEDED": "context",
     "WHITE": "context",
     "UNKNOWN": "context",
 }

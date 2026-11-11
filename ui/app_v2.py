@@ -2859,7 +2859,7 @@ if True:
         # nadie revisa. Se dice arriba, no solo en la tabla de
         # anomalias (FB-28).
         for anomaly in getattr(ts_result, "anomalies", []):
-            if anomaly.code == "TS-ROW-UNREADABLE":
+            if anomaly.code in ("TS-ROW-UNREADABLE", "TS-RED-FIELDS-ONLY"):
                 st.warning(anomaly.message)
 
         # ----------------------------------------------------

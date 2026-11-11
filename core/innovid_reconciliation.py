@@ -399,6 +399,17 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
 
     seen: set[str] = set()
     seen_ids: set[str] = set()
+    used_nodes: set[int] = set()
+
+    # Cuantas filas pide la TS de cada creativo. Un cambio de fechas
+    # se implementa duplicando el creativo en el decision set, un nodo
+    # por tramo (FB-13): dos filas verdes del mismo creativo son dos
+    # nodos, y se emparejan por fechas en vez de declararse ambiguos.
+    rows_per_creative: dict[str, int] = {}
+    for creative in expected:
+        k = str(creative.creative_id or "").strip() or norm_creative(creative.name)
+        if k:
+            rows_per_creative[k] = rows_per_creative.get(k, 0) + 1
 
     for creative in expected:
         key = norm_creative(creative.name)
@@ -477,6 +488,16 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
             continue
 
         if len(candidates) > 1:
+            _k = str(creative.creative_id or "").strip() or key
+            paired = (
+                _pair_by_dates(creative, candidates, used_nodes)
+                if rows_per_creative.get(_k, 0) >= len(candidates)
+                else None
+            )
+            if paired is not None:
+                candidates = [paired]
+
+        if len(candidates) > 1:
             # Dos nodos con el mismo archivo en el mismo decision set.
             # Se reporta la ambiguedad en vez de comparar contra uno
             # elegido al azar, que daria un veredicto sin fundamento.
@@ -500,6 +521,7 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
             continue
 
         node = candidates[0]
+        used_nodes.add(id(node))
         out.flights.append(CreativeFlightCheck(
             placement_id=pid,
             creative_name=creative.name,
@@ -543,6 +565,28 @@ def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:
                 dset_id=node.dtree_id,
                 dset_name=node.dtree_name,
             ))
+
+
+def _pair_by_dates(creative, candidates, used: set[int]):
+    """
+    El nodo de este tramo: el que tiene sus mismas fechas, si no el
+    libre que arranca mas cerca. None si ya no queda ninguno libre.
+    """
+    free = [n for n in candidates if id(n) not in used]
+    if not free:
+        return None
+    want = (creative.start, creative.end)
+    for node in free:
+        if (_node_date(node.start_timestamp), _node_date(node.end_timestamp)) == want:
+            return node
+    if creative.start is None:
+        return free[0]
+
+    def distance(node):
+        start = _node_date(node.start_timestamp)
+        return abs((start - creative.start).days) if start else 10**6
+
+    return min(free, key=distance)
 
 
 def _node_time(value: str) -> str:

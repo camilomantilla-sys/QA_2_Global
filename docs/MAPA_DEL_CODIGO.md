@@ -299,7 +299,7 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(585 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(629 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -314,6 +314,7 @@ Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(585 lineas
 | funcion | `_is_site_served_1x1(pm) -> bool` | Un 1x1 de tracking servido por el sitio |
 | funcion | `_expected_creatives(pm) -> list` | Los creativos que la TS declara para el placement |
 | funcion | `_compare_creatives(pid, expected, nodes, out, export_ids=None) -> None` |  |
+| funcion | `_pair_by_dates(creative, candidates, used: set[int])` | El nodo de este tramo: el que tiene sus mismas fechas, si no el libre que arranca mas cerca |
 | funcion | `_node_time(value: str) -> str` | '2026-09-14 06:30:00' -> '06:30' |
 | funcion | `_node_date(value: str) -> date \| None` |  |
 | funcion | `flights_by_creative(reconciliation) -> dict[tuple[str, str], CreativeFlightCheck]` | Indice (placement, nombre normalizado) -> lo que Innovid tiene |
@@ -329,7 +330,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1179 lineas)*
+Matching Engine. *(1224 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -343,6 +344,7 @@ Matching Engine. *(1179 lineas)*
 | clase | `CreativeLink` |  |
 | clase | `PlacementMatch` |  |
 | clase | `MatchResult` |  |
+| funcion | `_inject_group(ep: 'ExpectedPlacement', creatives: list, have: set[str]) -> None` | Los creativos de un decision set que el placement declara, filtrados por dimension |
 | funcion | `build_expected(ts) -> dict[str, ExpectedPlacement]` | Expected Model, solo con los placements TRABAJADOS |
 | funcion | `build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]` | Actual Model desde los exports de Innovid |
 | funcion | `_match_group(ep: ExpectedPlacement, ap: ActualPlacement, ts_declares_groups: bool=True) -> tuple[str, MatchTrace]` | ts_declares_groups: la TS de este perfil TIENE columna de grupo |
@@ -690,7 +692,7 @@ Parser de archivos de tags exportados desde Innovid. *(574 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(1025 lineas)*
+Parser de Traffic Sheets. *(1108 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -706,6 +708,7 @@ Parser de Traffic Sheets. *(1025 lineas)*
 | funcion | `_unreadable_row(grid, sheet_name: str, row: int, header_row: int, cmap: ColumnMap) -> Anomaly` |  |
 | funcion | `_repair_wpp_combined_rotation_header(grid, header_row: int, cmap: ColumnMap, spec: SheetSpec, anomalies: list[Anomaly]) -> None` | Repara una variante defectuosa de WPP donde los encabezados 'Creative Rotation' y 'Creative Name' fueron combinados |
 | funcion | `_parse_sheet(path, sheet_name, spec, intent_fields, resolver, primary_key, skip_hidden) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]` |  |
+| funcion | `_resolve_field_changes(sr: TSSheetResult) -> list[Anomaly]` | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
 | funcion | `_build_groups(sr: TSSheetResult \| None) -> dict[str, GroupScope]` | Agrupa creativos por rotacion y detecta que rotaciones se trabajaron |
 | funcion | `_merge_hidden_lp_refs(groups: dict[str, GroupScope], sr: TSSheetResult \| None) -> None` | Anade al mapa grupo -> landing page las filas ocultas de rotaciones |
 | funcion | `_build_lp_worked(sr: TSSheetResult \| None) -> set[str]` | Landing pages con color -> se trabajo su URL |
@@ -1272,6 +1275,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_creative_dimensions.py` | 9 | El tamano al que se sirve un creativo, y por que no se veia |
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
+| `test_date_change_rows.py` | 4 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
 | `test_default_ads_and_dims.py` | 8 | El default ad de BlackRock, y la rotacion que no es del tamano del placement |
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
@@ -1329,4 +1333,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 707 funciones de prueba en 68 archivos (algunas se parametrizan y corren varias veces).
+Total: 711 funciones de prueba en 69 archivos (algunas se parametrizan y corren varias veces).

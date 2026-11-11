@@ -644,6 +644,85 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
 
     return res, region
 
+# ------------------------------------------------------------------ campos que cambian
+
+#: Una fila roja cuyo valor viejo reemplaza otra fila verde del mismo
+#: creativo. No sale nada: cambia un dato.
+SUPERSEDED = "SUPERSEDED"
+#: Fechas (u otro dato) en rojo sin el valor nuevo en verde.
+RED_FIELDS_ONLY = "TS-RED-FIELDS-ONLY"
+
+#: Lo que dice QUIEN es el creativo. Rojo aqui = el creativo sale.
+_IDENTITY_FIELDS = {"creative_name", "creative_id", "universal_ad_id"}
+
+
+def _resolve_field_changes(sr: TSSheetResult) -> list[Anomaly]:
+    """
+    Principio 5: el color en el nombre o el ID dice si un creativo
+    entra o sale; el color en otro campo dice que ese campo cambio.
+
+    Regla de AdOps (11-nov, FB-13), dentro de un mismo decision set:
+
+      creativo en blanco, fechas en rojo y otra fila del mismo
+      creativo con las fechas en verde
+          -> cambio de fechas: el creativo se queda y valen las verdes.
+             Innovid lo implementa duplicando el creativo en el
+             decision set, una vez por cada tramo verde.
+      creativo en blanco y fechas en rojo, sin verde que las reemplace
+          -> la TS esta incompleta: lo mira una persona.
+      fila entera en roja (nombre o ID en rojo)
+          -> el creativo sale. No se toca.
+
+    Antes cualquier rojo en la fila era "sale", y el creativo que solo
+    cambiaba de fechas salia como que no debia estar en el decision set.
+    """
+    from core.colors import GREEN as _G, RED as _R
+
+    def key(row: TSRow) -> tuple[str, str]:
+        return (
+            norm_compare(str(row.values.get("group_name") or "")),
+            norm_compare(str(row.values.get("creative_name") or "")
+                         or str(row.values.get("creative_id") or "")),
+        )
+
+    green_fields: dict[tuple[str, str], set[str]] = {}
+    for row in sr.rows:
+        greens = {f for f, c in row.colors.items()
+                  if c == _G and f != "group_name"}
+        if greens:
+            green_fields.setdefault(key(row), set()).update(greens)
+
+    anomalies: list[Anomaly] = []
+    for row in sr.rows:
+        if row.intent != RED:
+            continue
+        reds = {f for f, c in row.colors.items()
+                if c == _R and f != "group_name"}
+        if not reds or reds & _IDENTITY_FIELDS:
+            continue
+        k = key(row)
+        if not k[1]:
+            continue
+        if reds & green_fields.get(k, set()):
+            new_intent = SUPERSEDED
+        else:
+            new_intent = "REVIEW"
+            fields = ", ".join(sorted(reds))
+            anomalies.append(Anomaly(
+                RED_FIELDS_ONLY, "WARNING",
+                f"{sr.sheet} row {row.row}: "
+                f"{row.values.get('creative_name') or 'this creative'} has "
+                f"{fields} in red but no row with the new value in green. "
+                "Check the Traffic Sheet with the requester.",
+                detail={"sheet": sr.sheet, "row": row.row},
+            ))
+        sr.intent_counts[RED] = sr.intent_counts.get(RED, 1) - 1
+        if not sr.intent_counts[RED]:
+            sr.intent_counts.pop(RED)
+        sr.intent_counts[new_intent] = sr.intent_counts.get(new_intent, 0) + 1
+        row.intent = new_intent
+    return anomalies
+
 # ------------------------------------------------------------------ grupos
 
 def _build_groups(sr: TSSheetResult | None) -> dict[str, GroupScope]:
@@ -1000,6 +1079,10 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
                 resolver, primary_key="lp_name")
             all_region += region
             res.anomalies += _surfaced(res.landing_pages)
+
+    # ---- campos que cambian (principio 5)
+    if res.rotations is not None:
+        res.anomalies += _resolve_field_changes(res.rotations)
 
     # ---- propagacion y scope
     res.groups = _build_groups(res.rotations)
