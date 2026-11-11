@@ -322,6 +322,13 @@ class ColumnMap:
     def col(self, name: str) -> int | None:
         return self.single.get(name)
 
+    def columns(self) -> set[int]:
+        """Cada columna que QA2 lee de esta hoja."""
+        out = set(self.single.values())
+        for cols in self.multi.values():
+            out.update(cols)
+        return out
+
 def map_columns(grid: SheetGrid, header_row: int,
                 spec: SheetSpec) -> tuple[ColumnMap, list[Anomaly]]:
     """
@@ -548,10 +555,19 @@ def classify_row(grid: SheetGrid, row: int, cmap: ColumnMap, spec: SheetSpec,
     if not texts:
         return ROW_SEPARATOR, "fila vacia"
 
-    # --- barato: errores de formula
-    for c in cells.values():
-        if c.is_error:
-            return ROW_CORRUPT, "contiene error de formula"
+    # --- barato: errores de formula, solo en columnas que QA2 lee
+    #
+    # Un #REF! en una columna auxiliar no dice nada de la fila. En la
+    # TS de FB-28 la columna "P# (Auto)" traia una formula rota en la
+    # fila de un placement verde, y por eso la fila entera se tiraba:
+    # QA2 reviso 6 placements de 7 sin avisar. Solo un error en una
+    # columna mapeada deja la fila sin leer.
+    mapped = cmap.columns()
+    for col, c in cells.items():
+        if c.is_error and col in mapped:
+            return ROW_CORRUPT, (
+                f"contiene error de formula en {c.ref.col_letter}{c.ref.row}"
+            )
 
     # --- barato: marcadores de corrupcion
     for t in texts[:12]:

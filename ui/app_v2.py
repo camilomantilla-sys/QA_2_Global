@@ -2855,6 +2855,13 @@ if True:
 
             st.stop()
 
+        # Una fila de la TS que no se pudo leer es un placement que
+        # nadie revisa. Se dice arriba, no solo en la tabla de
+        # anomalias (FB-28).
+        for anomaly in getattr(ts_result, "anomalies", []):
+            if anomaly.code == "TS-ROW-UNREADABLE":
+                st.warning(anomaly.message)
+
         # ----------------------------------------------------
         # Matching and rules
         # ----------------------------------------------------

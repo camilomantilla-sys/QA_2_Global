@@ -178,7 +178,7 @@ Branded multi-tab Excel export of a QA2 run. *(639 lineas)*
 
 ### `core/extraction.py`
 
-Capa de EXTRACCION (L1). Aqui estaba el bloqueo original. *(631 lineas)*
+Capa de EXTRACCION (L1). Aqui estaba el bloqueo original. *(647 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -688,7 +688,7 @@ Parser de archivos de tags exportados desde Innovid. *(572 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(974 lineas)*
+Parser de Traffic Sheets. *(1025 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -701,12 +701,14 @@ Parser de Traffic Sheets. *(974 lineas)*
 | funcion | `detect_profile(path: Path) -> tuple[str, str]` | Senal 1: columna CGEN/CGENS en Placements O en Creative Rotations -> Adobe |
 | funcion | `_row_own(colors: dict) -> set` | Los colores que describen a ESTA fila |
 | funcion | `_impl_type(vals: dict[str, object]) -> str` |  |
+| funcion | `_unreadable_row(grid, sheet_name: str, row: int, header_row: int, cmap: ColumnMap) -> Anomaly` |  |
 | funcion | `_repair_wpp_combined_rotation_header(grid, header_row: int, cmap: ColumnMap, spec: SheetSpec, anomalies: list[Anomaly]) -> None` | Repara una variante defectuosa de WPP donde los encabezados 'Creative Rotation' y 'Creative Name' fueron combinados |
 | funcion | `_parse_sheet(path, sheet_name, spec, intent_fields, resolver, primary_key, skip_hidden) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]` |  |
 | funcion | `_build_groups(sr: TSSheetResult \| None) -> dict[str, GroupScope]` | Agrupa creativos por rotacion y detecta que rotaciones se trabajaron |
 | funcion | `_merge_hidden_lp_refs(groups: dict[str, GroupScope], sr: TSSheetResult \| None) -> None` | Anade al mapa grupo -> landing page las filas ocultas de rotaciones |
 | funcion | `_build_lp_worked(sr: TSSheetResult \| None) -> set[str]` | Landing pages con color -> se trabajo su URL |
 | funcion | `_build_scope(sr, groups, lp_worked, propagate) -> dict[str, PlacementScope]` | El scope de QA2 = placements con color propio U placements que apuntan a grupos con color U placements que apuntan a landing pages con color |
+| funcion | `_surfaced(sr: TSSheetResult) -> list[Anomaly]` | Lo de una hoja que sube al resultado: lo fatal y las filas sin leer |
 | funcion | `parse_ts(path: Path, profile_name: str \| None=None) -> TSResult` |  |
 
 ## `rules/` — Reglas de QA, una familia por archivo
@@ -885,7 +887,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5942 lineas)*
+Interfaz de QA2 (Streamlit). *(5949 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1319,8 +1321,9 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_two_installations.py` | 10 | Dos carpetas de QA2 en la misma maquina, y la que se veia no era la que se habia abierto |
 | `test_ui_stale_modules.py` | 0 | La app debe darse cuenta de que corre codigo viejo |
 | `test_unreadable_sheet.py` | 12 | Una hoja que no se pudo leer nunca puede acabar en PASSED |
+| `test_unreadable_ts_row.py` | 2 | Un error de formula en una columna auxiliar no saca a la fila del QA |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 695 funciones de prueba en 66 archivos (algunas se parametrizan y corren varias veces).
+Total: 697 funciones de prueba en 67 archivos (algunas se parametrizan y corren varias veces).

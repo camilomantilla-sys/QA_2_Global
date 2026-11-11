@@ -21,7 +21,7 @@ from core.colors import (
 )
 from core.dates import resolve_date_column
 from core.extraction import (
-    ROW_DATA, ColumnMap, SheetSpec, classify_row, column_fill_rates,
+    ROW_CORRUPT, ROW_DATA, ColumnMap, SheetSpec, classify_row, column_fill_rates,
     find_header_row, map_columns, read_sheet, resolve_sheet, sheet_states,
 )
 from core.normalize import clean_id, norm_compare, norm_dims, norm_key, norm_text
@@ -280,6 +280,33 @@ def _impl_type(vals: dict[str, object]) -> str:
 
 # ------------------------------------------------------------------ hoja
 
+#: Una fila que QA2 no pudo leer. Sube al resultado de la TS para que
+#: se vea en pantalla: una fila que desaparece en silencio es un
+#: placement que nadie revisa (FB-28).
+ROW_UNREADABLE = "TS-ROW-UNREADABLE"
+
+
+def _unreadable_row(grid, sheet_name: str, row: int, header_row: int,
+                    cmap: ColumnMap) -> Anomaly:
+    mapped = cmap.columns()
+    bad = [c for col, c in sorted(grid.row_cells(row).items())
+           if c.is_error and col in mapped]
+    where = ", ".join(
+        f"{c.ref.col_letter}{row} "
+        f"\"{(grid.cell(header_row, c.ref.col) or c).text or c.ref.col_letter}\" "
+        f"({c.text})"
+        for c in bad[:3]
+    ) or f"row {row}"
+    return Anomaly(
+        ROW_UNREADABLE, "WARNING",
+        f"{sheet_name} row {row} was not read: formula error in {where}. "
+        "Fix the formula in the Traffic Sheet and run again, or check "
+        "this row by hand.",
+        ref=bad[0].ref if bad else None,
+        detail={"sheet": sheet_name, "row": row},
+    )
+
+
 def _repair_wpp_combined_rotation_header(
     grid,
     header_row: int,
@@ -497,6 +524,9 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
         res.row_class_counts[cls] = res.row_class_counts.get(cls, 0) + 1
         if cls == ROW_DATA:
             keep.append(r)
+        elif cls == ROW_CORRUPT:
+            res.anomalies.append(_unreadable_row(grid, sheet_name, r,
+                                                 hres.row, cmap))
 
     res.fill_rates = column_fill_rates(grid, cmap, spec, keep)
 
@@ -840,6 +870,27 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
 
 # ------------------------------------------------------------------ parser
 
+#: Cuantas filas sin leer se nombran una por una antes de resumir.
+UNREADABLE_LISTED = 5
+
+
+def _surfaced(sr: TSSheetResult) -> list[Anomaly]:
+    """Lo de una hoja que sube al resultado: lo fatal y las filas sin leer."""
+    out = [a for a in sr.anomalies if a.severity == "FATAL"]
+    unreadable = [a for a in sr.anomalies if a.code == ROW_UNREADABLE]
+    out += unreadable[:UNREADABLE_LISTED]
+    if len(unreadable) > UNREADABLE_LISTED:
+        rest = [a.detail.get("row") for a in unreadable[UNREADABLE_LISTED:]]
+        out.append(Anomaly(
+            ROW_UNREADABLE, "WARNING",
+            f"{sr.sheet}: {len(rest)} more row(s) were not read because of "
+            f"formula errors (rows {', '.join(str(r) for r in rest[:20])}"
+            f"{'...' if len(rest) > 20 else ''}).",
+            detail={"sheet": sr.sheet, "rows": rest},
+        ))
+    return out
+
+
 def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     res = TSResult(path=str(path))
 
@@ -913,7 +964,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
         profile.intent_fields.get("placements", []),
         resolver, primary_key="placement_id")
     all_region += region
-    res.anomalies += [a for a in res.placements.anomalies if a.severity == "FATAL"]
+    res.anomalies += _surfaced(res.placements)
 
     # ---- Creative Rotations
     rotations_all_rows: TSSheetResult | None = None
@@ -925,8 +976,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
                 profile.intent_fields.get("rotations", []),
                 resolver, primary_key="creative_name")
             all_region += region
-            res.anomalies += [a for a in res.rotations.anomalies
-                              if a.severity == "FATAL"]
+            res.anomalies += _surfaced(res.rotations)
 
             # Segunda lectura, solo si hay filas ocultas y solo para
             # saber a que landing page apunta cada grupo. Ver
@@ -949,6 +999,7 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
                 profile.intent_fields.get("landing_pages", []),
                 resolver, primary_key="lp_name")
             all_region += region
+            res.anomalies += _surfaced(res.landing_pages)
 
     # ---- propagacion y scope
     res.groups = _build_groups(res.rotations)
