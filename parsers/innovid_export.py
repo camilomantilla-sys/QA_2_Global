@@ -143,11 +143,11 @@ def _row_type(vals: dict[str, object], level: str,
 
     # fila de cabecera de placement: sin Creative_ID pero con nombre
     if not creative_id and placement_name:
-        return T_PLACEMENT_HEADER, "sin Creative_ID"
+        return T_PLACEMENT_HEADER, "no Creative_ID"
 
     # Enabled=No es evidencia directa e independiente del arbol
     if enabled is False:
-        return T_UNASSIGNED, "Enabled=No" + ("" if group_name else " + sin arbol")
+        return T_UNASSIGNED, "Enabled=No" + ("" if group_name else " + no decision tree")
 
     # site-served: el pixel ES el placement (hallazgo H22)
     if ptype == "pixel":
@@ -158,9 +158,9 @@ def _row_type(vals: dict[str, object], level: str,
 
     # sin arbol en esta fila: solo es desasignacion si el arbol ES visible
     if not group_visible.get(ptype_raw, False):
-        return T_DIRECT, f"arbol no visible para Placement_Type={ptype_raw}"
+        return T_DIRECT, f"decision tree not visible for Placement_Type={ptype_raw}"
 
-    return T_UNASSIGNED, "sin arbol"
+    return T_UNASSIGNED, "no decision tree"
 
 # ------------------------------------------------------------------ parser
 

@@ -87,7 +87,8 @@ def evaluate(match_result, buffer):
             status=Status.NOT_VERIFIED,
             message=(
                 f"{len(requested)} rotation weight(s) requested on this "
-                "placement were not compared."
+                "placement were not compared: Innovid was not "
+                "connected in this run."
             ),
             count=len(requested),
             reason=buffer.capabilities.reason(Capability.ROTATION_WEIGHT),

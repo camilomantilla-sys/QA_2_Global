@@ -234,8 +234,8 @@ class ActualCreative:
         if s in ("disabled", "inactive", "paused"):
             return f"Status={self.status}"
         if not self.group_name:
-            return "sin arbol"
-        return f"activo ({self.status or 'Active'})"
+            return "no decision tree"
+        return f"active ({self.status or 'Active'})"
 
     @property
     def clicktag_1(self) -> str:

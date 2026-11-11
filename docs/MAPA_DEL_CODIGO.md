@@ -846,7 +846,7 @@ PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(169 line
 
 ### `rules/rotation.py`
 
-ROT-001 -- la rotacion que se pidio cambiar. *(103 lineas)*
+ROT-001 -- la rotacion que se pidio cambiar. *(104 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
