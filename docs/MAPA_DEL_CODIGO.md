@@ -330,7 +330,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1278 lineas)*
+Matching Engine. *(1298 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1333,7 +1333,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_session.py` | 0 | El 401 que salio en pruebas con una sesion guardada |
 | `test_innovid_session_expiry.py` | 8 | Que exista el archivo de sesion no es que la sesion sirva |
 | `test_intent_fields.py` | 10 | La celda pintada manda: se valida lo que se pidio |
-| `test_lp_new_placements.py` | 4 | Una landing page verde que es de los placements nuevos no es un URL swap |
+| `test_lp_new_placements.py` | 5 | Una landing page verde que es de los placements nuevos no es un URL swap |
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
@@ -1367,4 +1367,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 734 funciones de prueba en 72 archivos (algunas se parametrizan y corren varias veces).
+Total: 735 funciones de prueba en 72 archivos (algunas se parametrizan y corren varias veces).

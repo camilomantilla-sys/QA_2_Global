@@ -463,6 +463,10 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # La URL autoritativa vive en la pestaña Landing Pages.
     landing_page_urls: dict[str, str] = {}
     green_landing_page_urls: dict[str, str] = {}
+    # Las que ya existian. Un placement nuevo puede reusar una landing
+    # page que ya estaba traficada: va en blanco porque no cambia, y
+    # sigue siendo la suya (FB-14).
+    white_landing_page_urls: dict[str, str] = {}
 
     if getattr(ts, "landing_pages", None) is not None:
         for lp_row in ts.landing_pages.rows:
@@ -478,6 +482,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 # sirve como valor esperado: la roja es la que se va.
                 if lp_row.intent in (GREEN, "SWAP"):
                     green_landing_page_urls[lp_name] = lp_url
+                elif lp_row.intent == WHITE:
+                    white_landing_page_urls.setdefault(lp_name, lp_url)
 
     # --- creativos con intencion, indexados por grupo (Creative Rotations)
     by_group: dict[str, list[ExpectedCreative]] = {}
@@ -759,6 +765,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             continue
 
         own: list[str] = []
+        reused: list[str] = []
         default_only: list[str] = []
 
         for group in sorted(sc.groups):
@@ -771,6 +778,15 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             for name in names:
                 url = green_landing_page_urls.get(name)
                 if not url:
+                    # Una landing page en blanco no es un cambio, pero
+                    # si es la del placement. Caso real (FB-14): un 1x1
+                    # nuevo, todo en verde, con la landing page de
+                    # siempre en blanco. Sin esto QA2 decia que la TS no
+                    # le declaraba ninguna, y un placement siempre tiene
+                    # una.
+                    white = white_landing_page_urls.get(name)
+                    if white and not _IS_DEFAULT.search(name) and white not in reused:
+                        reused.append(white)
                     continue
                 target = default_only if _IS_DEFAULT.search(name) else own
                 if url not in target:
@@ -778,6 +794,10 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
 
         if own:
             ep.url = own[0]
+        elif reused and len(reused) == 1:
+            # Solo si no hay duda: con dos landing pages en blanco
+            # distintas no se sabe cual es la del placement.
+            ep.url = reused[0]
         elif ep.inline_url:
             # Adobe Direct / Site-Served: la pestaña Landing Pages
             # viene vacia y la URL esta escrita en la fila del

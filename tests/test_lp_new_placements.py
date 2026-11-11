@@ -11,6 +11,11 @@ Como lo explica AdOps: si la URL esta en verde pero todo lo demas de la
 fila esta en blanco, ese placement ya estaba traficado; el verde aplica
 solo a los nuevos.
 
+Y su contraparte (FB-14): un placement nuevo, todo en verde, que reusa
+una landing page que ya existia. Esa landing page va en blanco porque
+no cambia, y sigue siendo la del placement. QA2 decia que la TS no le
+declaraba ninguna; un placement siempre tiene una.
+
 Run with pytest, or directly:
     python tests/test_lp_new_placements.py
 """
@@ -40,7 +45,8 @@ def build(lp_paint: str = "row", new_claims_lp: bool = True) -> Path:
     2 placements existentes en blanco y 2 nuevos en verde, misma LP.
 
     lp_paint: "row" la LP entra entera en verde; "url" solo la URL en
-    verde con la vieja en rojo debajo (un swap de URL de verdad).
+    verde con la vieja en rojo debajo (un swap de URL de verdad);
+    "white" la LP ya existia y va en blanco.
     new_claims_lp: los nuevos pintan su celda de Landing Page.
     """
     wb = Workbook()
@@ -61,6 +67,8 @@ def build(lp_paint: str = "row", new_claims_lp: bool = True) -> Path:
         lp.append(["LP_DEMO", "https://landing.example"])
         lp.cell(2, 1).fill = G
         lp.cell(2, 2).fill = G
+    elif lp_paint == "white":
+        lp.append(["LP_DEMO", "https://landing.example"])
     else:
         lp.append(["LP_DEMO", "https://old.example"])
         lp.cell(2, 2).fill = R
@@ -102,6 +110,17 @@ def test_an_lp_no_new_placement_paints_still_propagates():
     # La cadena de BlackRock: la LP verde y nadie en Placements la reclama.
     ts = parse(new_claims_lp=False)
     assert ts.request_counts.get("URL_SWAP") == 2
+
+
+def test_a_new_placement_keeps_an_existing_white_lp():
+    from core.matching import build_expected
+    ts = parse(lp_paint="white")
+    assert ts.request_counts.get("NEW_PLACEMENT") == 2
+    expected = build_expected(ts)
+    assert expected["1102"].url == "https://landing.example"
+    assert expected["1103"].url == "https://landing.example"
+    # Un blanco no es un cambio: los existentes no entran al QA.
+    assert "1100" not in {p.placement_id for p in ts.worked}
 
 
 if __name__ == "__main__":
