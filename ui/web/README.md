@@ -27,6 +27,7 @@ interfaces. Una regla nueva se conecta allí una sola vez.
 | Ruta | Para qué |
 |---|---|
 | `POST /api/traffic-sheet` | Paso 1. Lee la TS y la deja en la sesión |
+| `POST /api/bundle` | Paso 1. Un session bundle (.zip): la TS al paso 1 y los exports al paso 2, con la cuenta del manifest (`core/session_bundle.py`) |
 | `POST /api/file?slot=pc\|pl\|tags\|dv` | Paso 2. Lee un export y devuelve qué es cada archivo y la cobertura |
 | `POST /api/remove` | Quita un archivo del paso 2 (`{"slot", "name"}`) |
 | `GET /api/files` | El estado del paso 2 |

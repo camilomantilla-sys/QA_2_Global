@@ -541,6 +541,16 @@ Agrupado de hallazgos para la revision de QA2. *(77 lineas)*
 
 Contratos de campo para exports de Innovid. *(129 lineas)*
 
+### `core/session_bundle.py`
+
+Leer un session bundle (.zip) sin interfaz. *(96 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| clase | `BundleError` | El archivo no es un session bundle que QA2 pueda abrir |
+| clase | `Bundle` |  |
+| funcion | `read_bundle(data: bytes) -> Bundle` |  |
+
 ### `core/tag_analysis.py`
 
 Analisis de los archivos de tags, fila por fila y columna por columna. *(472 lineas)*
@@ -912,7 +922,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5802 lineas)*
+Interfaz de QA2 (Streamlit). *(5796 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1352,7 +1362,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_unreadable_ts_row.py` | 2 | Un error de formula en una columna auxiliar no saca a la fila del QA |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
-| `test_web_steps.py` | 9 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
+| `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 727 funciones de prueba en 71 archivos (algunas se parametrizan y corren varias veces).
+Total: 730 funciones de prueba en 71 archivos (algunas se parametrizan y corren varias veces).

@@ -139,3 +139,45 @@ def test_actions_from_another_page_are_refused(port):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ----------------------------------------------------------- session bundle
+
+def test_a_session_bundle_loads_every_file_at_once(port):
+    status, d = send(port, "/api/bundle", made_up.session_bundle(), "qa2_session_bundle.zip")
+    assert status == 200
+    assert d["counts"]["placements"] == 10
+    assert d["bundle"]["account"] == "Unilever"
+    assert "Demo Person" in d["bundle"]["origin"]
+    assert d["bundle"]["evidence"] == 1
+    assert d["files"]["ready"] is True
+    assert d["files"]["slots"]["pc"][0]["File"] == "DEMO_PC.xlsx"
+    status, results = post(port, "/api/run", {"account": "Unilever"})
+    assert status == 200 and results["counts"]["FAIL"] == 2
+
+
+def test_a_zip_that_is_not_a_bundle_says_so(port):
+    import io
+    import zipfile
+    raw = io.BytesIO()
+    with zipfile.ZipFile(raw, "w") as zf:
+        zf.writestr("notes.txt", "hello")
+    status, d = send(port, "/api/bundle", raw.getvalue(), "other.zip")
+    assert status == 400 and "manifest" in d["error"]
+    status, d = send(port, "/api/bundle", b"not a zip", "broken.zip")
+    assert status == 400 and "not a session bundle" in d["error"]
+
+
+def test_an_old_bundle_with_one_dv_name_still_reads():
+    import io
+    import json
+    import zipfile
+    from core.session_bundle import read_bundle
+    raw = io.BytesIO()
+    with zipfile.ZipFile(raw, "w") as zf:
+        zf.writestr("files/ts/t.xlsx", b"x")
+        zf.writestr("files/dv/dv.xlsx", b"y")
+        zf.writestr("manifest.json", json.dumps({"files": {"ts": "t.xlsx", "dv": "dv.xlsx"}}))
+    bundle = read_bundle(raw.getvalue())
+    assert bundle.one("ts") == ("t.xlsx", b"x")
+    assert bundle.files["dv"] == [("dv.xlsx", b"y")]

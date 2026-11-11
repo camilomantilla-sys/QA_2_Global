@@ -251,16 +251,16 @@ select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surfa
 
   <main>
     <section class="view" data-view="ts">
-      <div class="head"><div><div class="eyebrow">Step 1</div><h1>Traffic Sheet</h1><p class="lead">Drop the Traffic Sheet for this request. QA2 shows you how it read it before anything runs, so you can catch a misread column early.</p></div></div>
+      <div class="head"><div><div class="eyebrow">Step 1</div><h1>Traffic Sheet</h1><p class="lead">Drop the Traffic Sheet for this request, or the session bundle (.zip) to load every file at once. QA2 shows you how it read the sheet before anything runs, so you can catch a misread column early.</p></div></div>
       <div class="cols">
         <div class="grid">
           <div id="tsDrop">
             <label class="drop" id="drop" for="tsFile">
               <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg></span>
-              <b id="dropTitle" style="color:var(--ink);font-size:15px">Drop the Traffic Sheet here, or click to choose it</b>
-              <span class="muted small" style="font-weight:400">.xlsx, .xlsm or .xls · read on this computer, then discarded</span>
+              <b id="dropTitle" style="color:var(--ink);font-size:15px">Drop the Traffic Sheet or a session bundle here, or click to choose it</b>
+              <span class="muted small" style="font-weight:400">.xlsx, .xlsm or .xls · or the .zip from “Save session bundle”, which loads every file at once · read on this computer only</span>
             </label>
-            <input type="file" id="tsFile" accept=".xlsx,.xlsm,.xls" hidden>
+            <input type="file" id="tsFile" accept=".xlsx,.xlsm,.xls,.zip" hidden>
           </div>
           <div id="tsError" class="alert bad" hidden></div>
           <div id="tsRead" class="grid" hidden>
@@ -418,16 +418,17 @@ $("#another").onclick=()=>{state.data=null;state.results=null;$("#tsRead").hidde
 
 async function send(file){
   $("#tsError").hidden=true;drop.classList.add("busy");$("#dropTitle").textContent="Reading "+file.name+"…";
+  const isBundle=/\.zip$/i.test(file.name);
   const t0=performance.now();
   try{
-    const r=await fetch("/api/traffic-sheet",{method:"POST",headers:{"X-QA2":"1","X-File-Name":encodeURIComponent(file.name),"Content-Type":"application/octet-stream"},body:file});
+    const r=await fetch(isBundle?"/api/bundle":"/api/traffic-sheet",{method:"POST",headers:{"X-QA2":"1","X-File-Name":encodeURIComponent(file.name),"Content-Type":"application/octet-stream"},body:file});
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||"QA2 could not read this file.");
     d._secs=((performance.now()-t0)/1000).toFixed(1);
-    state.data=d;state.intent=null;state.results=null;show(d);
+    state.data=d;state.intent=null;state.results=null;state.files=d.files||null;state.account=d.bundle?d.bundle.account:null;show(d);
   }catch(err){
     const box=$("#tsError");box.textContent=err.message==="Failed to fetch"?"QA2 is not running. Start it again from QA2 and reload this page.":err.message;box.hidden=false;
-  }finally{drop.classList.remove("busy");$("#dropTitle").textContent="Drop the Traffic Sheet here, or click to choose it"}
+  }finally{drop.classList.remove("busy");$("#dropTitle").textContent="Drop the Traffic Sheet or a session bundle here, or click to choose it"}
 }
 
 /* ---------- step 1 render ---------- */
@@ -437,6 +438,8 @@ function show(d){
   const pl=d.placements;
   $("#fMeta").textContent=[d.profile_label,pl?`sheet “${pl.sheet}”, header on row ${pl.header_row}`:"",`read in ${d._secs} s`].filter(Boolean).join(" · ");
   const al=[];
+  if(d.bundle){const b=d.bundle,f=d.files||{slots:{}};const n=Object.values(f.slots).reduce((a,x)=>a+x.length,0);
+    al.push(["info",`<span><b>Session bundle loaded:</b> the Traffic Sheet and ${n} more file${n===1?"":"s"}${b.account?`, account ${esc(b.account)}`:""}. ${esc(b.origin)}${b.evidence?` The ${b.evidence} screenshot(s) in the bundle stay in the current QA2 for now.`:""}${b.unreadable.length?` Could not read: ${b.unreadable.map(esc).join(", ")}.`:""}</span>`])}
   if(d.fatal)al.push(["bad","QA2 cannot run on this file yet: "+d.anomalies.filter(a=>a.severity==="FATAL").map(a=>esc(a.message)).join(" ")]);
   if(pl&&pl.missing_required.length)al.push(["bad","Required columns not found: <b>"+pl.missing_required.map(esc).join(", ")+"</b>. Check the header names in the sheet."]);
   const warns=d.anomalies.filter(a=>a.severity==="WARNING");
@@ -540,6 +543,7 @@ async function prepareRun(){
   if(!$("#account").options.length){
     try{const d=await api("/api/accounts");$("#account").innerHTML=["All / unknown",...d.accounts].map(a=>`<option ${a===d.selected?"selected":""}>${esc(a)}</option>`).join("")}catch(e){toast(e.message)}
   }
+  if(state.account){$("#account").value=state.account;state.account=null}
   const f=state.files||{slots:{}};const n=k=>(f.slots[k]||[]).length;
   $("#recap").innerHTML=[`Traffic Sheet: <b>${esc(state.data?state.data.file:"")}</b>`,
     `Placement-Creative View${n("pl")?" and Placement View":""}${n("tags")?`, ${n("tags")} tag file${n("tags")>1?"s":""}`:""}${n("dv")?`, ${n("dv")} DV file${n("dv")>1?"s":""}`:""}`,

@@ -1884,12 +1884,6 @@ with st.sidebar:
                             )
                         except ValueError:
                             pass
-                    if _manifest.get("implementation_date"):
-                        st.session_state["qa2_record_impl_date"] = (
-                            date.fromisoformat(
-                                _manifest["implementation_date"]
-                            )
-                        )
                     st.session_state["_session_bundle_source"] = (
                         _bundle_source
                     )

@@ -85,3 +85,25 @@ def placement_creative(ids=range(900100, 900105)) -> bytes:
                    f"DEMO_Creative_{i}", "Active", LP])
         row += 2
     return _bytes(wb, "pc.xlsx")
+
+
+def session_bundle(account: str = "Unilever") -> bytes:
+    """Un session bundle como el que guarda "Save session bundle"."""
+    import io
+    import json
+    import zipfile
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("files/ts/DEMO_TS.xlsx", traffic_sheet())
+        zf.writestr("files/pc/DEMO_PC.xlsx", placement_creative())
+        zf.writestr("files/evidence/1_shot.png", b"\x89PNG demo")
+        manifest = {
+            "profile": "AUTO", "account": account, "campaign": "DEMO",
+            "wrike_id": "000000", "implemented_by": "Demo Person",
+            "implementation_date": "2027-01-05", "saved_at": "2027-01-05T10:00:00",
+            "files": {"ts": "DEMO_TS.xlsx", "pc": "DEMO_PC.xlsx",
+                      "evidence": [{"name": "shot.png", "stored_as": "1_shot.png"}]},
+        }
+        zf.writestr("manifest.json", json.dumps(manifest))
+    return out.getvalue()

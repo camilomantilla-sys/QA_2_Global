@@ -184,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._run(self._read_json())
         if path == "/api/innovid/sign-in":
             return self._json(HTTPStatus.OK, innovid_sign_in())
-        if path not in ("/api/traffic-sheet", "/api/file"):
+        if path not in ("/api/traffic-sheet", "/api/file", "/api/bundle"):
             return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
 
         slot = (query.get("slot") or [""])[0]
@@ -205,6 +205,8 @@ class Handler(BaseHTTPRequestHandler):
                               {"error": "That file is over 60 MB. Check it is the right file."})
 
         file_name = Path(unquote(self.headers.get("X-File-Name", "file.xlsx"))).name[:200]
+        if path == "/api/bundle":
+            return self._bundle(self.rfile.read(length))
         if Path(file_name).suffix.lower() not in WORKBOOK_SUFFIXES:
             return self._json(HTTPStatus.BAD_REQUEST,
                               {"error": "QA2 reads .xlsx, .xlsm or .xls files. Save the file in one of those formats and drop it again."})
@@ -227,6 +229,48 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "QA2 could not read this workbook. If Excel opens it, save a copy as .xlsx and try again.",
                 "detail": type(exc).__name__,
             })
+        return self._json(HTTPStatus.OK, summary)
+
+    def _bundle(self, data: bytes):
+        """Un session bundle: la TS va al paso 1 y el resto al paso 2."""
+        from core.qa1_trail import describe_origin
+        from core.session_bundle import BundleError, read_bundle
+        try:
+            bundle = read_bundle(data)
+        except BundleError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        ts = bundle.one("ts")
+        if ts is None:
+            return self._json(HTTPStatus.BAD_REQUEST,
+                              {"error": "This bundle has no Traffic Sheet inside."})
+        SESSION.reset()
+        try:
+            summary = read_traffic_sheet(ts[1], ts[0])
+        except Exception as exc:  # noqa: BLE001
+            return self._json(HTTPStatus.UNPROCESSABLE_ENTITY, {
+                "error": "QA2 could not read the Traffic Sheet inside this bundle.",
+                "detail": type(exc).__name__,
+            })
+        unreadable = []
+        for slot in SLOTS:
+            for name, content in bundle.files.get(slot, []):
+                try:
+                    SESSION.add_file(slot, name, content)
+                except Exception:  # noqa: BLE001 - se dice, no tumba la carga
+                    unreadable.append(name)
+        manifest = bundle.manifest
+        account = str(manifest.get("account") or "")
+        if account in account_options():
+            SESSION.account = account
+        origin = {k: manifest.get(k) for k in (
+            "implemented_by", "implementation_date", "wrike_id", "saved_at", "qa1_result")}
+        summary["bundle"] = {
+            "origin": describe_origin(origin),
+            "account": SESSION.account,
+            "evidence": len(bundle.files.get("evidence", [])),
+            "unreadable": unreadable,
+        }
+        summary["files"] = SESSION.overview()
         return self._json(HTTPStatus.OK, summary)
 
     def _read_json(self) -> dict:
