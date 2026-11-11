@@ -425,6 +425,25 @@ QA2 deja escrito su numero de proceso, para que se le pueda encontrar. *(110 lin
 | funcion | `is_running(root: Path \| None=None) -> bool` | ¿El QA2 de ESTA carpeta sigue vivo? |
 | funcion | `_alive(pid: int) -> bool` | Si ese PID sigue siendo un python |
 
+### `core/pipeline.py`
+
+El QA completo, sin interfaz. *(298 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `workbook_path(directory: str, file_name: str, file_bytes: bytes) -> Path` | Donde escribir un archivo subido, con la extension de lo que ES |
+| funcion | `_parse_bytes(parser: Callable[[Path], Any], file_bytes: bytes, file_name: str)` | Escribe el archivo en una carpeta temporal, lo lee y la borra |
+| funcion | `parse_traffic_sheet(file_bytes: bytes, file_name: str, profile: str \| None=None)` |  |
+| funcion | `parse_export(file_bytes: bytes, file_name: str)` |  |
+| funcion | `parse_tags(file_bytes: bytes, file_name: str)` |  |
+| funcion | `parse_dv(files: list[tuple[str, bytes]])` | Varios archivos de DV Pinnacle (uno por partner) en uno solo |
+| funcion | `is_fatal(result) -> bool` |  |
+| funcion | `anomaly_rows(source_name: str, result) -> list[dict]` |  |
+| funcion | `profile_label(profile: str) -> str` |  |
+| funcion | `understand_files(ts_name, ts_result, pc_name, pc_result, pl_name, pl_result, tags_results, dv_result) -> tuple[list[dict], list[dict]]` | Que es cada archivo y que problemas trae |
+| clase | `QAChecks` | Lo que dejan las reglas: los hallazgos y cada conciliacion que la interfaz muestra en sus tablas |
+| funcion | `run_checks(match_result, ts_result, pc_result, pl_result, tags_results, dv_result, account, innovid_reconciliation) -> QAChecks` | Todas las familias de reglas, en el orden de siempre |
+
 ### `core/pixel_reconciliation.py`
 
 Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(604 lineas)*
@@ -893,7 +912,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5949 lineas)*
+Interfaz de QA2 (Streamlit). *(5802 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1307,6 +1326,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
 | `test_paste_image.py` | 4 | Las capturas pegadas (FB-04) entran como cualquier archivo subido, y viajan en el session bundle |
+| `test_pipeline.py` | 5 | Una sola cadena de QA para las dos interfaces |
 | `test_portable_tests.py` | 8 | Las pruebas tienen que correr en la maquina de quien las corre |
 | `test_qa1_trail.py` | 4 | El bundle lleva el rastro del QA1 y el QA2 lo ve (FB-18, FB-21) |
 | `test_qa_export.py` | 24 | La hoja QA del entregable: una fila por creativo, TS contra Innovid |
@@ -1332,6 +1352,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_unreadable_ts_row.py` | 2 | Un error de formula en una columna auxiliar no saca a la fila del QA |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
+| `test_web_steps.py` | 9 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 713 funciones de prueba en 69 archivos (algunas se parametrizan y corren varias veces).
+Total: 727 funciones de prueba en 71 archivos (algunas se parametrizan y corren varias veces).

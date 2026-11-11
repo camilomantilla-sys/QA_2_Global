@@ -78,7 +78,8 @@ from core.verdict import (
     headline as scope_headline,
     verdicts_by_scope,
 )
-from core.engine import run_rules
+from core.engine import run_rules  # noqa: F401
+from core.pipeline import run_checks
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
     reconcile_adobe_tag_policy,
@@ -2911,171 +2912,23 @@ if True:
                     )
 
             trace("running rules")
-            findings_buffer = run_rules(
+            # La cadena de reglas vive en core.pipeline: la interfaz
+            # nueva corre exactamente la misma.
+            _checks = run_checks(
                 match_result,
-                account=selected_account,
-                innovid_reconciliation=innovid_reconciliation,
-                ts_result=ts_result,
-            )
-
-            tag_matches = []
-            tag_inventory = None
-            adobe_pixel_result = None
-
-            # Every tag file keeps its independent structural checks.
-            for file_name, tags_result in tags_results:
-                tag_match_result = match_tags(
-                    match_result,
-                    tags_result,
-                )
-
-                tag_rules.evaluate(
-                    tag_match_result,
-                    findings_buffer,
-                )
-
-                tag_matches.append(
-                    (
-                        file_name,
-                        tags_result,
-                        tag_match_result,
-                    )
-                )
-
-            # Consolidated multi-file Tag Inventory.
-            #
-            # Structural TAG rules run once per delivered file.
-            # Adobe business requirements run once against the
-            # consolidated inventory to avoid duplicate findings.
-            if tags_results:
-                tag_inventory = (
-                    build_tag_inventory_from_results(
-                        tags_results
-                    )
-                )
-
-            # PIX-A01 (DISQO/iSpot) applies to both Adobe profiles:
-            # Site-Served (adobe_variante_b) and Third Party / Decision
-            # Tree (adobe_variante_a). It used to run only for
-            # variante_b, so a Decision Tree campaign requiring DISQO
-            # never got checked at all.
-            #
-            # Traffic Sheet defines whether DISQO/iSpot is required.
-            # Tags and Innovid Placement View provide evidence.
-            if (
-                ts_result.profile in ("adobe_variante_a", "adobe_variante_b")
-                and tag_inventory is not None
-                and pl_result is not None
-            ):
-                adobe_pixel_result = (
-                    reconcile_adobe_pixels(
-                        ts_result,
-                        pl_result,
-                        tag_inventory,
-                        selected_account,
-                    )
-                )
-
-                adobe_pixels.evaluate(
-                    adobe_pixel_result,
-                    findings_buffer,
-                )
-
-            # TAG-012: Adobe tag column policy (Ftrack / No Ftrack /
-            # Clicktag / Protected). Only needs the delivered tag
-            # files, not the Placement View, so it can run for Adobe
-            # even without one uploaded.
-            adobe_tag_policy_result = None
-
-            if (
-                ts_result.profile in ("adobe_variante_a", "adobe_variante_b")
-                and tag_inventory is not None
-            ):
-                adobe_tag_policy_result = reconcile_adobe_tag_policy(
-                    ts_result,
-                    tag_inventory,
-                )
-
-                adobe_tag_policy.evaluate(
-                    adobe_tag_policy_result,
-                    findings_buffer,
-                )
-
-                # TAG-013: every 1x1 placement with a declared vendor
-                # requirement should have a row in the delivered tag
-                # file(s) -- coverage, not pixel content.
-                tag_coverage_result = reconcile_tag_coverage(
-                    ts_result,
-                    tag_inventory,
-                )
-
-                tag_coverage_rules.evaluate(
-                    tag_coverage_result,
-                    findings_buffer,
-                )
-
-            # DV (DoubleVerify) tag delivery check.
-            #
-            # Applies to any placement whose Traffic Sheet
-            # "Vendors / Pixels" value mentions DV, regardless of
-            # profile. Uses an empty inventory when no tag files
-            # were uploaded, so delivered-but-unverifiable DV tags
-            # surface as REVIEW rather than being silently skipped.
-            dv_reconciliation = reconcile_dv_tags(
-                ts_result,
-                tag_inventory
-                if tag_inventory is not None
-                else TagInventory(),
-                dv_result,
-            )
-
-            dv_rules.evaluate(
-                dv_reconciliation,
-                findings_buffer,
-            )
-
-            # DV-003: DV Omni y DV Monitoring/Blocking, que no van por
-            # pixel de placement ni por archivo de Pinnacle sino por
-            # una columna dentro del archivo de tags de Innovid.
-            dv_omni_reconciliation = reconcile_dv_omni(
-                ts_result,
-                pl_result,
-                tag_inventory
-                if tag_inventory is not None
-                else TagInventory(),
-            )
-
-            dv_omni_rules.evaluate(
-                dv_omni_reconciliation,
-                findings_buffer,
-            )
-
-            # Pixeles de vendor declarados en "Vendors / Pixels"
-            # (DoubleVerify, Dynata, Kantar) contra lo que Innovid
-            # tiene cargado a nivel de placement.
-            pixel_reconciliation = reconcile_pixels(
-                ts_result,
-                pl_result,
-                selected_account,
-            )
-
-            pixel_rules.evaluate(
-                pixel_reconciliation,
-                findings_buffer,
-            )
-
-            # El default ad es un creativo aparte, el mismo para todos
-            # los placements de su dimension: si uno se queda con otro
-            # default o con otra landing page, no recibio el swap.
-            default_ad_reconciliation = reconcile_default_ads(
                 ts_result,
                 pc_result,
+                pl_result,
+                tags_results,
+                dv_result,
+                account=selected_account,
+                innovid_reconciliation=innovid_reconciliation,
             )
-
-            default_rules.evaluate(
-                default_ad_reconciliation,
-                findings_buffer,
-            )
+            findings_buffer = _checks.findings
+            tag_matches = _checks.tag_matches
+            tag_inventory = _checks.tag_inventory
+            adobe_pixel_result = _checks.adobe_pixel_result
+            dv_reconciliation = _checks.dv_reconciliation
 
             # Innovid holds three things no export carries: each
             # creative's flight dates inside the decision set, its

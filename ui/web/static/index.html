@@ -292,40 +292,118 @@ select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surfa
           <p>A column that is <b>missing</b> or barely filled is the first thing to check when a result looks wrong.</p>
         </aside>
       </div>
-      <div class="nav"><span class="spacer"></span><button class="btn" data-go="next" id="tsNext" disabled>Continue</button></div>
+      <div class="nav"><span class="spacer"></span><button class="btn" data-go="exports" id="tsNext" disabled>Continue</button></div>
     </section>
 
-    <section class="view" data-view="next" hidden>
-      <div class="head"><div><div class="eyebrow">Steps 2 to 5</div><h1>The rest of the QA, coming next</h1><p class="lead">Exports, the Innovid check, the run and the results are being moved to this new screen one by one. Until then, finish this request in the current QA2 window.</p></div></div>
-      <div class="card grid" style="max-width:640px">
-        <p style="margin:0">The current QA2 runs the full check with the same engine and the same rules. Load the same Traffic Sheet there.</p>
-        <div class="row"><a class="btn" href="http://localhost:8501/" target="_blank" rel="noopener" style="text-decoration:none">Open the current QA2</a><button class="btn ghost" data-go="ts">Back to the Traffic Sheet</button></div>
+    <section class="view" data-view="exports" hidden>
+      <div class="head"><div><div class="eyebrow">Step 2</div><h1>Innovid exports</h1><p class="lead">Drop the files you downloaded from Innovid. QA2 says what each one is and how many of the placements in this request it found, before anything runs.</p></div></div>
+      <div class="cols">
+        <div class="grid">
+          <div class="slots" id="slots"></div>
+          <div id="coverage"></div>
+          <div id="exIssues" class="grid"></div>
+        </div>
+        <aside class="hint">
+          <h3>Why this step matters</h3>
+          <p>The <b>Placement-Creative View</b> is the only file QA2 needs. It shows which creatives are assigned, their status and their click tags.</p>
+          <p>The <b>Placement View</b> adds pixels and the URLs of 1x1 placements. <b>Tag files</b> and <b>DV Pinnacle</b> files turn on the tag and DoubleVerify checks.</p>
+          <p>If a placement from the Traffic Sheet is missing here, check the export filter before running.</p>
+        </aside>
       </div>
+      <div class="nav"><button class="btn ghost" data-go="ts">Back</button><span class="spacer"></span><button class="btn" data-go="innovid" id="exNext" disabled>Continue</button></div>
+    </section>
+
+    <section class="view" data-view="innovid" hidden>
+      <div class="head"><div><div class="eyebrow">Step 3 · optional</div><h1>Check against Innovid</h1><p class="lead">Three things are not in any export: each creative's flight dates inside the decision set, its rotation weight, and the verification partner. QA2 can read them from Innovid with your saved sign-in.</p></div></div>
+      <div class="cols">
+        <div class="grid">
+          <div class="card grid">
+            <div class="conn"><span class="pill off" id="ivPill">Checking…</span><span class="small muted" id="ivNote"></span><span class="spacer"></span><button class="btn ghost" id="ivSignIn">Sign in to Innovid</button></div>
+            <div id="ivMsg" class="alert info" hidden></div>
+            <button class="toggle" id="ivUse" aria-pressed="false" style="color:var(--ink);background:var(--surface);border-color:var(--line)"><span class="sw" style="background:var(--line)"></span><span><b>Check this request against Innovid</b><br><span class="small muted">The campaign comes from the Traffic Sheet. Nothing to type.</span></span></button>
+            <div class="reads"><div><b>Flight dates</b>Each creative inside its decision set (INV-001)</div><div><b>Rotation weight</b>Even, 1x and percentages compared the same way (INV-002)</div><div><b>Verification partner</b>DoubleVerify on DV Omni video (INV-003)</div></div>
+          </div>
+        </div>
+        <aside class="hint">
+          <h3>When to use it</h3>
+          <p>Turn it on whenever the request changes dates or rotation. Without it, those checks come back as <b>Not checked</b>, never as a pass.</p>
+          <p>The sign-in is saved on this computer only. QA2 never asks for your password here.</p>
+        </aside>
+      </div>
+      <div class="nav"><button class="btn ghost" data-go="exports">Back</button><span class="spacer"></span><button class="btn" data-go="run">Continue</button></div>
+    </section>
+
+    <section class="view" data-view="run" hidden>
+      <div class="head"><div><div class="eyebrow">Step 4</div><h1>Run the QA</h1><p class="lead">Same engine and same rules as the current QA2. Pick the account so the right checks apply.</p></div></div>
+      <div class="cols">
+        <div class="grid">
+          <div class="card grid">
+            <div class="form"><label>Account / campaign<select id="account"></select></label></div>
+            <ul class="list" id="recap"></ul>
+            <div id="runError" class="alert bad" hidden></div>
+            <div class="runbox" id="runBox" hidden><div class="stage doing"><span class="i"></span><span><b id="runTitle">Running the QA…</b><br><small id="runSub">Matching the Traffic Sheet with the exports and running every rule.</small></span><span class="tm" id="runTime">0 s</span></div></div>
+            <div class="row"><button class="btn lime" id="runBtn">Run QA</button></div>
+          </div>
+        </div>
+        <aside class="hint">
+          <h3>Why the account matters</h3>
+          <p>Only Adobe uses the CGEN triangle, and some pixels are specific to an account or campaign. With the wrong account QA2 asks for things that request never has.</p>
+        </aside>
+      </div>
+      <div class="nav"><button class="btn ghost" data-go="innovid">Back</button></div>
+    </section>
+
+    <section class="view" data-view="results" hidden>
+      <div class="head"><div><div class="eyebrow">Step 5</div><h1>Results</h1><p class="lead" id="resLead"></p></div><div class="row"><button class="btn ghost" data-go="run">Run again</button><button class="btn ghost" id="startOver">Start over</button></div></div>
+      <div class="verdicts" id="verdicts"></div>
+      <div id="ivResult" class="grid" style="margin-top:12px"></div>
+      <div class="sec"><h2>What QA2 found</h2><span class="ln"></span></div>
+      <div class="row" style="margin-bottom:10px"><div class="chips" id="chips"></div><span class="spacer"></span><input id="search" type="search" placeholder="Search a placement, creative or rule" style="min-width:min(280px,100%)"></div>
+      <div class="findings" id="findings"></div>
+      <p class="small muted" id="findNote"></p>
+      <div class="alert info" style="margin-top:16px">Signing off reviews and downloading the PDF and Excel reports are still in the current QA2 window. They move here next.&nbsp;<a href="http://localhost:8501/" target="_blank" rel="noopener">Open the current QA2</a></div>
     </section>
   </main>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const STEPS=[
  {k:"ts",t:"Traffic Sheet",s:"What QA2 understood"},
- {k:"next",t:"Innovid exports",s:"Coming next",soon:1},
- {k:"next",t:"Innovid check",s:"Coming next",soon:1},
- {k:"next",t:"Run QA",s:"Coming next",soon:1},
- {k:"next",t:"Results",s:"Coming next",soon:1}];
+ {k:"exports",t:"Innovid exports",s:"What each file is"},
+ {k:"innovid",t:"Innovid check",s:"Optional"},
+ {k:"run",t:"Run QA",s:"Account and run"},
+ {k:"results",t:"Results",s:"Verdict and why"}];
 const INTENT=[["new","New","green rows · will be checked","--int-new"],["remove","Remove","red rows · must be gone","--int-rem"],["swap","Swap","green and red in one row","--int-new",1],["review","Unclear colour","QA2 could not tell · check it","--review",1],["out","Out of scope","yellow/grey · skipped","--int-out"],["context","Context","white · reference only","--int-ctx"]];
 const CLS={new:"new",remove:"rem",swap:"new",out:"out",context:"ctx",review:"out"};
-const state={view:"ts",data:null,intent:null};
+const state={view:"ts",data:null,intent:null,files:null,results:null,status:null,innovid:false};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=n=>Number(n).toLocaleString("en-US");
 
-function renderSteps(){
-  $("#steps").innerHTML=STEPS.map((x,j)=>{
-    const on=(j===0&&state.view==="ts")||(j===1&&state.view==="next");
-    const cls=[on?"on":"",j===0&&state.data&&state.view!=="ts"?"done":"",x.soon?"soon":""].join(" ");
-    return `<li class="${cls}"><button data-go="${x.k}" aria-label="Step ${j+1}: ${x.t}"><span class="n">${j+1}</span><span class="t">${x.t}<span class="s">${x.s}</span></span></button></li>`}).join("");
+function unlocked(k){
+  if(k==="ts")return true;
+  if(!state.data||state.data.fatal)return false;
+  if(k==="exports")return true;
+  if(!(state.files&&state.files.ready))return false;
+  if(k==="results")return !!state.results;
+  return true;
 }
-function go(k){state.view=k;document.querySelectorAll(".view").forEach(v=>v.hidden=v.dataset.view!==k);renderSteps();window.scrollTo({top:0})}
+function renderSteps(){
+  const at=STEPS.findIndex(x=>x.k===state.view);
+  $("#steps").innerHTML=STEPS.map((x,j)=>{
+    const ok=unlocked(x.k);
+    const done=j<at&&ok;
+    const cls=[x.k===state.view?"on":"",done?"done":"",ok?"":"locked"].join(" ");
+    return `<li class="${cls}"><button data-go="${x.k}" ${ok?"":"disabled"} aria-label="Step ${j+1}: ${x.t}"><span class="n">${done?"✓":j+1}</span><span class="t">${x.t}<span class="s">${x.s}</span></span></button></li>`}).join("");
+}
+function go(k){
+  if(!unlocked(k))return;
+  state.view=k;document.querySelectorAll(".view").forEach(v=>v.hidden=v.dataset.view!==k);renderSteps();window.scrollTo({top:0});
+  if(k==="exports")loadFiles();
+  if(k==="innovid")loadInnovid();
+  if(k==="run")prepareRun();
+}
 document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g&&!g.disabled)go(g.dataset.go)});
 $("#guide").onclick=e=>{const b=e.currentTarget;const on=b.getAttribute("aria-pressed")!=="true";b.setAttribute("aria-pressed",on);document.body.classList.toggle("noguide",!on);try{localStorage.setItem("qa2.guide",on?"1":"0")}catch(_){}};
 try{if(localStorage.getItem("qa2.guide")==="0")$("#guide").click()}catch(_){}
@@ -336,7 +414,7 @@ const drop=$("#drop"),input=$("#tsFile");
 ["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
 drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)send(f)});
 input.addEventListener("change",()=>{if(input.files[0])send(input.files[0])});
-$("#another").onclick=()=>{state.data=null;$("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";input.click()};
+$("#another").onclick=()=>{state.data=null;state.results=null;$("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";input.click()};
 
 async function send(file){
   $("#tsError").hidden=true;drop.classList.add("busy");$("#dropTitle").textContent="Reading "+file.name+"…";
@@ -346,7 +424,7 @@ async function send(file){
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||"QA2 could not read this file.");
     d._secs=((performance.now()-t0)/1000).toFixed(1);
-    state.data=d;state.intent=null;show(d);
+    state.data=d;state.intent=null;state.results=null;show(d);
   }catch(err){
     const box=$("#tsError");box.textContent=err.message==="Failed to fetch"?"QA2 is not running. Start it again from QA2 and reload this page.":err.message;box.hidden=false;
   }finally{drop.classList.remove("busy");$("#dropTitle").textContent="Drop the Traffic Sheet here, or click to choose it"}
@@ -388,6 +466,129 @@ function renderRows(){
 }
 $("#intent").addEventListener("click",e=>{const b=e.target.closest(".int");if(!b)return;state.intent=state.intent===b.dataset.k?null:b.dataset.k;renderRows()});
 
+
+/* ---------- shared ---------- */
+async function api(path,opts={}){
+  const headers=Object.assign({"X-QA2":"1"},opts.headers||{});
+  let r;
+  try{r=await fetch(path,Object.assign({},opts,{headers}))}catch(_){throw new Error("QA2 is not running. Start it again from “QA2 nueva interfaz” and reload this page.")}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||"Something went wrong.");
+  return d;
+}
+const post=(path,body)=>api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+let toastTimer;function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),3200)}
+
+/* ---------- step 2 ---------- */
+const SLOT_INFO=[
+ ["pc","Placement-Creative View",1,0,"Creatives, status, decision tree and click tags. Needed to run."],
+ ["pl","Placement View",0,0,"Pixels and 1x1 URLs at placement level."],
+ ["tags","Tag files",0,1,"The tags sent to the publisher. Several at once is fine."],
+ ["dv","DV Pinnacle tags",0,1,"Only when the Traffic Sheet asks for DV. One file per partner."]];
+async function loadFiles(){try{state.files=await api("/api/files");renderFiles()}catch(e){toast(e.message)}}
+function renderFiles(){
+  const f=state.files;if(!f)return;
+  $("#slots").innerHTML=SLOT_INFO.map(([k,label,req,many,what])=>{
+    const items=f.slots[k]||[];
+    const ok=items.length&&items.every(i=>i.Status==="OK");
+    const list=items.map(i=>`<div class="file" style="padding:8px 10px"><div style="min-width:0"><b class="small">${esc(i.File)}</b><div class="small muted">${i.Status==="FATAL"?'<span style="color:var(--fail);font-weight:700">Not recognised</span>':`${esc(i["Detected Type"]||"")} · ${fmt(i.Records||0)} rows`}</div></div><span class="spacer"></span><button class="fix" data-rm="${k}" data-name="${esc(i.File)}">Remove</button></div>`).join("");
+    const canAdd=many||!items.length;
+    return `<div class="slot ${ok?"ok":""}"><div class="top"><h3>${label}</h3><span class="tag ${req?"req":"opt"}">${req?"Required":"Optional"}</span></div><p class="what">${what}</p>${list}${canAdd?`<label class="drop" style="padding:14px" data-slot="${k}"><span class="small" style="font-weight:700;color:var(--ink)">Drop ${many?"files":"the file"} here, or click to choose</span><input type="file" accept=".xlsx,.xlsm,.xls" ${many?"multiple":""} hidden></label>`:""}</div>`}).join("");
+  const c=f.coverage;
+  $("#coverage").innerHTML=c?`<div class="card"><h2>${fmt(c.found)} of ${fmt(c.worked)} placement${c.worked===1?"":"s"} in this request ${c.found===1?"is":"are"} in the export</h2>${c.missing_total?`<p class="small muted" style="margin:6px 0 0">Not in the export: <code>${c.missing.map(esc).join(", ")}</code>${c.missing_total>c.missing.length?" …":""}. A placement the request removes can be missing on purpose; anything else usually means the export was filtered.</p>`:'<p class="small muted" style="margin:6px 0 0">Every placement the Traffic Sheet works is there.</p>'}</div>`:"";
+  const iss=f.issues||[];
+  $("#exIssues").innerHTML=(f.blocked_by.length?`<div class="alert bad">QA2 can't run with these files yet: ${f.blocked_by.map(esc).join(" ")}</div>`:"")
+    +(iss.filter(i=>i.Severity==="WARNING").length?`<details class="card"><summary class="small" style="cursor:pointer;font-weight:700">${iss.filter(i=>i.Severity==="WARNING").length} thing(s) to double-check in the files</summary><ul class="list">${iss.filter(i=>i.Severity==="WARNING").map(i=>`<li><b>${esc(i.Source)}</b>: ${esc(i.Message)}</li>`).join("")}</ul></details>`:"");
+  $("#exNext").disabled=!f.ready;
+  renderSteps();
+}
+async function sendFiles(slot,files){
+  for(const file of files){
+    toast("Reading "+file.name+"…");
+    try{state.files=await api("/api/file?slot="+slot,{method:"POST",headers:{"X-File-Name":encodeURIComponent(file.name),"Content-Type":"application/octet-stream"},body:file});state.results=null;renderFiles();$("#toast").classList.remove("show")}
+    catch(e){toast(e.message)}
+  }
+}
+$("#slots").addEventListener("change",e=>{const l=e.target.closest("[data-slot]");if(l&&e.target.files.length)sendFiles(l.dataset.slot,[...e.target.files])});
+$("#slots").addEventListener("dragover",e=>{const l=e.target.closest("[data-slot]");if(l){e.preventDefault();l.classList.add("over")}});
+$("#slots").addEventListener("dragleave",e=>{const l=e.target.closest("[data-slot]");if(l)l.classList.remove("over")});
+$("#slots").addEventListener("drop",e=>{const l=e.target.closest("[data-slot]");if(!l)return;e.preventDefault();l.classList.remove("over");sendFiles(l.dataset.slot,[...e.dataTransfer.files])});
+$("#slots").addEventListener("click",async e=>{const b=e.target.closest("[data-rm]");if(!b)return;e.preventDefault();try{state.files=await post("/api/remove",{slot:b.dataset.rm,name:b.dataset.name});state.results=null;renderFiles()}catch(err){toast(err.message)}});
+
+/* ---------- step 3 ---------- */
+async function loadInnovid(){
+  try{state.status=await api("/api/innovid")}catch(e){toast(e.message);return}
+  const s=state.status;
+  const ok=s.saved&&!s.expired;
+  $("#ivPill").className="pill "+(ok?"on":"off");
+  $("#ivPill").textContent=ok?"Signed in":s.expired?"Sign-in expired":"Not signed in";
+  $("#ivNote").textContent=ok&&s.hours_left!=null?`Good for ${s.hours_left} more hour${s.hours_left===1?"":"s"}.`:ok?"":"Sign in once; the session is saved on this computer.";
+  $("#ivSignIn").textContent=ok?"Sign in again":"Sign in to Innovid";
+  setInnovid(state.innovid&&ok,ok);
+}
+function setInnovid(on,possible){
+  state.innovid=!!on;const b=$("#ivUse");b.setAttribute("aria-pressed",state.innovid);b.disabled=!possible;b.style.opacity=possible?1:.5;
+  b.querySelector(".sw").style.background=state.innovid?"var(--lime)":"var(--line)";
+}
+$("#ivUse").onclick=()=>{const s=state.status||{};setInnovid(!state.innovid,s.saved&&!s.expired)};
+$("#ivSignIn").onclick=async()=>{const m=$("#ivMsg");m.hidden=false;m.className="alert info";m.textContent="Opening the sign-in window…";
+  try{const d=await post("/api/innovid/sign-in");m.className="alert "+(d.ok?"info":"bad");m.textContent=d.message}catch(e){m.className="alert bad";m.textContent=e.message}};
+window.addEventListener("focus",()=>{if(state.view==="innovid")loadInnovid()});
+
+/* ---------- step 4 ---------- */
+async function prepareRun(){
+  if(!$("#account").options.length){
+    try{const d=await api("/api/accounts");$("#account").innerHTML=["All / unknown",...d.accounts].map(a=>`<option ${a===d.selected?"selected":""}>${esc(a)}</option>`).join("")}catch(e){toast(e.message)}
+  }
+  const f=state.files||{slots:{}};const n=k=>(f.slots[k]||[]).length;
+  $("#recap").innerHTML=[`Traffic Sheet: <b>${esc(state.data?state.data.file:"")}</b>`,
+    `Placement-Creative View${n("pl")?" and Placement View":""}${n("tags")?`, ${n("tags")} tag file${n("tags")>1?"s":""}`:""}${n("dv")?`, ${n("dv")} DV file${n("dv")>1?"s":""}`:""}`,
+    state.innovid?"Innovid: <b>checked</b> (dates, rotation, verification partner)":"Innovid: not checked · dates and rotation come back as Not checked"].map(x=>`<li>${x}</li>`).join("");
+}
+$("#runBtn").onclick=async()=>{
+  const btn=$("#runBtn");btn.disabled=true;$("#runError").hidden=true;$("#runBox").hidden=false;
+  $("#runSub").textContent=state.innovid?"Reading the decision sets from Innovid can take a few minutes.":"Matching the Traffic Sheet with the exports and running every rule.";
+  const t0=Date.now();const tick=setInterval(()=>{$("#runTime").textContent=Math.round((Date.now()-t0)/1000)+" s"},500);
+  try{state.results=await post("/api/run",{account:$("#account").value,innovid:state.innovid});go("results");renderResults()}
+  catch(e){const b=$("#runError");b.textContent=e.message;b.hidden=false}
+  finally{clearInterval(tick);btn.disabled=false;$("#runBox").hidden=true}
+};
+
+/* ---------- step 5 ---------- */
+const ST={FAIL:["Fail","--fail"],REVIEW:["Review","--review"],NOT_VERIFIED:["Not checked","--nv"],INFO:["Info","--info"],PASS:["Pass","--pass"]};
+const res={filter:null,q:""};
+function vclass(v){return v==="PASSED"?"vpass":v==="NO_CHECKS"?"":"vfail"}
+function renderResults(){
+  const d=state.results;if(!d)return;
+  const open=(d.counts.FAIL||0)+(d.counts.REVIEW||0)+(d.counts.NOT_VERIFIED||0);
+  $("#resLead").textContent=d.headline||(open?`${fmt(open)} item${open>1?"s":""} to look at. Each one says what QA2 expected, what it found and why.`:"Everything QA2 checked matches the Traffic Sheet.");
+  $("#verdicts").innerHTML=`<div class="vd main"><span class="cap">Request</span><span class="v" style="color:${d.verdict==="PASSED"?"var(--lime)":"#FFB4B4"}">${esc(d.verdict_label)}</span><span class="why">${d.account?esc(d.account)+" · ":""}${fmt(d.findings.length)} checks</span></div>`
+    +d.scopes.map(s=>`<div class="vd ${vclass(s.verdict)}"><span class="cap">${esc(s.label)}</span><span class="v">${esc(s.verdict_label)}</span></div>`).join("");
+  const iv=d.innovid||{};
+  $("#ivResult").innerHTML=iv.used?(iv.errors&&iv.errors.length?`<div class="alert warn">Innovid answered for ${fmt(iv.placements)} placement(s) with problems: ${iv.errors.map(esc).join(" · ")}</div>`:`<div class="alert info">Checked against Innovid campaign ${esc(iv.campaign_id)}.</div>`):(iv.message?`<div class="alert warn">${esc(iv.message)}</div>`:"");
+  if(!res.filter)res.filter=open?"open":"all";
+  renderFindings();
+}
+function renderFindings(){
+  const d=state.results;if(!d)return;
+  const c=d.counts;const open=(c.FAIL||0)+(c.REVIEW||0)+(c.NOT_VERIFIED||0);
+  const chips=[["open","To look at",open,"--fail"],["FAIL","Fail",c.FAIL,"--fail"],["REVIEW","Review",c.REVIEW,"--review"],["NOT_VERIFIED","Not checked",c.NOT_VERIFIED,"--nv"],["PASS","Pass",c.PASS,"--pass"],["all","All",d.findings.length,"--line"]];
+  $("#chips").innerHTML=chips.filter(x=>x[2]||x[0]==="open"||x[0]==="all").map(([k,l,n,col])=>`<button class="chip" data-f="${k}" aria-pressed="${res.filter===k}"><i style="background:var(${col})"></i>${l}<span class="c">${fmt(n||0)}</span></button>`).join("");
+  const q=res.q.toLowerCase();
+  let rows=d.findings.filter(f=>res.filter==="all"||(res.filter==="open"?["FAIL","REVIEW","NOT_VERIFIED"].includes(f.status):f.status===res.filter));
+  if(q)rows=rows.filter(f=>[f.placement_id,f.placement_name,f.creative,f.rule,f.message].join(" ").toLowerCase().includes(q));
+  const shown=rows.slice(0,400);
+  $("#findings").innerHTML=shown.length?shown.map((f,i)=>{const s=ST[f.status]||[f.status,"--line"];
+    const ev=(f.expected||f.actual)?`<div class="ev"><div class="exp"><small>Traffic Sheet expects</small><code>${esc(f.expected||"—")}</code></div><div class="act"><small>QA2 found</small><code>${esc(f.actual||"—")}</code></div></div>`:"";
+    return `<div class="f" style="--sev:var(${s[1]})"><button aria-expanded="false"><span class="badge" style="background:color-mix(in srgb,var(${s[1]}) 16%,transparent);color:var(${s[1]})">${s[0]}</span><span style="min-width:0"><span class="msg">${esc(f.message)}</span><br><span class="where">${f.placement_id?`<code>${esc(f.placement_id)}</code> ${esc(f.placement_name)}`:"Whole request"}${f.creative?" · "+esc(f.creative):""}</span></span><span class="chev">›</span></button><div class="body">${ev}<div class="explain"><div><b>What this checks</b>${esc(f.rule_title||f.rule)} <span class="muted">(${esc(f.rule)})</span></div>${f.reason?`<div><b>Why</b>${esc(f.reason)}</div>`:""}${f.action?`<div><b>What to do</b>${esc(f.action)}</div>`:""}</div></div></div>`}).join(""):'<div class="card muted">Nothing here.</div>';
+  $("#findNote").textContent=rows.length>shown.length?`Showing the first ${fmt(shown.length)} of ${fmt(rows.length)}. Search to narrow it down.`:"";
+}
+$("#chips").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(!b)return;res.filter=b.dataset.f;renderFindings()});
+$("#search").addEventListener("input",e=>{res.q=e.target.value;renderFindings()});
+$("#findings").addEventListener("click",e=>{const b=e.target.closest(".f>button");if(!b)return;const f=b.parentElement;f.classList.toggle("open");b.setAttribute("aria-expanded",f.classList.contains("open"))});
+$("#startOver").onclick=async()=>{try{await post("/api/reset")}catch(_){}
+  Object.assign(state,{data:null,files:null,results:null,intent:null});res.filter=null;res.q="";$("#search").value="";
+  $("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";go("ts")};
 fetch("/api/health").then(r=>r.json()).then(d=>{$("#ver").textContent=d.version}).catch(()=>{});
 renderSteps();
 </script>
