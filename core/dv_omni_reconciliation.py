@@ -194,7 +194,7 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
 
         # Display: el pixel de DV vive en Third Party Survey 1 del
         # placement y lo revisa PIX-002. Un archivo de tags de display
-        # normalmente no trae doubleverify_html (AdOps, 11-nov; FB-22).
+        # normalmente no trae doubleverify_html (AdOps, 11-nov; FB-12).
         # Solo si la columna viene, se revisa que no este vacia --
         # una celda vacia ahi es un wrapping incompleto (FB-02) -- y
         # nunca se compara contra un pixel oficial.

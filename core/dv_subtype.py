@@ -20,7 +20,7 @@ names one of three flavors, and each is verified in a different place.
         Display: the placement needs the Third Party Survey 1 pixel
         (PIX-002). A doubleverify_html column is checked only when the
         tag file carries it (empty cell = incomplete wrapping), and is
-        never compared to an official pixel (AdOps, 11-nov; FB-22).
+        never compared to an official pixel (AdOps, 11-nov; FB-12).
         Video: table says this combo "shouldn't normally show up" --
         treated as a callout, validated the same way as Omni Video.
 

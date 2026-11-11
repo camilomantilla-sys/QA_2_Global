@@ -1,7 +1,7 @@
 """
 Donde se revisa DoubleVerify, segun lo que pide la TS y el formato.
 
-Reglas de AdOps (11-nov-2026), por FB-28 y FB-22:
+Reglas de AdOps (11-nov-2026), por FB-28, FB-22, FB-20 y FB-12:
 
     DV Monitoring, 1x1      wrapping de DV Pinnacle (DV-001). Sin pixel.
     DV Monitoring, Display  pixel en Third Party Survey 1 (PIX-002).
