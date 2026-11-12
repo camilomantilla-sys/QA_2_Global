@@ -330,7 +330,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1298 lineas)*
+Matching Engine. *(1317 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -352,6 +352,7 @@ Matching Engine. *(1298 lineas)*
 | funcion | `is_site_served_1x1(expected) -> bool` | Un 1x1 de tracking servido por el sitio |
 | funcion | `placement_clicktags(ap: ActualPlacement) -> list[str]` | Los clicktags que gobiernan el placement |
 | funcion | `_tracker_cgen(ap: ActualPlacement) -> str` | El CGEN que Innovid tiene para un placement site-served |
+| funcion | `_creative_cgen(ap: ActualPlacement) -> str` | El CGEN que Innovid tiene en la fila del creativo de un placement |
 | funcion | `_match_creatives(ep: ExpectedPlacement, ap: ActualPlacement) -> tuple[list[CreativeLink], list[ActualCreative]]` |  |
 | funcion | `compare_placement(pm: PlacementMatch, res: 'MatchResult') -> None` | Empareja los creativos de un placement y compara URL y atribucion |
 | funcion | `match(ts, export_pc, export_pl=None) -> MatchResult` |  |
@@ -777,7 +778,7 @@ TAG-012 -- politica de columnas de tags de Adobe. *(48 lineas)*
 
 ### `rules/attribution.py`
 
-ATR-001 / ATR-002 -- atribucion (CGEN). *(187 lineas)*
+ATR-001 / ATR-002 -- atribucion (CGEN). *(188 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1296,7 +1297,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 
 | Archivo | Pruebas | Que protege |
 | --- | --- | --- |
-| `test_adobe_direct.py` | 8 | Adobe Direct / Site-Served: lo que se revisa cuando no hay creativos |
+| `test_adobe_direct.py` | 11 | Adobe Direct / Site-Served: lo que se revisa cuando no hay creativos |
 | `test_adobe_official_pixels.py` | 9 | Los pixeles oficiales de Adobe: uno universal y uno por linea de negocio |
 | `test_anonimizar_ts.py` | 4 | La copia anónima de una TS sirve para reproducir un caso: QA2 la lee igual que la original, y no queda ningún nombre ni ID de la original |
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
@@ -1370,4 +1371,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 740 funciones de prueba en 73 archivos (algunas se parametrizan y corren varias veces).
+Total: 743 funciones de prueba en 73 archivos (algunas se parametrizan y corren varias veces).

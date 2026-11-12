@@ -1022,6 +1022,25 @@ def _tracker_cgen(ap: ActualPlacement) -> str:
     return ""
 
 
+def _creative_cgen(ap: ActualPlacement) -> str:
+    """
+    El CGEN que Innovid tiene en la fila del creativo de un placement.
+
+    Un 3P de asignacion directa (sin decision tree) lleva el CGEN a
+    nivel de creativo: el Third_Party_ID de la fila del creativo en el
+    Placement-Creative View. El del Placement View es el codigo del
+    placement (P3...), no un CGEN. Primero el pixel de un 1x1; si no
+    hay, el valor que comparten los creativos que corren. Si no hay uno
+    solo, no se puede decir cual es.
+    """
+    tracker = _tracker_cgen(ap)
+    if tracker:
+        return tracker
+    values = {ac.third_party_id for ac in ap.creatives
+              if ac.running and ac.third_party_id}
+    return values.pop() if len(values) == 1 else ""
+
+
 def _match_creatives(ep: ExpectedPlacement,
                      ap: ActualPlacement) -> tuple[list[CreativeLink], list[ActualCreative]]:
     links: list[CreativeLink] = []
@@ -1212,7 +1231,7 @@ def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
         if ep.cgen:
             pm.triangle = check_triangle(
                 ep.cgen,
-                _tracker_cgen(ap) or ap.third_party_id,
+                _creative_cgen(ap) or ap.third_party_id,
                 placement_url,
             )
             res.triangle_counts[pm.triangle.result] = (

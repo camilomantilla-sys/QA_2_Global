@@ -30,6 +30,7 @@ from core.matching import (  # noqa: E402
     ActualPlacement,
     ExpectedPlacement,
     PlacementMatch,
+    _creative_cgen,
     _tracker_cgen,
 )
 from core.urls import check_triangle, compare_urls  # noqa: E402
@@ -84,7 +85,7 @@ def placement(ts_url: str = URL, ts_cgen: str = CGEN,
     if ts_cgen:
         match.triangle = check_triangle(
             ts_cgen,
-            _tracker_cgen(actual) or actual.third_party_id,
+            _creative_cgen(actual) or actual.third_party_id,
             innovid_url,
         )
     return match
@@ -150,6 +151,37 @@ def test_without_a_single_tracker_there_is_nothing_to_read():
     actual = placement().actual
     actual.creatives = [pixel("AAA"), pixel("BBB")]
     assert _tracker_cgen(actual) == ""
+
+
+def banner(third_party_id: str = CGEN, creative_id: str = "6557413") -> ActualCreative:
+    """Un creativo de display asignado directo, sin decision tree."""
+    return ActualCreative(
+        creative_id=creative_id,
+        filename=f"banner_728x90.jpg ({creative_id})",
+        name="banner_728x90.jpg",
+        third_party_id=third_party_id,
+        enabled=True,
+        status="Active",
+    )
+
+
+def test_a_direct_3p_takes_the_cgen_from_the_creative_row():
+    # 3P de asignacion directa: el CGEN va en la fila del creativo, y
+    # el Third_Party_ID del Placement View (P3K74DP) es el codigo del
+    # placement. Compararlo contra el CGEN daba FAIL en todos.
+    found = only(run(placement(creatives=[banner()])), "ATR-002")
+    assert found and found[0].status.value == "PASS", found
+
+
+def test_a_direct_3p_with_the_wrong_cgen_on_the_creative_fails():
+    found = only(run(placement(creatives=[banner("XXXXXXXX")])), "ATR-002")
+    assert found and found[0].status.value == "FAIL", found
+
+
+def test_creatives_that_disagree_give_no_single_cgen():
+    actual = placement().actual
+    actual.creatives = [banner("AAA", "1"), banner("BBB", "2")]
+    assert _creative_cgen(actual) == ""
 
 
 def test_a_placement_with_creatives_is_left_to_the_creative_rules():

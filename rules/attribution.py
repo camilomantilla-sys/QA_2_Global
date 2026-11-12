@@ -156,6 +156,7 @@ def _evaluate_placement_triangle(pm, buffer):
         buffer.pass_(
             message="Attribution is correct for this placement",
             expected=pm.triangle.consensus or pm.triangle.ts,
+            actual=pm.triangle.export,
             **common,
         )
 
