@@ -476,7 +476,10 @@ def _landing_page_in_click_tag(link, buffer: FindingsBuffer) -> None:
             )
             continue
 
-        comparison = compare_urls(expected_url, actual_url)
+        # Innovid resuelve las macros al generar el tag: la del
+        # Placement ID tiene que ser la de esta fila (FB-27).
+        comparison = compare_urls(expected_url, actual_url,
+                                  {"placementid": row.placement_id})
 
         if comparison.result == URL_MATCH:
             buffer.pass_(

@@ -111,6 +111,50 @@ def parse_url(value: object) -> ParsedURL:
     out.ok = True
     return out
 
+# ------------------------------------------------------------------ macros de Innovid
+
+#: [%placementID%], [%creativeID%], [%siteName%]... Innovid los cambia
+#: por el valor real al generar el tag.
+_INNOVID_MACRO = re.compile(r"\[%\s*([A-Za-z0-9_]+)\s*%\]")
+
+
+def _template_match(template: str, value: str, known: dict[str, str]) -> bool:
+    """
+    ¿`value` es `template` con sus macros de Innovid resueltas?
+
+    Caso real (FB-27, Unilever): la TS declara
+    utm_term=[%placementID%]_[%creativeID%] y el tag que entrega
+    Innovid trae utm_term=11269660_6567795. Es la misma URL: Innovid
+    resolvio las macros al generar el tag. Una macro cuyo valor se
+    conoce (el Placement ID de la fila) tiene que coincidir con ese
+    valor; las demas aceptan cualquier valor no vacio.
+    """
+    parts: list[str] = []
+    last = 0
+    for m in _INNOVID_MACRO.finditer(template):
+        parts.append(re.escape(template[last:m.start()]))
+        name = m.group(1).lower()
+        if known.get(name):
+            parts.append(re.escape(str(known[name])))
+        else:
+            parts.append(r".+?")
+        last = m.end()
+    if not parts:
+        return False
+    parts.append(re.escape(template[last:]))
+    return re.fullmatch("".join(parts), value) is not None
+
+
+def _same_value(expected: str, actual: str, known: dict[str, str]) -> bool:
+    if expected == actual:
+        return True
+    if _INNOVID_MACRO.search(expected) and not _INNOVID_MACRO.search(actual):
+        return _template_match(expected, actual, known)
+    if _INNOVID_MACRO.search(actual) and not _INNOVID_MACRO.search(expected):
+        return _template_match(actual, expected, known)
+    return False
+
+
 # ------------------------------------------------------------------ comparison
 
 URL_MATCH = "MATCH"
@@ -135,7 +179,14 @@ class URLComparison:
     def is_ok(self) -> bool:
         return self.result == URL_MATCH
 
-def compare_urls(expected: object, actual: object) -> URLComparison:
+def compare_urls(expected: object, actual: object,
+                 known_macros: dict[str, str] | None = None) -> URLComparison:
+    """
+    Compara destino y parametros. Una macro de Innovid ([%placementID%])
+    en un lado y su valor resuelto en el otro cuentan como iguales;
+    ``known_macros`` ({"placementid": "11269660"}) fija las que se saben.
+    """
+    known = {k.lower(): v for k, v in (known_macros or {}).items()}
     e, a = parse_url(expected), parse_url(actual)
     c = URLComparison(expected=e, actual=a)
 
@@ -167,7 +218,7 @@ def compare_urls(expected: object, actual: object) -> URLComparison:
     for k in sorted(ak - ek):
         c.params_only_actual[k] = a.params[k]
     for k in sorted(ek & ak):
-        if e.params[k] != a.params[k]:
+        if not _same_value(e.params[k], a.params[k], known):
             c.params_diff_value[k] = (e.params[k], a.params[k])
 
     if c.params_only_expected or c.params_only_actual or c.params_diff_value:

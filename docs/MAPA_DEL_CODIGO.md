@@ -639,15 +639,17 @@ Lo que QA leyo de una Traffic Sheet, en forma comparable. *(167 lineas)*
 
 ### `core/urls.py`
 
-URL and attribution engine. *(276 lineas)*
+URL and attribution engine. *(327 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `account_uses_cgen(account: str) -> bool \| None` | False cuando la cuenta elegida no maneja CGEN; None cuando no se eligio cuenta o no la conocemos -- ahi decide la hoja |
 | clase | `ParsedURL` |  |
 | funcion | `parse_url(value: object) -> ParsedURL` |  |
+| funcion | `_template_match(template: str, value: str, known: dict[str, str]) -> bool` | ¿`value` es `template` con sus macros de Innovid resueltas? |
+| funcion | `_same_value(expected: str, actual: str, known: dict[str, str]) -> bool` |  |
 | clase | `URLComparison` |  |
-| funcion | `compare_urls(expected: object, actual: object) -> URLComparison` |  |
+| funcion | `compare_urls(expected: object, actual: object, known_macros: dict[str, str] \| None=None) -> URLComparison` | Compara destino y parametros |
 | clase | `AttributionTriangle` | Three vertices that must match: ts       = CGENS declared in the Traffic Sheet export   = Third_Party_ID of the row in Innovid url      = sdid param extracted from the ClickTag |
 | funcion | `check_triangle(ts_cgen: object, export_tpid: object, url_value: object) -> AttributionTriangle` |  |
 
@@ -894,7 +896,7 @@ TAG-013 -- cobertura del archivo de tags. *(39 lineas)*
 
 ### `rules/tags.py`
 
-QA2 rules for tag files. *(501 lineas)*
+QA2 rules for tag files. *(504 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1362,9 +1364,10 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_ui_stale_modules.py` | 0 | La app debe darse cuenta de que corre codigo viejo |
 | `test_unreadable_sheet.py` | 12 | Una hoja que no se pudo leer nunca puede acabar en PASSED |
 | `test_unreadable_ts_row.py` | 2 | Un error de formula en una columna auxiliar no saca a la fila del QA |
+| `test_url_macros.py` | 5 | Las macros de Innovid se resuelven en el tag, y eso no es otra URL |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 735 funciones de prueba en 72 archivos (algunas se parametrizan y corren varias veces).
+Total: 740 funciones de prueba en 73 archivos (algunas se parametrizan y corren varias veces).
