@@ -37,7 +37,7 @@ from parsers.ts_parser import (  # noqa: E402
     RED_FIELDS_ONLY, SUPERSEDED, parse_ts,
 )
 from tests.test_innovid_reconciliation import (  # noqa: E402
-    _innovid, _node, _ts,
+    _by_rule, _findings, _innovid, _node, _ts,
 )
 
 G = PatternFill("solid", fgColor="FF00FF00")
@@ -161,6 +161,32 @@ def test_two_slots_of_one_creative_pair_with_their_two_nodes():
         (date(2026, 11, 16), date(2026, 12, 31)),
     ]
 
+
+
+def test_two_creatives_in_two_slots_rotate_even_with_one_in_between():
+    # FB-25/26: v1 y v2 corren del 16-nov al 5-dic y otra vez del 20 al
+    # 31-dic; v3 entra en medio. Cinco filas al 20% y cinco nodos en el
+    # decision set. Antes: INV-001 "appears 2 times" e INV-002 FAIL.
+    v1, v2, v3 = "Holiday_v1_300x600.jpg", "Holiday_v2_300x600.jpg", "Holiday_v3_300x600.jpg"
+    first = (date(2026, 11, 16), date(2026, 12, 5))
+    middle = (date(2026, 12, 6), date(2026, 12, 19))
+    last = (date(2026, 12, 20), date(2026, 12, 31))
+    rows = [(v1, 1, first), (v1, 1, last), (v2, 2, first), (v2, 2, last), (v3, 3, middle)]
+    ts = _ts("11310594", [
+        ExpectedCreative(name=n, creative_id=str(cid), intent=GREEN,
+                         start=d[0], end=d[1], rotation_weight="0.2")
+        for n, cid, d in rows
+    ])
+    got = _innovid("11310594", 40316, [
+        _node(n, d[0].isoformat(), d[1].isoformat(), node_id=i,
+              creative_id=cid, weight=20)
+        for i, (n, cid, d) in enumerate(rows, start=1)
+    ])
+    result = reconcile(ts, got)
+    assert [f.status for f in result.flights] == [MATCHED] * 5
+    findings = _findings(result)
+    assert {f.status.name for f in _by_rule(findings, "INV-001")} == {"PASS"}
+    assert {f.status.name for f in _by_rule(findings, "INV-002")} == {"PASS"}
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
