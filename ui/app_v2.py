@@ -59,12 +59,6 @@ _LOGO_CANDIDATES = (
 )
 
 
-def logo_path() -> Path | None:
-    for name in _LOGO_CANDIDATES:
-        candidate = PROJECT_ROOT / "ui" / "assets" / name
-        if candidate.exists():
-            return candidate
-    return None
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -80,6 +74,17 @@ from core.verdict import (
 )
 from core.engine import run_rules  # noqa: F401
 from core.pipeline import compare_dates, run_checks
+from core import reports as _reports
+from core.reports import (
+    ReportInputs,
+    apply_review_overrides,
+    build_excel,
+    build_pdf,
+    findings_dataframe,
+    logo_path,
+    placement_status,
+    rule_summary_dataframe,
+)
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
     reconcile_adobe_tag_policy,
@@ -141,7 +146,7 @@ from core.tag_inventory import (
     build_tag_inventory_from_results,
 )
 from core.matching import match, norm_creative
-from core.qa_export import _dset_name as dset_name, build_qa_rows
+from core.qa_export import _dset_name as dset_name
 from core.urls import account_uses_cgen
 from core.normalize import (
     norm_compare,
@@ -150,8 +155,6 @@ from core.normalize import (
     site_names_match,
 )
 from core.tag_matching import match_tags
-from core.pdf_report import ReportMeta, build_pdf_report
-from core.excel_report import build_excel_report
 from parsers.dv_tags import merge_dv_results, parse_dv_tags
 from parsers.innovid_export import parse_innovid_export
 from parsers.innovid_tags import parse_innovid_tags
@@ -167,6 +170,7 @@ from rules import defaults as default_rules
 from ui.help_content import DOWNLOAD_PURPOSE, help_markdown
 from ui.paste_image import paste_images
 from core.qa1_trail import describe_origin, describe_result, result_snapshot
+from core.session_bundle import write_bundle
 
 
 warnings.filterwarnings(
@@ -780,136 +784,6 @@ def placement_findings(
         for finding in findings_buffer.findings
         if finding.placement_id == placement_id
     ]
-
-
-def placement_status(
-    placement_id: str,
-    findings_buffer,
-) -> str:
-    statuses = [
-        finding.status.value
-        for finding in placement_findings(
-            placement_id,
-            findings_buffer,
-        )
-    ]
-
-    if not statuses:
-        return "NOT_VERIFIED"
-
-    return max(
-        statuses,
-        key=lambda status: STATUS_PRIORITY.get(status, 0),
-    )
-
-
-def findings_dataframe(findings) -> pd.DataFrame:
-    rows = []
-
-    for finding in findings:
-        rows.append(
-            {
-                "Status": finding.status.value,
-                "Severity": finding.severity.value,
-                "Rule": finding.rule_id,
-                "Domain": finding.domain.value,
-                "Placement ID": finding.placement_id,
-                "Placement Name": finding.placement_name,
-                "Creative ID": finding.creative_id,
-                "Creative Name": finding.creative_name,
-                "Message": finding.message,
-                "Expected": finding.expected,
-                "Found": finding.actual,
-                "Reason": finding.reason,
-                "Recommended Action": finding.recommended_action,
-                "Confidence": finding.confidence.value,
-                "Count": finding.count,
-            }
-        )
-
-    return pd.DataFrame(rows)
-
-
-def apply_review_overrides(findings, overrides: dict, approved_by: str = ""):
-    """
-    Turns an approved REVIEW, FAIL or NOT_VERIFIED finding into PASS,
-    carrying the QA's observation forward as the reason a human can
-    read later.
-
-    A FAIL is signed off, not silenced: the observation is what makes
-    it acceptable, and it stays on the record in the report and in
-    the Excel as "MANUALLY Approved by ...".
-
-    `overrides` is {finding_id: {"approved": bool, "note": str}} from
-    the sign-off panel. A REVIEW finding not in `overrides` (or not
-    approved) passes through unchanged -- only an explicit approval
-    flips the status. The finding's identity (rule, placement,
-    creative, expected/actual) is untouched, so its finding_id stays
-    stable across reruns.
-    """
-    out = []
-
-    for finding in findings:
-        entry = overrides.get(finding.finding_id)
-
-        if (
-            not entry
-            or not entry.get("approved")
-            or finding.status.value not in ("REVIEW", "FAIL", "NOT_VERIFIED")
-        ):
-            out.append(finding)
-            continue
-
-        note = entry.get("note", "").strip()
-        stamp = f"Approved by {approved_by}" if approved_by else "Approved"
-        approval_text = f"{stamp}: {note}" if note else stamp
-
-        out.append(
-            replace(
-                finding,
-                status=Status.PASS,
-                severity=Severity.NONE,
-                reason=(
-                    f"{finding.reason} | {approval_text}"
-                    if finding.reason
-                    else approval_text
-                ),
-            )
-        )
-
-    return out
-
-
-def rule_summary_dataframe(findings_buffer) -> pd.DataFrame:
-    grouped: dict[str, Counter] = defaultdict(Counter)
-
-    for finding in findings_buffer.findings:
-        grouped[finding.rule_id][finding.status.value] += max(
-            finding.count,
-            1,
-        )
-
-    rows = []
-
-    for rule_id in sorted(grouped):
-        counts = grouped[rule_id]
-
-        rows.append(
-            {
-                "Rule": rule_id,
-                "PASS": counts.get("PASS", 0),
-                "FAIL": counts.get("FAIL", 0),
-                "REVIEW": counts.get("REVIEW", 0),
-                "NOT_VERIFIED": counts.get(
-                    "NOT_VERIFIED",
-                    0,
-                ),
-                "INFO": counts.get("INFO", 0),
-                "Total": sum(counts.values()),
-            }
-        )
-
-    return pd.DataFrame(rows)
 
 
 # ============================================================
@@ -2342,72 +2216,21 @@ with st.sidebar:
     _can_bundle = uploaded_ts is not None and uploaded_pc is not None
 
     if _can_bundle:
-        _bundle_buffer = BytesIO()
-        with zipfile.ZipFile(
-            _bundle_buffer, "w", zipfile.ZIP_DEFLATED
-        ) as _zf:
-            _files_manifest: dict = {}
-
-            _ts_name = Path(uploaded_ts.name).name
-            _zf.writestr(f"files/ts/{_ts_name}", uploaded_ts.getbuffer())
-            _files_manifest["ts"] = _ts_name
-
-            _pc_name = Path(uploaded_pc.name).name
-            _zf.writestr(f"files/pc/{_pc_name}", uploaded_pc.getbuffer())
-            _files_manifest["pc"] = _pc_name
-
-            if uploaded_pl is not None:
-                _pl_name = Path(uploaded_pl.name).name
-                _zf.writestr(
-                    f"files/pl/{_pl_name}", uploaded_pl.getbuffer()
-                )
-                _files_manifest["pl"] = _pl_name
-
-            _dv_entries = []
-            for _index, _dv_file in enumerate(uploaded_dv or [], start=1):
-                _stored_as = f"{_index}_{Path(_dv_file.name).name}"
-                _zf.writestr(
-                    f"files/dv/{_stored_as}", _dv_file.getbuffer()
-                )
-                _dv_entries.append(
-                    {
-                        "name": Path(_dv_file.name).name,
-                        "stored_as": _stored_as,
-                    }
-                )
-            if _dv_entries:
-                _files_manifest["dv"] = _dv_entries
-
-            _tag_entries = []
-            for _index, _tag_file in enumerate(uploaded_tags or [], start=1):
-                _stored_as = f"{_index}_{Path(_tag_file.name).name}"
-                _zf.writestr(
-                    f"files/tags/{_stored_as}", _tag_file.getbuffer()
-                )
-                _tag_entries.append(
-                    {
-                        "name": Path(_tag_file.name).name,
-                        "stored_as": _stored_as,
-                    }
-                )
-            if _tag_entries:
-                _files_manifest["tags"] = _tag_entries
-
-            # FB-04: las capturas (subidas o pegadas) viajan tambien,
-            # para que quien haga el QA2 vea la misma evidencia.
-            _evidence_entries = []
-            for _index, _image in enumerate(uploaded_evidence or [], start=1):
-                _stored_as = f"{_index}_{Path(_image.name).name}"
-                _zf.writestr(
-                    f"files/evidence/{_stored_as}", _image.getvalue()
-                )
-                _evidence_entries.append(
-                    {"name": Path(_image.name).name, "stored_as": _stored_as}
-                )
-            if _evidence_entries:
-                _files_manifest["evidence"] = _evidence_entries
-
-            _manifest_out = {
+        _bundle_bytes = write_bundle(
+            {
+                "ts": [(uploaded_ts.name, bytes(uploaded_ts.getbuffer()))],
+                "pc": [(uploaded_pc.name, bytes(uploaded_pc.getbuffer()))],
+                "pl": (
+                    [(uploaded_pl.name, bytes(uploaded_pl.getbuffer()))]
+                    if uploaded_pl is not None else []
+                ),
+                "dv": [(f.name, bytes(f.getbuffer())) for f in uploaded_dv or []],
+                "tags": [(f.name, bytes(f.getbuffer())) for f in uploaded_tags or []],
+                # FB-04: las capturas (subidas o pegadas) viajan tambien,
+                # para que quien haga el QA2 vea la misma evidencia.
+                "evidence": [(f.name, f.getvalue()) for f in uploaded_evidence or []],
+            },
+            {
                 "profile": selected_profile,
                 "account": selected_account,
                 "campaign": record_campaign,
@@ -2420,16 +2243,12 @@ with st.sidebar:
                 ),
                 "notes": record_notes,
                 "qa1_result": st.session_state.get("qa2_last_result"),
-                "saved_at": datetime.now().isoformat(timespec="seconds"),
-                "files": _files_manifest,
-            }
-            _zf.writestr(
-                "manifest.json", json.dumps(_manifest_out, indent=2)
-            )
+            },
+        )
 
         st.download_button(
             "💾 Save session bundle (for QA2)",
-            data=_bundle_buffer.getvalue(),
+            data=_bundle_bytes,
             file_name="qa2_session_bundle.zip",
             mime="application/zip",
             use_container_width=True,
@@ -3833,59 +3652,14 @@ if True:
                     )
 
         # ----------------------------------------------------
-        # Downloadable PDF report
+        # Downloadable PDF and Excel reports (core.reports, the same
+        # chain the new interface uses)
         # ----------------------------------------------------
 
-        placement_ids_for_pdf = sorted(
-            set(matched_by_id) | set(expected_missing_by_id)
-        )
-
-        placements_rows_for_pdf = []
-
-        for placement_id in placement_ids_for_pdf:
-            placement_match = matched_by_id.get(placement_id)
-
-            if placement_match is not None:
-                expected = placement_match.expected
-                actual = placement_match.actual
-            else:
-                expected = expected_missing_by_id[placement_id]
-                actual = None
-
-            status = placement_status(
-                placement_id,
-                findings_buffer,
-            )
-
-            creative_links = (
-                placement_match.creative_links
-                if placement_match
-                else []
-            )
-
-            tag_records = tags_by_placement.get(placement_id, [])
-
-            placements_rows_for_pdf.append(
-                {
-                    "Status": status,
-                    "Placement ID": placement_id,
-                    "Placement Name": expected.name,
-                    "Request Type": expected.request_type or "-",
-                    "Dimensions": expected.dims or "-",
-                    "Creatives": len(creative_links),
-                    "Tag Rows": len(tag_records),
-                    "Found in Innovid": (
-                        "Yes" if actual else "No"
-                    ),
-                }
-            )
-
-        evidence_images = []
-
-        for uploaded_image in uploaded_evidence or []:
-            evidence_images.append(
-                (uploaded_image.name, uploaded_image.getvalue())
-            )
+        evidence_images = [
+            (uploaded_image.name, uploaded_image.getvalue())
+            for uploaded_image in uploaded_evidence or []
+        ]
 
         # Lo que hace distinto a un informe de otro: el veredicto, el
         # recuento por estado, lo firmado y los datos del registro.
@@ -3902,217 +3676,47 @@ if True:
             len(getattr(innovid_reconciliation, "flights", None) or ()),
         )
 
-        trace("building the PDF")
-        pdf_report_bytes = reuse("pdf", _report_signature, lambda: build_pdf_report(
-            ReportMeta(
-                verdict=scorecard.verdict,
-                verdict_label=VERDICT_LABELS.get(
-                    scorecard.verdict, scorecard.verdict
-                ),
-                # El veredicto partido en dos, igual que en pantalla:
-                # el reporte que se reparte tiene que decir lo mismo
-                # que vio quien lo genero.
-                scope_verdicts=verdicts_by_scope(
-                    findings_buffer.findings
-                ),
-                scope_summary=scope_headline(findings_buffer.findings),
-                profile_used=professional_profile_name(
-                    ts_result.profile
-                ),
-                detected_profile=professional_profile_name(
-                    detected_profile
-                ),
-                detection_evidence=detection_evidence,
-                scope_guard=match_result.scope_guard or "UNKNOWN",
-                scope_evidence=match_result.scope_evidence,
-                ts_campaign_id=match_result.ts_campaign_id,
-                export_campaign_id=match_result.export_campaign_id,
-                metrics={
-                    "Worked Placements": match_result.expected_total,
-                    "Found": len(match_result.matched),
-                    "Missing": len(match_result.only_expected),
-                    "Tag Files": len(tags_results),
-                    "Errors": scorecard.errors,
-                    "Reviews": scorecard.reviews,
-                    "Not Verified": scorecard.not_verified,
-                },
-                source_files=[
-                    row["File"] for row in file_rows
-                ],
-                campaign=record_campaign,
-                request_type=record_request_type,
-                wrike_id=record_wrike_id,
-                implemented_by=record_implemented_by,
-                qa1_result=describe_result(
-                    (st.session_state.get("qa2_bundle_origin") or {})
-                    .get("qa1_result")
-                ),
-                implementation_date=record_implementation_date,
-                qa2_by=record_qa2_by,
-                qa2_date=record_qa2_date,
-                qa3_by=record_qa3_by,
-                qa3_date=record_qa3_date,
-                notes=record_notes,
-            ),
-            findings_df=findings_dataframe(
-                [
-                    finding
-                    for finding in findings_buffer.findings
-                    if finding.status.value != "PASS"
-                ]
-            ),
-            rules_df=rule_summary_dataframe(findings_buffer),
-            files_df=files_dataframe,
-            placements_df=pd.DataFrame(placements_rows_for_pdf),
-            evidence_images=evidence_images,
-            logo_path=logo_path(),
-        ))
-
-        tag_coverage_rows_for_excel = [
-            {
-                "File": file_name,
-                "Campaign ID": tags_result.campaign_id,
-                "Sheet": tags_result.sheet,
-                "Placements": tags_result.distinct_placements,
-                "Materialized Tags": tags_result.total_tags,
-                "Rows In Scope": len(
-                    tag_match_result.matched_to_scope
-                ),
-                "Rows Out of Scope": len(
-                    tag_match_result.outside_scope
-                ),
-                "No Innovid Match": len(
-                    tag_match_result.missing_in_innovid
-                ),
-            }
-            for file_name, tags_result, tag_match_result in tag_matches
-        ]
-
-        # El panel de arriba de la hoja Tags: una linea por tipo de
-        # placement, diciendo si cada uno trae las columnas que le
-        # tocan.
-        tag_family_rows = [
-            {
-                "Status": family.status,
-                "Placement Type": family.family,
-                "Rows": family.rows,
-                "Placements": family.placements,
-                "Tags": family.tags,
-                "Complete": family.complete,
-                "To Look At": family.incomplete,
-                "Tag Columns": ", ".join(family.columns) or "-",
-            }
-            for family in tag_analysis.families
-        ]
-
-        tag_coverage_counts = {}
-
-        if tag_analysis.rows:
-            tag_coverage_counts["Tag files"] = len(tags_results)
-            tag_coverage_counts["Tag rows"] = len(tag_analysis.rows)
-            tag_coverage_counts["Placements in the tag files"] = (
-                tag_analysis.placements
-            )
-            tag_coverage_counts["Tags delivered"] = (
-                tag_analysis.total_tags
-            )
-
-            if tag_analysis.coverage_known:
-                tag_coverage_counts[
-                    "Worked placements in the Traffic Sheet"
-                ] = tag_analysis.ts_worked
-                tag_coverage_counts[
-                    "Of those, found in the tag files"
-                ] = tag_analysis.ts_covered
-                tag_coverage_counts["Missing from the tag files"] = len(
-                    tag_analysis.missing_from_tags
-                )
-
-            tag_coverage_counts["Rows to look at"] = len(
-                tag_analysis.incomplete
-            )
-
-        dv_rows_for_excel = dv_table(dv_result)
-
-        trace("building the Excel")
-        excel_report_bytes = reuse("excel", _report_signature, lambda: build_excel_report(
-            ReportMeta(
-                verdict=scorecard.verdict,
-                verdict_label=VERDICT_LABELS.get(
-                    scorecard.verdict, scorecard.verdict
-                ),
-                # El veredicto partido en dos, igual que en pantalla:
-                # el reporte que se reparte tiene que decir lo mismo
-                # que vio quien lo genero.
-                scope_verdicts=verdicts_by_scope(
-                    findings_buffer.findings
-                ),
-                scope_summary=scope_headline(findings_buffer.findings),
-                profile_used=professional_profile_name(
-                    ts_result.profile
-                ),
-                detected_profile=professional_profile_name(
-                    detected_profile
-                ),
-                detection_evidence=detection_evidence,
-                scope_guard=match_result.scope_guard or "UNKNOWN",
-                scope_evidence=match_result.scope_evidence,
-                ts_campaign_id=match_result.ts_campaign_id,
-                export_campaign_id=match_result.export_campaign_id,
-                metrics={
-                    "Worked Placements": match_result.expected_total,
-                    "Found": len(match_result.matched),
-                    "Missing": len(match_result.only_expected),
-                    "Tag Files": len(tags_results),
-                    "Errors": scorecard.errors,
-                    "Reviews": scorecard.reviews,
-                    "Not Verified": scorecard.not_verified,
-                },
-                source_files=[
-                    row["File"] for row in file_rows
-                ],
-                campaign=record_campaign,
-                request_type=record_request_type,
-                wrike_id=record_wrike_id,
-                implemented_by=record_implemented_by,
-                qa1_result=describe_result(
-                    (st.session_state.get("qa2_bundle_origin") or {})
-                    .get("qa1_result")
-                ),
-                implementation_date=record_implementation_date,
-                qa2_by=record_qa2_by,
-                qa2_date=record_qa2_date,
-                qa3_by=record_qa3_by,
-                qa3_date=record_qa3_date,
-                notes=record_notes,
-            ),
-            findings_df=findings_dataframe(findings_buffer.findings),
-            rules_df=rule_summary_dataframe(findings_buffer),
-            files_df=files_dataframe,
-            placements_df=pd.DataFrame(placements_rows_for_pdf),
-            tag_coverage_df=(
-                pd.DataFrame(tag_coverage_rows_for_excel)
-                if tag_coverage_rows_for_excel else None
-            ),
-            tags_df=(
-                pd.DataFrame(import_table(tag_analysis))
-                if tag_analysis.rows else None
-            ),
-            tag_summary_rows=tag_family_rows,
-            tag_coverage_counts=tag_coverage_counts,
-            dv_tags_df=(
-                pd.DataFrame(dv_rows_for_excel)
-                if dv_rows_for_excel else None
-            ),
-            evidence_images=evidence_images,
+        _report_inputs = ReportInputs(
+            ts_result=ts_result,
+            match_result=match_result,
+            findings=list(findings_buffer.findings),
+            profile_used=professional_profile_name(ts_result.profile),
+            detected_profile=professional_profile_name(detected_profile),
+            detection_evidence=detection_evidence,
+            file_rows=file_rows,
+            tags_results=tags_results,
+            tag_matches=tag_matches,
+            tag_analysis=tag_analysis,
+            dv_result=dv_result,
             innovid_reconciliation=innovid_reconciliation,
-            logo_path=logo_path(),
-            qa_rows=build_qa_rows(
-                match_result,
-                findings_buffer.findings,
-                innovid_reconciliation,
+            evidence_images=evidence_images,
+            campaign=record_campaign,
+            request_type=record_request_type,
+            wrike_id=record_wrike_id,
+            implemented_by=record_implemented_by,
+            qa1_result=describe_result(
+                (st.session_state.get("qa2_bundle_origin") or {})
+                .get("qa1_result")
             ),
-        ))
+            implementation_date=record_implementation_date,
+            qa2_by=record_qa2_by,
+            qa2_date=record_qa2_date,
+            qa3_by=record_qa3_by,
+            qa3_date=record_qa3_date,
+            notes=record_notes,
+        )
+
+        trace("building the PDF")
+        pdf_report_bytes = reuse("pdf", _report_signature,
+                                 lambda: build_pdf(_report_inputs))
+        trace("building the Excel")
+        excel_report_bytes = reuse("excel", _report_signature,
+                                   lambda: build_excel(_report_inputs))
+
+        # Las mismas tablas que lleva el Excel, para mostrarlas abajo.
+        tag_coverage_rows_for_excel = _reports.tag_coverage_rows(tag_matches)
+        tag_family_rows = _reports.tag_family_rows(tag_analysis)
+        dv_rows_for_excel = dv_table(dv_result)
 
         download_columns = st.columns(2)
 

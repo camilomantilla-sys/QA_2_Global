@@ -39,7 +39,7 @@ def test_anything_else_is_ignored():
 
 
 def test_evidence_travels_in_the_bundle():
-    assert 'f"files/evidence/{_stored_as}"' in APP
+    assert '"evidence": [(f.name, f.getvalue())' in APP
     assert '_restored["evidence"] = _restored_evidence' in APP
 
 

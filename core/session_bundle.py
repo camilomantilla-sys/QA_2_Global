@@ -94,3 +94,38 @@ def read_bundle(data: bytes) -> Bundle:
             if got:
                 bundle.files[slot] = got
     return bundle
+
+
+def write_bundle(files: dict[str, list[tuple[str, bytes]]], fields: dict) -> bytes:
+    """
+    Arma un session bundle con los archivos de cada slot y los datos del
+    registro (cuenta, perfil, campana, QA1...). Es el formato que lee
+    `read_bundle`: ts/pc/pl van como un nombre; tags, dv y evidence como
+    listas de {"name", "stored_as"} con un prefijo que evita choques.
+    """
+    from datetime import datetime
+    from pathlib import PurePath
+
+    buffer = io.BytesIO()
+    listed: dict = {}
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for slot in ("ts", "pc", "pl"):
+            item = (files.get(slot) or [None])[0]
+            if item:
+                name = PurePath(item[0]).name
+                archive.writestr(f"files/{slot}/{name}", item[1])
+                listed[slot] = name
+        for slot in ("tags", "dv", "evidence"):
+            entries = []
+            for index, (name, content) in enumerate(files.get(slot) or [], start=1):
+                name = PurePath(name).name
+                stored = f"{index}_{name}"
+                archive.writestr(f"files/{slot}/{stored}", content)
+                entries.append({"name": name, "stored_as": stored})
+            if entries:
+                listed[slot] = entries
+        manifest = dict(fields)
+        manifest.setdefault("saved_at", datetime.now().isoformat(timespec="seconds"))
+        manifest["files"] = listed
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2))
+    return buffer.getvalue()

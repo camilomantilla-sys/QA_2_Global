@@ -541,6 +541,27 @@ Como se llama el archivo que alguien se descarga. *(53 lineas)*
 | funcion | `safe_part(value: str) -> str` | Un trozo de nombre de archivo que Windows si acepta |
 | funcion | `report_filename(extension: str, campaign: str='', when: date \| datetime \| None=None) -> str` | <fecha>_QA_Report_<campana>.<extension> |
 
+### `core/reports.py`
+
+Los informes del QA (PDF y Excel) y las firmas de QA2 Review, sin interfaz. *(346 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `logo_path() -> Path \| None` |  |
+| funcion | `apply_review_overrides(findings, overrides: dict, approved_by: str='')` | Turns an approved REVIEW, FAIL or NOT_VERIFIED finding into PASS, carrying the QA's observation forward as the reason a human can read later |
+| funcion | `_items(findings) -> list` |  |
+| funcion | `findings_dataframe(findings) -> pd.DataFrame` |  |
+| funcion | `rule_summary_dataframe(findings) -> pd.DataFrame` |  |
+| funcion | `placement_status(placement_id: str, findings) -> str` |  |
+| funcion | `placement_rows(match_result, findings, tag_matches) -> list[dict]` | Una fila por placement trabajado: lo que va en 'Worked Placements' |
+| funcion | `tag_coverage_rows(tag_matches) -> list[dict]` |  |
+| funcion | `tag_family_rows(tag_analysis) -> list[dict]` | El panel de arriba de la hoja Tags: una linea por tipo de placement |
+| funcion | `tag_coverage_counts(tag_analysis, tag_files: int) -> dict` |  |
+| clase | `ReportInputs` | Todo lo que necesitan los dos informes de una corrida |
+| funcion | `report_meta(inputs: ReportInputs) -> ReportMeta` |  |
+| funcion | `build_pdf(inputs: ReportInputs) -> bytes` |  |
+| funcion | `build_excel(inputs: ReportInputs) -> bytes` |  |
+
 ### `core/review.py`
 
 Agrupado de hallazgos para la revision de QA2. *(77 lineas)*
@@ -557,13 +578,14 @@ Contratos de campo para exports de Innovid. *(129 lineas)*
 
 ### `core/session_bundle.py`
 
-Leer un session bundle (.zip) sin interfaz. *(96 lineas)*
+Leer un session bundle (.zip) sin interfaz. *(131 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | clase | `BundleError` | El archivo no es un session bundle que QA2 pueda abrir |
 | clase | `Bundle` |  |
 | funcion | `read_bundle(data: bytes) -> Bundle` |  |
+| funcion | `write_bundle(files: dict[str, list[tuple[str, bytes]]], fields: dict) -> bytes` | Arma un session bundle con los archivos de cada slot y los datos del registro (cuenta, perfil, campana, QA1...) |
 
 ### `core/tag_analysis.py`
 
@@ -940,11 +962,10 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5843 lineas)*
+Interfaz de QA2 (Streamlit). *(5447 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
-| funcion | `logo_path() -> Path \| None` |  |
 | funcion | `professional_profile_name(profile_name: str) -> str` | Corporate-facing name that avoids exposing internal technical keys |
 | clase | `_RestoredUpload` | Stand-in for Streamlit's UploadedFile, built from bytes stored in a QA session bundle -- exposes just the surface the app actually touches (.name, .size, .getbuffer(), .getvalue()) so a restored file can be passed anywhere a live upload is expected |
 | funcion | `_workbook_path(directory: str, file_name: str, file_bytes: bytes) -> Path` | Writes the upload to disk under a name that matches what it actually is |
@@ -967,10 +988,6 @@ Interfaz de QA2 (Streamlit). *(5843 lineas)*
 | funcion | `anomaly_rows(source_name: str, result) -> list[dict]` |  |
 | funcion | `result_is_fatal(result) -> bool` |  |
 | funcion | `placement_findings(placement_id: str, findings_buffer)` |  |
-| funcion | `placement_status(placement_id: str, findings_buffer) -> str` |  |
-| funcion | `findings_dataframe(findings) -> pd.DataFrame` |  |
-| funcion | `apply_review_overrides(findings, overrides: dict, approved_by: str='')` | Turns an approved REVIEW, FAIL or NOT_VERIFIED finding into PASS, carrying the QA's observation forward as the reason a human can read later |
-| funcion | `rule_summary_dataframe(findings_buffer) -> pd.DataFrame` |  |
 | funcion | `clean_value(value) -> str` |  |
 | funcion | `compare_value(expected, actual, *, normalizer=None, optional: bool=False, fuzzy: bool=False) -> str` |  |
 | funcion | `comparison_row(field_name, expected, actual, normalizer, optional, fuzzy) -> dict` |  |
@@ -1386,5 +1403,6 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
+| `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 755 funciones de prueba en 75 archivos (algunas se parametrizan y corren varias veces).
+Total: 757 funciones de prueba en 76 archivos (algunas se parametrizan y corren varias veces).

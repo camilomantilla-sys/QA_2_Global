@@ -64,10 +64,13 @@ def test_a_not_verified_can_be_signed_off():
 def test_an_approved_not_verified_becomes_a_pass():
     # Sin esto el panel lo dejaria marcar y el veredicto seguiria
     # igual, que es el peor de los dos mundos.
-    source = APP.read_text(encoding="utf-8")
+    # Vive en core.reports: las dos interfaces firman igual.
+    from core import reports
+    assert reports.REVIEWABLE == ("REVIEW", "FAIL", "NOT_VERIFIED")
+    source = (APP.parents[1] / "core" / "reports.py").read_text(encoding="utf-8")
     body = source[source.index("def apply_review_overrides("):]
     body = body[:body.index("\ndef ")]
-    assert '("REVIEW", "FAIL", "NOT_VERIFIED")' in body
+    assert "not in REVIEWABLE" in body
 
 
 def test_the_guessing_panel_is_gone():
