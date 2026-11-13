@@ -14,7 +14,7 @@
       "display"
     ],
     "site_exceptions": [],
-    "official_pixel": "",
+    "official_pixel": "https://cdn.doubleverify.com/dvtp_src.js#ctx=715607&cmp=[%campaignID%]&sid=[%siteID%]&plc=[%placementID%]&num=&adid=&advid=&adsrv=29&btreg=[%placementID%]&btadsrv=flashtalking&crt=[%creativeID%]&gdpr=[%FT_GDPR%]&gdpr_consent=[%FT_GDPR_CONSENT%]&auevent=[ftqs:[ft_dv]]&dvtagver=6.1.src",
     "note": "Placement-level pixel, Display only. On 1x1, Monitoring is delivered as a wrapped tag from DV Pinnacle (DV-001) instead -- no pixel to compare here."
   },
   {
