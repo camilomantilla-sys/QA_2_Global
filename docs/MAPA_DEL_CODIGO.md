@@ -1401,8 +1401,9 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_url_macros.py` | 5 | Las macros de Innovid se resuelven en el tag, y eso no es otra URL |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
+| `test_web_signoff.py` | 8 | Paso 5 de la interfaz nueva: firmar los Review, el Implementation Record, las capturas y las descargas (PDF, Excel, session bundle) |
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 757 funciones de prueba en 76 archivos (algunas se parametrizan y corren varias veces).
+Total: 765 funciones de prueba en 77 archivos (algunas se parametrizan y corren varias veces).

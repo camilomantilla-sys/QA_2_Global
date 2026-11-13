@@ -1,8 +1,11 @@
 # Interfaz nueva de QA2 (`ui/web`)
 
-Reemplazo de la interfaz de Streamlit, paso a paso. Mientras no cubra
-todo, las dos conviven: Streamlit en `localhost:8501` y esta en
-`127.0.0.1:8502`.
+Reemplazo de la interfaz de Streamlit. Ya cubre la solicitud completa,
+de la TS a la firma y las descargas; las dos conviven mientras el equipo
+se pasa: Streamlit en `localhost:8501` y esta en `127.0.0.1:8502`.
+Las dos usan la misma cadena: `core/pipeline.py` (reglas),
+`core/reports.py` (firmas de QA2 Review, PDF y Excel) y
+`core/session_bundle.py` (leer y guardar el bundle).
 
 ```bash
 python -m ui.web          # o doble clic en "QA2 nueva interfaz.bat"
@@ -33,7 +36,11 @@ interfaces. Una regla nueva se conecta allí una sola vez.
 | `GET /api/files` | El estado del paso 2 |
 | `GET /api/innovid` · `POST /api/innovid/sign-in` | Paso 3. Si hay sesión de Innovid guardada; abrir el inicio de sesión |
 | `GET /api/accounts` · `POST /api/run` | Paso 4. Cuentas y correr (`{"account", "innovid"}`) |
-| `GET /api/results` | Paso 5. El último resultado |
+| `GET /api/results` | Paso 5. El último resultado, con lo firmado ya contado |
+| `POST /api/review` | Paso 5. Firmar o deshacer (`{"ids": [...], "approved", "note"}`); solo REVIEW, FAIL y NOT_VERIFIED |
+| `GET /api/record` · `POST /api/record` | Paso 5. Implementation Record (campaña, Wrike, QA1, QA2, QA3, notas) y la lista del equipo |
+| `POST /api/evidence` · `POST /api/evidence/remove` · `GET /api/evidence/image?name=` | Paso 5. Capturas (PNG, JPG o GIF; Ctrl+V en la página) |
+| `GET /api/download/pdf` · `/xlsx` · `/bundle` | Paso 5. El PDF, el Excel y el session bundle |
 | `POST /api/reset` | Start over: olvida todo |
 
 ## Estado
@@ -44,7 +51,7 @@ interfaces. Una regla nueva se conecta allí una sola vez.
 | 2. Exports de Innovid | Hecho |
 | 3. Revisión contra Innovid | Hecho |
 | 4. Correr el QA | Hecho |
-| 5. Resultados | Hecho. Falta: firmar revisiones (QA2 Review), PDF/Excel y session bundle, que siguen en Streamlit |
+| 5. Resultados | Hecho: veredicto y porqué, fechas de campaña, QA2 Review (uno a uno o todos los que se ven, con observación), Implementation Record, capturas, PDF, Excel y session bundle |
 
 ## Seguridad
 

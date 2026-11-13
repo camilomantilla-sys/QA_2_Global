@@ -109,9 +109,14 @@ class Handler(BaseHTTPRequestHandler):
         """Sin registro por peticion: las rutas no dicen nada util y asi
         no queda ni el nombre de un archivo en ninguna consola."""
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str,
+              download: str = "") -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        if download:
+            from urllib.parse import quote
+            self.send_header("Content-Disposition",
+                             f"attachment; filename*=UTF-8''{quote(download)}")
         self.send_header("Content-Length", str(len(body)))
         for key, value in SECURITY_HEADERS.items():
             self.send_header(key, value)
@@ -145,7 +150,31 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/innovid":
             return self._json(HTTPStatus.OK, innovid_status())
         if path == "/api/results":
-            return self._json(HTTPStatus.OK, SESSION.last_run or {})
+            return self._json(HTTPStatus.OK, SESSION.results())
+        if path == "/api/record":
+            return self._json(HTTPStatus.OK, {"record": SESSION.record,
+                                              "people": people_options(SESSION.account)})
+        if path in ("/api/download/pdf", "/api/download/xlsx"):
+            try:
+                name, body, kind = SESSION.report(path.rsplit("/", 1)[1])
+            except ValueError as exc:
+                return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+            return self._send(HTTPStatus.OK, body, kind, download=name)
+        if path == "/api/download/bundle":
+            try:
+                body = SESSION.bundle()
+            except ValueError as exc:
+                return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+            return self._send(HTTPStatus.OK, body, "application/zip",
+                              download="qa2_session_bundle.zip")
+        if path == "/api/evidence/image":
+            from urllib.parse import parse_qs, urlsplit
+            name = (parse_qs(urlsplit(self.path).query).get("name") or [""])[0]
+            data = SESSION.evidence_image(name)
+            if data is None:
+                return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
+            kind = mimetypes.guess_type(name)[0] or "application/octet-stream"
+            return self._send(HTTPStatus.OK, data, kind)
         if path in ASSET_FILES and ASSET_FILES[path].is_file():
             target = ASSET_FILES[path]
             kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
@@ -184,7 +213,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._run(self._read_json())
         if path == "/api/innovid/sign-in":
             return self._json(HTTPStatus.OK, innovid_sign_in())
-        if path not in ("/api/traffic-sheet", "/api/file", "/api/bundle"):
+        if path == "/api/review":
+            body = self._read_json()
+            ids = body.get("ids") or []
+            if not isinstance(ids, list):
+                ids = []
+            try:
+                payload = SESSION.sign([str(i) for i in ids][:2000],
+                                       bool(body.get("approved")), str(body.get("note") or ""))
+            except ValueError as exc:
+                return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+            return self._json(HTTPStatus.OK, payload)
+        if path == "/api/record":
+            record = SESSION.update_record(self._read_json())
+            if SESSION.run_state is not None:
+                SESSION.results()
+            return self._json(HTTPStatus.OK, {"record": record})
+        if path == "/api/evidence/remove":
+            return self._json(HTTPStatus.OK, {"evidence": SESSION.remove_evidence(
+                str(self._read_json().get("name", "")))})
+        if path not in ("/api/traffic-sheet", "/api/file", "/api/bundle", "/api/evidence"):
             return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
 
         slot = (query.get("slot") or [""])[0]
@@ -207,6 +255,12 @@ class Handler(BaseHTTPRequestHandler):
         file_name = Path(unquote(self.headers.get("X-File-Name", "file.xlsx"))).name[:200]
         if path == "/api/bundle":
             return self._bundle(self.rfile.read(length))
+        if path == "/api/evidence":
+            try:
+                names = SESSION.add_evidence(file_name, self.rfile.read(length))
+            except ValueError as exc:
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return self._json(HTTPStatus.OK, {"evidence": names})
         if Path(file_name).suffix.lower() not in WORKBOOK_SUFFIXES:
             return self._json(HTTPStatus.BAD_REQUEST,
                               {"error": "QA2 reads .xlsx, .xlsm or .xls files. Save the file in one of those formats and drop it again."})
@@ -262,6 +316,16 @@ class Handler(BaseHTTPRequestHandler):
         account = str(manifest.get("account") or "")
         if account in account_options():
             SESSION.account = account
+        SESSION.update_record({k: manifest.get(k) for k in (
+            "campaign", "request_type", "wrike_id", "implemented_by",
+            "implementation_date", "notes") if manifest.get(k)})
+        if isinstance(manifest.get("qa1_result"), dict):
+            SESSION.qa1_result = manifest["qa1_result"]
+        for name, content in bundle.files.get("evidence", []):
+            try:
+                SESSION.add_evidence(name, content)
+            except ValueError:
+                unreadable.append(name)
         origin = {k: manifest.get(k) for k in (
             "implemented_by", "implementation_date", "wrike_id", "saved_at", "qa1_result")}
         summary["bundle"] = {
@@ -301,6 +365,23 @@ class Handler(BaseHTTPRequestHandler):
 
 
 # ------------------------------------------------------------------ Innovid
+
+def people_options(account: str = "") -> list[str]:
+    """Quien puede firmar: el equipo de la cuenta (o todos), como en Streamlit."""
+    try:
+        from core.team_roster import ACCOUNTS, load_roster, names_for_account
+        roster = load_roster()
+        if account:
+            return list(names_for_account(roster, account))
+        names: list[str] = []
+        for team in ACCOUNTS:
+            for name in roster.get(team, []):
+                if name not in names:
+                    names.append(name)
+        return names
+    except Exception:  # noqa: BLE001 - sin lista se escribe a mano
+        return []
+
 
 def innovid_status() -> dict:
     """Si hay una sesion de Innovid guardada en este PC y hasta cuando sirve."""

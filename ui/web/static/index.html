@@ -201,8 +201,27 @@ select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surfa
 .dates b{font-variant-numeric:tabular-nums}
 .dates .diff{color:var(--review);background:color-mix(in srgb,var(--review) 12%,transparent);padding:2px 8px;border-radius:8px}
 .dates p{flex-basis:100%}
-.override{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px}
-.override button{font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.override{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;border-top:1px dashed var(--line);padding-top:10px}
+.override input{flex:1;min-width:min(240px,100%);font-size:13px;padding:7px 9px}
+.override button{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700}
+.override button.ok{background:var(--pass);border-color:var(--pass);color:#fff}
+.override .done{color:var(--pass);font-weight:700}
+.badge.signed{background:color-mix(in srgb,var(--pass) 16%,transparent);color:var(--pass)}
+.revbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);margin-bottom:10px;font-size:13.5px}
+.revbar .meter{flex:0 0 120px;height:7px;border-radius:9px;background:var(--line);overflow:hidden}.revbar .meter i{display:block;height:100%;background:var(--pass)}
+.revbar input{flex:1;min-width:min(220px,100%);font-size:13px;padding:7px 9px}
+.revbar button{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid var(--pass);background:var(--pass);color:#fff;font-weight:700}
+textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 10px;min-height:70px;resize:vertical}
+.form .wide{grid-column:1/-1}
+.saved{font-size:12px;color:var(--muted);min-height:1em}
+.evzone{border:2px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--muted);font-size:13.5px;background:var(--surface)}
+.evzone.over{border-color:var(--accent);color:var(--accent)}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}
+.thumb{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.thumb img{display:block;width:100%;height:96px;object-fit:cover}
+.thumb span{display:block;font-size:11.5px;padding:5px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb button{position:absolute;top:6px;right:6px;border:0;border-radius:99px;width:24px;height:24px;background:rgba(0,0,80,.75);color:#fff;font-weight:700;line-height:1}
+.dl a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .sec{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
 .sec .ln{flex:1;height:1px;background:var(--line)}
 .dl{display:flex;gap:10px;flex-wrap:wrap}
@@ -365,9 +384,43 @@ select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surfa
       <div id="dates"></div>
       <div class="sec"><h2>What QA2 found</h2><span class="ln"></span></div>
       <div class="row" style="margin-bottom:10px"><div class="chips" id="chips"></div><span class="spacer"></span><input id="search" type="search" placeholder="Search a placement, creative or rule" style="min-width:min(280px,100%)"></div>
+      <div id="revbar"></div>
       <div class="findings" id="findings"></div>
       <p class="small muted" id="findNote"></p>
-      <div class="alert info" style="margin-top:16px">Signing off reviews and downloading the PDF and Excel reports are still in the current QA2 window. They move here next.&nbsp;<a href="http://localhost:8501/" target="_blank" rel="noopener">Open the current QA2</a></div>
+
+      <div class="sec"><h2>Implementation Record</h2><span class="ln"></span></div>
+      <div class="card grid">
+        <p class="small muted" style="margin:0">Goes on the first page of the PDF and the Excel. QA2 By also signs the reviews you approve.</p>
+        <div class="form" id="record">
+          <label class="wide">Campaign<input data-k="campaign" autocomplete="off"></label>
+          <label>Request type<input data-k="request_type" autocomplete="off"></label>
+          <label>Wrike ID<input data-k="wrike_id" autocomplete="off"></label>
+          <label>Implemented by (QA1)<input data-k="implemented_by" list="people" autocomplete="off"></label>
+          <label>Implementation date<input type="date" data-k="implementation_date"></label>
+          <label>QA2 by<input data-k="qa2_by" list="people" autocomplete="off"></label>
+          <label>QA2 date<input type="date" data-k="qa2_date"></label>
+          <label>QA3 by<input data-k="qa3_by" list="people" autocomplete="off"></label>
+          <label>QA3 date<input type="date" data-k="qa3_date"></label>
+          <label class="wide">Notes / callouts<textarea data-k="notes" placeholder="Anything worth flagging that doesn't block the implementation"></textarea></label>
+        </div>
+        <datalist id="people"></datalist>
+        <div class="saved" id="recSaved" aria-live="polite"></div>
+      </div>
+
+      <div class="sec"><h2>Evidence</h2><span class="ln"></span></div>
+      <div class="card">
+        <div class="evzone" id="evZone" tabindex="0">Paste a screenshot here with <b>Ctrl+V</b>, drop image files, or <button class="fix" id="evPick" type="button">choose files</button>.<br><span class="small">PNG, JPG or GIF. They go into the PDF, the Excel and the session bundle.</span></div>
+        <input type="file" id="evFile" accept="image/png,image/jpeg,image/gif" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+
+      <div class="sec"><h2>Download</h2><span class="ln"></span></div>
+      <div class="dl">
+        <a class="btn" href="/api/download/pdf" id="dlPdf">PDF report</a>
+        <a class="btn" href="/api/download/xlsx" id="dlXlsx">Excel report</a>
+        <a class="btn ghost" href="/api/download/bundle" id="dlBundle">Session bundle (.zip)</a>
+      </div>
+      <p class="small muted">The PDF is the summary to share. The Excel has every check, the tags and what Innovid returned. The session bundle carries the files, the record and the screenshots, so the next person loads it in step 1 instead of uploading everything again.</p>
     </section>
   </main>
 </div>
@@ -560,14 +613,14 @@ $("#runBtn").onclick=async()=>{
   const btn=$("#runBtn");btn.disabled=true;$("#runError").hidden=true;$("#runBox").hidden=false;
   $("#runSub").textContent=state.innovid?"Reading the decision sets from Innovid can take a few minutes.":"Matching the Traffic Sheet with the exports and running every rule.";
   const t0=Date.now();const tick=setInterval(()=>{$("#runTime").textContent=Math.round((Date.now()-t0)/1000)+" s"},500);
-  try{state.results=await post("/api/run",{account:$("#account").value,innovid:state.innovid});go("results");renderResults()}
+  try{state.results=await post("/api/run",{account:$("#account").value,innovid:state.innovid});go("results");renderResults();loadRecord()}
   catch(e){const b=$("#runError");b.textContent=e.message;b.hidden=false}
   finally{clearInterval(tick);btn.disabled=false;$("#runBox").hidden=true}
 };
 
 /* ---------- step 5 ---------- */
 const ST={FAIL:["Fail","--fail"],REVIEW:["Review","--review"],NOT_VERIFIED:["Not checked","--nv"],INFO:["Info","--info"],PASS:["Pass","--pass"]};
-const res={filter:null,q:""};
+const res={filter:null,q:"",open:new Set()};
 function vclass(v){return v==="PASSED"?"vpass":v==="NO_CHECKS"?"":"vfail"}
 function renderResults(){
   const d=state.results;if(!d)return;
@@ -578,6 +631,7 @@ function renderResults(){
   const iv=d.innovid||{};
   $("#ivResult").innerHTML=iv.used?(iv.errors&&iv.errors.length?`<div class="alert warn">Innovid answered for ${fmt(iv.placements)} placement(s) with problems: ${iv.errors.map(esc).join(" · ")}</div>`:`<div class="alert info">Checked against Innovid campaign ${esc(iv.campaign_id)}.</div>`):(iv.message?`<div class="alert warn">${esc(iv.message)}</div>`:"");
   renderDates(d.dates);
+  fillRecord(d.record);renderThumbs(d.evidence);
   if(!res.filter)res.filter=open?"open":"all";
   renderFindings();
 }
@@ -590,22 +644,88 @@ function renderDates(dt){
 function renderFindings(){
   const d=state.results;if(!d)return;
   const c=d.counts;const open=(c.FAIL||0)+(c.REVIEW||0)+(c.NOT_VERIFIED||0);
-  const chips=[["open","To look at",open,"--fail"],["FAIL","Fail",c.FAIL,"--fail"],["REVIEW","Review",c.REVIEW,"--review"],["NOT_VERIFIED","Not checked",c.NOT_VERIFIED,"--nv"],["PASS","Pass",c.PASS,"--pass"],["all","All",d.findings.length,"--line"]];
+  const chips=[["open","To look at",open,"--fail"],["FAIL","Fail",c.FAIL,"--fail"],["REVIEW","Review",c.REVIEW,"--review"],["NOT_VERIFIED","Not checked",c.NOT_VERIFIED,"--nv"],["PASS","Pass",c.PASS,"--pass"],["signed","Approved",(d.review||{}).signed||0,"--pass"],["all","All",d.findings.length,"--line"]];
   $("#chips").innerHTML=chips.filter(x=>x[2]||x[0]==="open"||x[0]==="all").map(([k,l,n,col])=>`<button class="chip" data-f="${k}" aria-pressed="${res.filter===k}"><i style="background:var(${col})"></i>${l}<span class="c">${fmt(n||0)}</span></button>`).join("");
   const q=res.q.toLowerCase();
-  let rows=d.findings.filter(f=>res.filter==="all"||(res.filter==="open"?["FAIL","REVIEW","NOT_VERIFIED"].includes(f.status):f.status===res.filter));
+  let rows=d.findings.filter(f=>res.filter==="all"||(res.filter==="open"?["FAIL","REVIEW","NOT_VERIFIED"].includes(f.status):res.filter==="signed"?f.signed:f.status===res.filter));
   if(q)rows=rows.filter(f=>[f.placement_id,f.placement_name,f.creative,f.rule,f.message].join(" ").toLowerCase().includes(q));
   const shown=rows.slice(0,400);
   $("#findings").innerHTML=shown.length?shown.map((f,i)=>{const s=ST[f.status]||[f.status,"--line"];
     const ev=(f.expected||f.actual)?`<div class="ev"><div class="exp"><small>Traffic Sheet expects</small><code>${esc(f.expected||"—")}</code></div><div class="act"><small>QA2 found</small><code>${esc(f.actual||"—")}</code></div></div>`:"";
-    return `<div class="f" style="--sev:var(${s[1]})"><button aria-expanded="false"><span class="badge" style="background:color-mix(in srgb,var(${s[1]}) 16%,transparent);color:var(${s[1]})">${s[0]}</span><span style="min-width:0"><span class="msg">${esc(f.message)}</span><br><span class="where">${f.placement_id?`<code>${esc(f.placement_id)}</code> ${esc(f.placement_name)}`:"Whole request"}${f.creative?" · "+esc(f.creative):""}</span></span><span class="chev">›</span></button><div class="body">${ev}<div class="explain"><div><b>What this checks</b>${esc(f.rule_title||f.rule)} <span class="muted">(${esc(f.rule)})</span></div>${f.reason?`<div><b>Why</b>${esc(f.reason)}</div>`:""}${f.action?`<div><b>What to do</b>${esc(f.action)}</div>`:""}</div></div></div>`}).join(""):'<div class="card muted">Nothing here.</div>';
+    const sign=f.reviewable?(f.signed?`<div class="override"><span class="done">✓ Approved${d.record&&d.record.qa2_by?" by "+esc(d.record.qa2_by):""}</span>${f.note?`<span class="muted">“${esc(f.note)}”</span>`:""}<span class="spacer"></span><button data-unsign="${esc(f.id)}">Undo</button></div>`:`<div class="override"><input placeholder="Observation (why it's fine)" data-note="${esc(f.id)}" maxlength="500"><button class="ok" data-sign="${esc(f.id)}">Approve</button></div>`):"";
+    const badge=f.signed?`<span class="badge signed">Approved</span>`:`<span class="badge" style="background:color-mix(in srgb,var(${s[1]}) 16%,transparent);color:var(${s[1]})">${s[0]}</span>`;
+    return `<div class="f${res.open.has(f.id)?" open":""}" style="--sev:var(${f.signed?"--pass":s[1]})"><button aria-expanded="${res.open.has(f.id)}" data-id="${esc(f.id)}">${badge}<span style="min-width:0"><span class="msg">${esc(f.message)}</span><br><span class="where">${f.placement_id?`<code>${esc(f.placement_id)}</code> ${esc(f.placement_name)}`:"Whole request"}${f.creative?" · "+esc(f.creative):""}</span></span><span class="chev">›</span></button><div class="body">${ev}<div class="explain"><div><b>What this checks</b>${esc(f.rule_title||f.rule)} <span class="muted">(${esc(f.rule)})</span></div>${f.reason?`<div><b>Why</b>${esc(f.reason)}</div>`:""}${f.action?`<div><b>What to do</b>${esc(f.action)}</div>`:""}</div>${sign}</div></div>`}).join(""):'<div class="card muted">Nothing here.</div>';
   $("#findNote").textContent=rows.length>shown.length?`Showing the first ${fmt(shown.length)} of ${fmt(rows.length)}. Search to narrow it down.`:"";
+  renderRevbar(shown.filter(f=>f.reviewable&&!f.signed));
+}
+function renderRevbar(unsigned){
+  const d=state.results,r=d.review||{total:0,signed:0},box=$("#revbar");
+  if(!r.total){box.innerHTML="";return}
+  const pct=Math.round(100*r.signed/r.total);
+  const bulk=unsigned.length>1?`<input id="bulkNote" placeholder="Observation for all ${fmt(unsigned.length)} shown" maxlength="500"><button id="bulkSign">Approve ${fmt(unsigned.length)} shown</button>`:"";
+  box.innerHTML=`<div class="revbar"><b>QA2 Review</b><span>${fmt(r.signed)} of ${fmt(r.total)} approved</span><span class="meter"><i style="width:${pct}%"></i></span>${bulk}</div>`;
+  const b=$("#bulkSign");if(b)b.onclick=()=>signIds(unsigned.map(f=>f.id),true,$("#bulkNote").value);
+}
+async function signIds(ids,approved,note){
+  try{state.results=await post("/api/review",{ids,approved,note:note||""});renderResults();
+    toast(approved?`${fmt(ids.length)} approved. The verdict and the reports count them as Pass.`:"Approval undone.")}
+  catch(e){toast(e.message)}
 }
 $("#chips").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(!b)return;res.filter=b.dataset.f;renderFindings()});
 $("#search").addEventListener("input",e=>{res.q=e.target.value;renderFindings()});
-$("#findings").addEventListener("click",e=>{const b=e.target.closest(".f>button");if(!b)return;const f=b.parentElement;f.classList.toggle("open");b.setAttribute("aria-expanded",f.classList.contains("open"))});
+$("#findings").addEventListener("click",e=>{
+  const sg=e.target.closest("[data-sign]");if(sg){const id=sg.dataset.sign;const n=$(`[data-note="${CSS.escape(id)}"]`);signIds([id],true,n?n.value:"");return}
+  const un=e.target.closest("[data-unsign]");if(un){signIds([un.dataset.unsign],false,"");return}
+  const b=e.target.closest(".f>button");if(!b)return;const f=b.parentElement;f.classList.toggle("open");
+  const open=f.classList.contains("open");b.setAttribute("aria-expanded",open);if(open)res.open.add(b.dataset.id);else res.open.delete(b.dataset.id)});
+$("#findings").addEventListener("keydown",e=>{const n=e.target.closest("[data-note]");if(n&&e.key==="Enter"){e.preventDefault();signIds([n.dataset.note],true,n.value)}});
+
+/* ---------- record ---------- */
+let recTimer;
+let recDirty=false;
+function fillRecord(rec){if(!rec||recDirty)return;document.querySelectorAll("#record [data-k]").forEach(el=>{if(document.activeElement!==el)el.value=rec[el.dataset.k]||""})}
+async function loadRecord(){
+  try{const d=await api("/api/record");fillRecord(d.record);
+    $("#people").innerHTML=(d.people||[]).map(n=>`<option value="${esc(n)}">`).join("");
+}
+  catch(e){}
+}
+function saveRecord(){
+  clearTimeout(recTimer);recDirty=true;$("#recSaved").textContent="Saving…";
+  recTimer=setTimeout(async()=>{const body={};document.querySelectorAll("#record [data-k]").forEach(el=>body[el.dataset.k]=el.value);
+    try{await post("/api/record",body);recDirty=false;$("#recSaved").textContent="Saved. It goes into the reports and the bundle.";
+      if(state.results&&state.results.record&&state.results.record.qa2_by!==body.qa2_by){state.results=await api("/api/results");renderFindings()}}
+    catch(e){recDirty=false;$("#recSaved").textContent=e.message}},500)}
+$("#record").addEventListener("input",saveRecord);
+
+/* ---------- evidence ---------- */
+function renderThumbs(names){
+  $("#thumbs").innerHTML=(names||[]).map(n=>`<div class="thumb"><img alt="" src="/api/evidence/image?name=${encodeURIComponent(n)}&t=${Date.now()}"><span title="${esc(n)}">${esc(n)}</span><button aria-label="Remove ${esc(n)}" data-rmev="${esc(n)}">×</button></div>`).join("");
+}
+async function addImages(files){
+  for(const file of files){
+    if(!/^image\/(png|jpeg|gif)$/.test(file.type)){toast("Screenshots go in as PNG, JPG or GIF.");continue}
+    const name=file.name&&file.name!=="image.png"?file.name:`screenshot_${new Date().toTimeString().slice(0,8).replace(/:/g,"")}.png`;
+    try{const d=await api("/api/evidence",{method:"POST",headers:{"X-File-Name":encodeURIComponent(name),"Content-Type":"application/octet-stream"},body:file});renderThumbs(d.evidence);toast("Screenshot added.")}
+    catch(e){toast(e.message)}
+  }
+}
+const evZone=$("#evZone");
+$("#evPick").onclick=()=>$("#evFile").click();
+$("#evFile").onchange=e=>{addImages([...e.target.files]);e.target.value=""};
+evZone.addEventListener("dragover",e=>{e.preventDefault();evZone.classList.add("over")});
+evZone.addEventListener("dragleave",()=>evZone.classList.remove("over"));
+evZone.addEventListener("drop",e=>{e.preventDefault();evZone.classList.remove("over");addImages([...e.dataTransfer.files])});
+document.addEventListener("paste",e=>{
+  if(state.view!=="results")return;
+  const t=e.target;if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")&&!(e.clipboardData&&[...e.clipboardData.items].some(i=>i.type.startsWith("image/"))))return;
+  const files=[...(e.clipboardData?e.clipboardData.items:[])].filter(i=>i.kind==="file"&&i.type.startsWith("image/")).map(i=>i.getAsFile()).filter(Boolean);
+  if(files.length){e.preventDefault();addImages(files)}});
+$("#thumbs").addEventListener("click",async e=>{const b=e.target.closest("[data-rmev]");if(!b)return;
+  try{const d=await post("/api/evidence/remove",{name:b.dataset.rmev});renderThumbs(d.evidence)}catch(err){toast(err.message)}});
+document.querySelectorAll(".dl a").forEach(a=>a.addEventListener("click",()=>toast("Preparing the file…")));
 $("#startOver").onclick=async()=>{try{await post("/api/reset")}catch(_){}
-  Object.assign(state,{data:null,files:null,results:null,intent:null});res.filter=null;res.q="";$("#search").value="";
+  Object.assign(state,{data:null,files:null,results:null,intent:null});res.filter=null;res.q="";res.open.clear();$("#search").value="";fillRecord(Object.fromEntries([...document.querySelectorAll("#record [data-k]")].map(el=>[el.dataset.k,""])));renderThumbs([]);
   $("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";go("ts")};
 fetch("/api/health").then(r=>r.json()).then(d=>{$("#ver").textContent=d.version}).catch(()=>{});
 renderSteps();
