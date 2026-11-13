@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from core import placement_state
 from core.colors import RED
 from core.matching import is_site_served_1x1, norm_creative
 from core.normalize import norm_compare, normalize_weights
@@ -162,10 +163,10 @@ class InnovidReconciliation:
     # nada que comparar.
     site_served: list[str] = field(default_factory=list)
 
-    # Placements desactivados en Innovid (en gris): (placement, estado).
-    # No tienen decision set ni partner que revisar, y decir "no se
-    # pudo leer el decision set" o "no tiene Verification Partner"
-    # escondia lo que de verdad pasa (FB-25).
+    # Placements desactivados en Innovid (en gris) que la TS quiere
+    # corriendo: (placement, estado). Es un Review, y uno solo: decir
+    # "no se pudo leer el decision set" o "no tiene Verification
+    # Partner" escondia lo que de verdad pasa (FB-25).
     inactive: list[tuple[str, str]] = field(default_factory=list)
 
     errors: list[str] = field(default_factory=list)
@@ -173,31 +174,6 @@ class InnovidReconciliation:
     @property
     def checked_placements(self) -> set[str]:
         return {c.placement_id for c in self.flights}
-
-
-#: Como llama Innovid a un placement que ya no sirve (en gris en la UI).
-INACTIVE_STATUSES = {
-    "stopped", "disabled", "inactive", "deactivated", "paused",
-    "archived", "hidden",
-}
-
-
-def _inactive_status(innovid_placement, pm) -> str:
-    """
-    El estado con el que Innovid dice que el placement esta apagado, o "".
-
-    Manda lo que trae Innovid en vivo; si no dice nada, el export
-    (Stopped / Hidden en el Placement View).
-    """
-    status = str(getattr(innovid_placement, "status", "") or "").strip()
-    if status.lower() in INACTIVE_STATUSES:
-        return status
-    actual = getattr(pm, "actual", None)
-    if actual is not None and not status:
-        export_status = str(getattr(actual, "status", "") or "").strip()
-        if export_status.lower() in INACTIVE_STATUSES:
-            return export_status
-    return ""
 
 
 def _dates_differ(left: date | None, right: date | None) -> bool:
@@ -246,9 +222,18 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             )
             continue
 
-        inactive = _inactive_status(innovid_placement, pm)
-        if inactive:
-            out.inactive.append((pid, inactive))
+        # Apagado en Innovid: no hay decision set ni partner que revisar,
+        # y decir "no se pudo leer" escondia lo que pasa. Si la TS lo
+        # quiere corriendo es un Review (INV-005, o PLC-003 si ya lo
+        # dice el export); si lo desasigna, es lo pedido.
+        live = str(innovid_placement.status or "").strip()
+        export_status = str(getattr(getattr(pm, "actual", None), "status", "") or "").strip()
+        live_off = placement_state.is_inactive(live)
+        export_off = placement_state.is_inactive(export_status) and not live
+        if live_off or export_off:
+            if live_off and not placement_state.is_inactive(export_status) \
+                    and not placement_state.wants_it_off(pm):
+                out.inactive.append((pid, live))
             continue
 
         out.partners.append(VerificationPartnerCheck(
@@ -275,8 +260,11 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
                 out.site_served.append(pid)
                 continue
 
+            # El estado que da Innovid va en el mensaje: si es uno que
+            # QA2 no reconoce como apagado, quien lo lea lo ve.
             out.unchecked.append(
-                (pid, "no decision set could be read for this placement")
+                (pid, "no decision set could be read for this placement"
+                      + (f" (Innovid status: {live})" if live else ""))
             )
             continue
 

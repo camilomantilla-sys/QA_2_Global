@@ -299,14 +299,13 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(665 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(653 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | clase | `CreativeFlightCheck` | Un creativo de la TS frente a su nodo en el decision set |
 | clase | `VerificationPartnerCheck` |  |
 | clase | `InnovidReconciliation` | Todo lo que se pudo comparar, y todo lo que no |
-| funcion | `_inactive_status(innovid_placement, pm) -> str` | El estado con el que Innovid dice que el placement esta apagado, o "" |
 | funcion | `_dates_differ(left: date \| None, right: date \| None) -> bool` | Solo compara cuando ambos lados existen |
 | funcion | `reconcile(match_result, innovid_result) -> InnovidReconciliation` | Cruza los placements trabajados de la TS con lo que trajo Innovid |
 | funcion | `_normalize_weights(out: InnovidReconciliation) -> None` | Lleva los pesos de los dos lados a porcentajes, placement por placement |
@@ -473,6 +472,16 @@ Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(604 lineas)*
 | funcion | `_declared(vendor: Vendor, vendor_raw: str) -> bool` |  |
 | funcion | `_pixels_in(row, column: str) -> list[str]` |  |
 | funcion | `reconcile_pixels(ts_result, placement_view, account: str='') -> PixelReconciliation` |  |
+
+### `core/placement_state.py`
+
+Lo que la TS pide de un placement frente a si esta encendido en Innovid. *(55 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `is_inactive(status) -> bool` |  |
+| funcion | `wants_it_off(pm) -> bool` | La TS desasigna el placement entero: apagado es lo pedido (PLC-002) |
+| funcion | `what_the_ts_asks(pm) -> str` |  |
 
 ### `core/provenance.py`
 
@@ -841,7 +850,7 @@ DV-001 / DV-002 -- tags de DoubleVerify Pinnacle. *(61 lineas)*
 
 ### `rules/innovid.py`
 
-Hallazgos de lo que solo Innovid sabe. *(611 lineas)*
+Hallazgos de lo que solo Innovid sabe. *(613 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -873,12 +882,13 @@ PIX-002 -- el pixel de cada vendor esta en su columna. *(71 lineas)*
 
 ### `rules/placements.py`
 
-PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(169 lineas)*
+PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(201 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `evaluate(match_result, buffer)` |  |
 | funcion | `_evaluate_rotation_dims(ep, buffer)` | PLC-007 -- la rotacion que el placement declara no es de su tamano |
+| funcion | `_evaluate_switched_off(pm, buffer)` | PLC-003 -- la TS quiere el placement corriendo y esta apagado |
 | funcion | `_evaluate_disassignment(pm, buffer)` | PLC-002 - desasignacion de placement |
 
 ### `rules/rotation.py`
@@ -1327,7 +1337,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_help_content.py` | 4 | La ayuda dentro de la app (FB-05, FB-19) dice lo mismo que la pantalla |
 | `test_hidden_landing_page_chain.py` | 12 | La tabla que dice a que landing page apunta un grupo puede estar oculta |
 | `test_hidden_rotations.py` | 6 | Una hoja de rotaciones filtrada sigue siendo una hoja con datos |
-| `test_inactive_placement.py` | 2 | Un placement desactivado en Innovid (en gris) se dice tal cual (FB-25) |
+| `test_inactive_placement.py` | 7 | Un placement apagado en Innovid frente a lo que pide la TS (FB-25) |
 | `test_innovid_api.py` | 8 | Parser tests for core/innovid_api |
 | `test_innovid_cache.py` | 0 | La cache de la app no debe guardar fallos |
 | `test_innovid_cache_policy.py` | 11 | Que se guarda en el cache de Innovid y que no |
@@ -1377,4 +1387,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 750 funciones de prueba en 75 archivos (algunas se parametrizan y corren varias veces).
+Total: 755 funciones de prueba en 75 archivos (algunas se parametrizan y corren varias veces).

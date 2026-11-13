@@ -20,6 +20,7 @@ from core.innovid_reconciliation import (
     MISSING_IN_INNOVID,
     ONLY_IN_EXPORT,
 )
+from core import placement_state
 from core.intent import requested
 from core.matching import norm_creative
 from core.normalize import norm_compare
@@ -517,23 +518,24 @@ def _unchecked(reconciliation, buffer):
         )
 
     for placement_id, status in getattr(reconciliation, "inactive", ()):
-        buffer.info(
+        buffer.review(
             rule_id="INV-005",
-            domain=Domain.DATES,
+            domain=Domain.SCOPE,
             entity_type=EntityType.PLACEMENT,
             placement_id=placement_id,
             message=(
-                f"This placement is deactivated in Innovid ({status}), so "
-                "its decision set, creative dates and Verification Partner "
-                "were not checked"
+                "The Traffic Sheet wants this placement running, but "
+                f"Innovid has it {status} today"
             ),
-            expected="Active",
-            actual=status,
-            reason="Innovid placement status",
-            recommended_action=(
-                "Nothing to do if a later request turned it off. If this "
-                "request needs it running, activate it in Innovid."
+            expected="Running",
+            actual=f"Status={status}",
+            reason=(
+                placement_state.OLDER_TS_NOTE + " The exports still show it "
+                "running, so it was turned off after they were downloaded. "
+                "Its decision set, creative dates and Verification Partner "
+                "were not checked."
             ),
+            recommended_action=placement_state.ACTION,
         )
 
     for placement_id, why in reconciliation.unchecked:

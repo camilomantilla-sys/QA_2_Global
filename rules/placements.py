@@ -3,11 +3,14 @@ PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements.
 
 PLC-001: el placement que pide la TS existe en Innovid.
 PLC-002: en una desasignacion, el placement quedo detenido.
+PLC-003 (REVIEW): la TS quiere el placement corriendo y el export lo
+muestra apagado.
 PLC-007 (REVIEW): la rotacion que declara el placement tiene al menos
 un creativo de su dimension.
 """
 
 from core.colors import GREEN, RED
+from core import placement_state
 from core.findings import Domain
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
@@ -37,6 +40,7 @@ def evaluate(match_result, buffer):
         )
 
         _evaluate_disassignment(pm, buffer)
+        _evaluate_switched_off(pm, buffer)
 
     # PLC-007 mira la TS, no Innovid: vale igual para un placement que
     # volvio y para uno que no.
@@ -94,6 +98,34 @@ def _evaluate_rotation_dims(ep, buffer):
             f"this placement is {ep.dims} and the rotation it names is "
             "not."
         ),
+    )
+
+
+def _evaluate_switched_off(pm, buffer):
+    """
+    PLC-003 -- la TS quiere el placement corriendo y esta apagado.
+
+    Todo lo demas puede coincidir (creativos asignados, URL, CGEN) y aun
+    asi el placement no sirve nada. Sin esto el QA salia PASSED con
+    placements en gris.
+    """
+    status = str(pm.actual.status or "").strip() if pm.actual else ""
+    if not placement_state.is_inactive(status) or placement_state.wants_it_off(pm):
+        return
+    buffer.review(
+        rule_id="PLC-003",
+        domain=Domain.SCOPE,
+        placement_id=pm.placement_id,
+        placement_name=pm.expected.name,
+        message=(
+            "The Traffic Sheet wants this placement running "
+            f"({placement_state.what_the_ts_asks(pm)}), but the export "
+            f"shows it {status}"
+        ),
+        expected="Running",
+        actual=f"Status={status}",
+        reason=placement_state.OLDER_TS_NOTE,
+        recommended_action=placement_state.ACTION,
     )
 
 
