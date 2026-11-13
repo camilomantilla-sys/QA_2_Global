@@ -516,6 +516,26 @@ def _unchecked(reconciliation, buffer):
             reason="Innovid decision set",
         )
 
+    for placement_id, status in getattr(reconciliation, "inactive", ()):
+        buffer.info(
+            rule_id="INV-005",
+            domain=Domain.DATES,
+            entity_type=EntityType.PLACEMENT,
+            placement_id=placement_id,
+            message=(
+                f"This placement is deactivated in Innovid ({status}), so "
+                "its decision set, creative dates and Verification Partner "
+                "were not checked"
+            ),
+            expected="Active",
+            actual=status,
+            reason="Innovid placement status",
+            recommended_action=(
+                "Nothing to do if a later request turned it off. If this "
+                "request needs it running, activate it in Innovid."
+            ),
+        )
+
     for placement_id, why in reconciliation.unchecked:
         buffer.not_verified(
             rule_id="INV-001",

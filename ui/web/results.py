@@ -36,6 +36,7 @@ RULE_TITLES = {
     "INV-002": "Creative rotation weight inside the decision set",
     "INV-003": "Verification partner on the placement",
     "INV-004": "The creative name in the decision set",
+    "INV-005": "The placement is active in Innovid",
     "TAG-001": "The tag file declares the right Campaign ID",
     "TAG-002": "The tag's placement exists in Innovid",
     "TAG-003": "The tag's placement is part of this request",

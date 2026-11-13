@@ -162,11 +162,42 @@ class InnovidReconciliation:
     # nada que comparar.
     site_served: list[str] = field(default_factory=list)
 
+    # Placements desactivados en Innovid (en gris): (placement, estado).
+    # No tienen decision set ni partner que revisar, y decir "no se
+    # pudo leer el decision set" o "no tiene Verification Partner"
+    # escondia lo que de verdad pasa (FB-25).
+    inactive: list[tuple[str, str]] = field(default_factory=list)
+
     errors: list[str] = field(default_factory=list)
 
     @property
     def checked_placements(self) -> set[str]:
         return {c.placement_id for c in self.flights}
+
+
+#: Como llama Innovid a un placement que ya no sirve (en gris en la UI).
+INACTIVE_STATUSES = {
+    "stopped", "disabled", "inactive", "deactivated", "paused",
+    "archived", "hidden",
+}
+
+
+def _inactive_status(innovid_placement, pm) -> str:
+    """
+    El estado con el que Innovid dice que el placement esta apagado, o "".
+
+    Manda lo que trae Innovid en vivo; si no dice nada, el export
+    (Stopped / Hidden en el Placement View).
+    """
+    status = str(getattr(innovid_placement, "status", "") or "").strip()
+    if status.lower() in INACTIVE_STATUSES:
+        return status
+    actual = getattr(pm, "actual", None)
+    if actual is not None and not status:
+        export_status = str(getattr(actual, "status", "") or "").strip()
+        if export_status.lower() in INACTIVE_STATUSES:
+            return export_status
+    return ""
 
 
 def _dates_differ(left: date | None, right: date | None) -> bool:
@@ -213,6 +244,11 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             out.unchecked.append(
                 (pid, "Innovid did not return this placement")
             )
+            continue
+
+        inactive = _inactive_status(innovid_placement, pm)
+        if inactive:
+            out.inactive.append((pid, inactive))
             continue
 
         out.partners.append(VerificationPartnerCheck(

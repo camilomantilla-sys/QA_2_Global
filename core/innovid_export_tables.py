@@ -72,6 +72,11 @@ def decision_set_table(reconciliation) -> pd.DataFrame:
             "Placement ID": placement_id,
             "Result": "1x1 site-served: no decision set to compare",
         })
+    for placement_id, status in getattr(reconciliation, "inactive", None) or []:
+        rows.append({
+            "Placement ID": placement_id,
+            "Result": f"Deactivated in Innovid ({status}): nothing to compare",
+        })
     columns = [
         "Placement ID", "Decision Set ID", "Decision Set Name", "TS Creative",
         "Creative Name in DS", "Creative Name in Export", "Default Ad",
