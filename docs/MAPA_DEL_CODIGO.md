@@ -929,7 +929,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5860 lineas)*
+Interfaz de QA2 (Streamlit). *(5843 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |

@@ -3462,66 +3462,49 @@ if True:
                 )
 
         # ----------------------------------------------------
-        # Fechas: TS frente a Innovid (FB-24). Solo para ver: una
-        # diferencia no cambia el veredicto.
+        # Fechas de campana: TS frente a Innovid (FB-24). Solo a
+        # nivel de campana (las del placement ya salen en su
+        # desglose). Una diferencia no cambia el veredicto.
         # ----------------------------------------------------
 
-        _dates = compare_dates(ts_result, pc_result, pl_result, match_result)
-        _date_rows = (
-            ([dict(_dates["campaign"], placement_id="Campaign", placement_name="")]
-             if _dates["campaign"] else [])
-            + _dates["placements"]
-        )
-        if _date_rows:
-            with st.expander(
-                "📅 Dates: Traffic Sheet vs Innovid"
-                + (
-                    f" ({_dates['differences']} difference"
-                    f"{'s' if _dates['differences'] > 1 else ''})"
-                    if _dates["differences"] else ""
-                ),
-                expanded=bool(_dates["differences"]),
-            ):
-                if _dates["differences"]:
-                    st.warning(
-                        f"{_dates['differences']} date"
-                        f"{'s differ' if _dates['differences'] > 1 else ' differs'} between the "
-                        "Traffic Sheet and Innovid. This doesn't change the "
-                        "verdict: check whether the difference is intended."
-                    )
-                else:
-                    st.caption("The Traffic Sheet and Innovid have the same dates.")
-
-                def _date_style(row):
-                    styles = [""] * len(row)
-                    cols = list(row.index)
-                    for key, ok in (("Start", row["_start_ok"]), ("End", row["_end_ok"])):
-                        if ok is False:
-                            for col in (f"{key} in TS", f"{key} in Innovid"):
-                                styles[cols.index(col)] = (
-                                    "background-color:#FFF4D6;color:#8A5000;font-weight:700"
-                                )
-                    return styles
-
-                _df_dates = pd.DataFrame([
-                    {
-                        "Placement": r["placement_id"],
-                        "Start in TS": r["ts_start"],
-                        "Start in Innovid": r["innovid_start"],
-                        "End in TS": r["ts_end"],
-                        "End in Innovid": r["innovid_end"],
-                        "Name": r["placement_name"],
-                        "_start_ok": r["start_ok"],
-                        "_end_ok": r["end_ok"],
-                    }
-                    for r in _date_rows
-                ])
-                st.dataframe(
-                    _df_dates.style.apply(_date_style, axis=1),
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={"_start_ok": None, "_end_ok": None},
+        _campaign_dates = compare_dates(
+            ts_result, pc_result, pl_result, match_result
+        )["campaign"]
+        if _campaign_dates:
+            def _date_line(label, ts_value, innovid_value, ok):
+                style = (
+                    ' style="color:#8A5000;background:#FFF4D6;'
+                    'padding:1px 6px;border-radius:6px;font-weight:700"'
+                    if ok is False else ""
                 )
+                return (
+                    f"<strong>{label}:</strong> <span{style}>"
+                    f"Traffic Sheet {html.escape(ts_value or '—')} · "
+                    f"Innovid {html.escape(innovid_value or '—')}</span>"
+                    + (" ⚠️" if ok is False else "")
+                )
+
+            _dates_differ = (
+                _campaign_dates["start_ok"] is False
+                or _campaign_dates["end_ok"] is False
+            )
+            st.markdown(
+                f"""
+                <div class="profile-card">
+                    <strong>Campaign dates</strong><br>
+                    {_date_line("Start", _campaign_dates["ts_start"],
+                                _campaign_dates["innovid_start"],
+                                _campaign_dates["start_ok"])}<br>
+                    {_date_line("End", _campaign_dates["ts_end"],
+                                _campaign_dates["innovid_end"],
+                                _campaign_dates["end_ok"])}
+                    {"<br><small>The dates differ. This doesn't change "
+                     "the verdict: check whether it's intended.</small>"
+                     if _dates_differ else ""}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         # ----------------------------------------------------
         # Adobe Pixel & Tag Requirements
