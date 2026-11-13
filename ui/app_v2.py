@@ -79,7 +79,7 @@ from core.verdict import (
     verdicts_by_scope,
 )
 from core.engine import run_rules  # noqa: F401
-from core.pipeline import run_checks
+from core.pipeline import compare_dates, run_checks
 from core.findings import Severity, Status
 from core.adobe_tag_policy_reconciliation import (
     reconcile_adobe_tag_policy,
@@ -3459,6 +3459,68 @@ if True:
                     </div>
                     """,
                     unsafe_allow_html=True,
+                )
+
+        # ----------------------------------------------------
+        # Fechas: TS frente a Innovid (FB-24). Solo para ver: una
+        # diferencia no cambia el veredicto.
+        # ----------------------------------------------------
+
+        _dates = compare_dates(ts_result, pc_result, pl_result, match_result)
+        _date_rows = (
+            ([dict(_dates["campaign"], placement_id="Campaign", placement_name="")]
+             if _dates["campaign"] else [])
+            + _dates["placements"]
+        )
+        if _date_rows:
+            with st.expander(
+                "📅 Dates: Traffic Sheet vs Innovid"
+                + (
+                    f" ({_dates['differences']} difference"
+                    f"{'s' if _dates['differences'] > 1 else ''})"
+                    if _dates["differences"] else ""
+                ),
+                expanded=bool(_dates["differences"]),
+            ):
+                if _dates["differences"]:
+                    st.warning(
+                        f"{_dates['differences']} date"
+                        f"{'s differ' if _dates['differences'] > 1 else ' differs'} between the "
+                        "Traffic Sheet and Innovid. This doesn't change the "
+                        "verdict: check whether the difference is intended."
+                    )
+                else:
+                    st.caption("The Traffic Sheet and Innovid have the same dates.")
+
+                def _date_style(row):
+                    styles = [""] * len(row)
+                    cols = list(row.index)
+                    for key, ok in (("Start", row["_start_ok"]), ("End", row["_end_ok"])):
+                        if ok is False:
+                            for col in (f"{key} in TS", f"{key} in Innovid"):
+                                styles[cols.index(col)] = (
+                                    "background-color:#FFF4D6;color:#8A5000;font-weight:700"
+                                )
+                    return styles
+
+                _df_dates = pd.DataFrame([
+                    {
+                        "Placement": r["placement_id"],
+                        "Start in TS": r["ts_start"],
+                        "Start in Innovid": r["innovid_start"],
+                        "End in TS": r["ts_end"],
+                        "End in Innovid": r["innovid_end"],
+                        "Name": r["placement_name"],
+                        "_start_ok": r["start_ok"],
+                        "_end_ok": r["end_ok"],
+                    }
+                    for r in _date_rows
+                ])
+                st.dataframe(
+                    _df_dates.style.apply(_date_style, axis=1),
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={"_start_ok": None, "_end_ok": None},
                 )
 
         # ----------------------------------------------------

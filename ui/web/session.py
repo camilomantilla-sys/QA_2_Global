@@ -181,6 +181,8 @@ class Session:
                  for r in (ts.result.placements.rows if ts.result.placements else [])}
         payload = build_results(checks.findings, names, innovid)
         payload["account"] = account
+        payload["dates"] = pipeline.compare_dates(
+            ts.result, pc.result, pl.result if pl else None, match_result)
         with self.lock:
             self.account = account
             self.last_run = payload

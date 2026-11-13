@@ -428,7 +428,7 @@ QA2 deja escrito su numero de proceso, para que se le pueda encontrar. *(110 lin
 
 ### `core/pipeline.py`
 
-El QA completo, sin interfaz. *(298 lineas)*
+El QA completo, sin interfaz. *(375 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -444,6 +444,9 @@ El QA completo, sin interfaz. *(298 lineas)*
 | funcion | `understand_files(ts_name, ts_result, pc_name, pc_result, pl_name, pl_result, tags_results, dv_result) -> tuple[list[dict], list[dict]]` | Que es cada archivo y que problemas trae |
 | clase | `QAChecks` | Lo que dejan las reglas: los hallazgos y cada conciliacion que la interfaz muestra en sus tablas |
 | funcion | `run_checks(match_result, ts_result, pc_result, pl_result, tags_results, dv_result, account, innovid_reconciliation) -> QAChecks` | Todas las familias de reglas, en el orden de siempre |
+| funcion | `_to_date(value) -> 'date \| None'` | Fecha de una celda o de los metadatos ('2026-11-02 00:00:00') |
+| funcion | `_date_text(value) -> str` |  |
+| funcion | `compare_dates(ts, pc, pl, match_result) -> dict[str, Any]` | Fechas de la TS frente a las de Innovid, solo para mostrar |
 
 ### `core/pixel_reconciliation.py`
 
@@ -926,7 +929,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5798 lineas)*
+Interfaz de QA2 (Streamlit). *(5860 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1303,6 +1306,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
+| `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
 | `test_copilot_export.py` | 3 | The Copilot knowledge export carries all the code and never a secret |
@@ -1371,4 +1375,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 
-Total: 743 funciones de prueba en 73 archivos (algunas se parametrizan y corren varias veces).
+Total: 747 funciones de prueba en 74 archivos (algunas se parametrizan y corren varias veces).
