@@ -296,3 +296,80 @@ def run_checks(
     default_rules.evaluate(out.default_ad_reconciliation, findings)
 
     return out
+
+
+# ------------------------------------------------------------------ fechas
+
+def _to_date(value) -> "date | None":
+    """Fecha de una celda o de los metadatos ('2026-11-02 00:00:00')."""
+    from datetime import date, datetime
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip().replace("T", " ").split(" ")[0]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _date_text(value) -> str:
+    return value.isoformat() if value else ""
+
+
+def compare_dates(ts, pc, pl, match_result) -> dict[str, Any]:
+    """
+    Fechas de la TS frente a las de Innovid, solo para mostrar.
+
+    La campana: Campaign Start / Campaign End de la TS contra el
+    Start/End Date que traen los exports. Cada placement trabajado: sus
+    fechas en la TS contra las del export. Una diferencia no cambia el
+    veredicto del QA (FB-24): la persona la ve y decide.
+    """
+    info = getattr(ts, "campaign_info", {}) or {}
+    meta: dict = {}
+    for export in (pc, pl):
+        if export is not None and (export.metadata or {}).get("startdate"):
+            meta = export.metadata
+            break
+
+    campaign = None
+    ts_start, ts_end = _to_date(info.get("campaignstart")), _to_date(info.get("campaignend"))
+    in_start, in_end = _to_date(meta.get("startdate")), _to_date(meta.get("enddate"))
+    if any((ts_start, ts_end, in_start, in_end)):
+        campaign = {
+            "ts_start": _date_text(ts_start), "ts_end": _date_text(ts_end),
+            "innovid_start": _date_text(in_start), "innovid_end": _date_text(in_end),
+            "start_ok": None if not (ts_start and in_start) else ts_start == in_start,
+            "end_ok": None if not (ts_end and in_end) else ts_end == in_end,
+        }
+
+    placements = []
+    for pm in getattr(match_result, "matched", []) or []:
+        expected, actual = pm.expected, pm.actual
+        if actual is None:
+            continue
+        e_start, e_end = _to_date(expected.start), _to_date(expected.end)
+        a_start, a_end = _to_date(actual.start), _to_date(actual.end)
+        if not any((e_start, e_end, a_start, a_end)):
+            continue
+        placements.append({
+            "placement_id": str(pm.placement_id),
+            "placement_name": expected.name or actual.name,
+            "ts_start": _date_text(e_start), "ts_end": _date_text(e_end),
+            "innovid_start": _date_text(a_start), "innovid_end": _date_text(a_end),
+            "start_ok": None if not (e_start and a_start) else e_start == a_start,
+            "end_ok": None if not (e_end and a_end) else e_end == a_end,
+        })
+    placements.sort(key=lambda p: (p["start_ok"] is not False and p["end_ok"] is not False,
+                                   p["placement_id"]))
+
+    rows = ([campaign] if campaign else []) + placements
+    return {
+        "campaign": campaign,
+        "placements": placements,
+        "differences": sum(1 for r in rows if r["start_ok"] is False or r["end_ok"] is False),
+    }
