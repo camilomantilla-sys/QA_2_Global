@@ -312,6 +312,7 @@ class Session:
     def results(self) -> dict[str, Any]:
         """Lo que pinta el paso 5, con lo firmado ya contado en el veredicto."""
         from core.reports import REVIEWABLE
+        from core.decision_sets import decision_set_view
         from ui.web.results import build_results
         state = self.run_state
         if state is None:
@@ -333,6 +334,8 @@ class Session:
         }
         payload["account"] = self.account
         payload["dates"] = state.dates
+        payload["decision_sets"] = decision_set_view(
+            state.match_result, payload["findings"], state.innovid_reconciliation)
         payload["record"] = dict(self.record)
         payload["evidence"] = [u.name for u in self.evidence]
         with self.lock:

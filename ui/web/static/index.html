@@ -196,6 +196,30 @@ select,input{font:inherit;font-size:14px;color:var(--ink);background:var(--surfa
 .explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;font-size:13px}
 .explain div{min-width:0}
 .explain b{display:block;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:3px;background:var(--card);margin-bottom:12px}
+.seg button{border:0;background:none;border-radius:99px;padding:6px 14px;font-size:13px;font-weight:700;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.dsl{display:flex;flex-direction:column;gap:10px}
+.ds{border:1px solid var(--line);border-left:5px solid var(--sev,var(--line));border-radius:12px;background:var(--card)}
+.ds>button{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:none;border:0;padding:12px 14px;color:inherit}
+.ds .nm{font-weight:700;font-size:14.5px}
+.ds .sub{font-size:12.5px;color:var(--muted)}
+.ds .chev{transition:transform .2s;color:var(--muted)}
+.ds.open .chev{transform:rotate(90deg)}
+.ds .body{display:none;padding:0 14px 14px;gap:12px}
+.ds.open .body{display:grid}
+.ds td .url{font-family:var(--mono);font-size:12px;word-break:break-all}
+.ds td .alt{display:block;margin-top:4px;color:var(--fail)}
+.ds td.tm,.ds td .tm{white-space:nowrap}
+.ds td.lp{min-width:200px}
+.ds .body>*{min-width:0}
+.ds{min-width:0}
+.pls{display:flex;flex-direction:column;gap:4px}
+.pl{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:5px 10px;font-size:12.5px;display:flex;gap:8px;align-items:center;color:var(--ink);width:100%;text-align:left}
+.pl code,.pl i{flex:none}
+.pl span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.ds td.cr{min-width:170px;max-width:280px;overflow-wrap:anywhere}
+.pl i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .dates{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:baseline;margin-top:12px}
 .dates small{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .dates b{font-variant-numeric:tabular-nums}
@@ -383,10 +407,14 @@ textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);
       <div id="ivResult" class="grid" style="margin-top:12px"></div>
       <div id="dates"></div>
       <div class="sec"><h2>What QA2 found</h2><span class="ln"></span></div>
+      <div class="seg" id="viewSeg" role="group" aria-label="Review by"><button data-v="findings" aria-pressed="true">By finding</button><button data-v="ds" aria-pressed="false">By decision set</button></div>
+      <div id="dsWrap" hidden><p class="small muted" style="margin:0 0 10px" id="dsLead"></p><div class="dsl" id="dsList"></div></div>
+      <div id="fWrap">
       <div class="row" style="margin-bottom:10px"><div class="chips" id="chips"></div><span class="spacer"></span><input id="search" type="search" placeholder="Search a placement, creative or rule" style="min-width:min(280px,100%)"></div>
       <div id="revbar"></div>
       <div class="findings" id="findings"></div>
       <p class="small muted" id="findNote"></p>
+      </div>
 
       <div class="sec"><h2>Implementation Record</h2><span class="ln"></span></div>
       <div class="card grid">
@@ -613,14 +641,14 @@ $("#runBtn").onclick=async()=>{
   const btn=$("#runBtn");btn.disabled=true;$("#runError").hidden=true;$("#runBox").hidden=false;
   $("#runSub").textContent=state.innovid?"Reading the decision sets from Innovid can take a few minutes.":"Matching the Traffic Sheet with the exports and running every rule.";
   const t0=Date.now();const tick=setInterval(()=>{$("#runTime").textContent=Math.round((Date.now()-t0)/1000)+" s"},500);
-  try{state.results=await post("/api/run",{account:$("#account").value,innovid:state.innovid});go("results");renderResults();loadRecord()}
+  try{state.results=await post("/api/run",{account:$("#account").value,innovid:state.innovid});res.dsOpen=null;go("results");renderResults();loadRecord()}
   catch(e){const b=$("#runError");b.textContent=e.message;b.hidden=false}
   finally{clearInterval(tick);btn.disabled=false;$("#runBox").hidden=true}
 };
 
 /* ---------- step 5 ---------- */
 const ST={FAIL:["Fail","--fail"],REVIEW:["Review","--review"],NOT_VERIFIED:["Not checked","--nv"],INFO:["Info","--info"],PASS:["Pass","--pass"]};
-const res={filter:null,q:"",open:new Set()};
+const res={filter:null,q:"",open:new Set(),view:"findings",dsOpen:null};
 function vclass(v){return v==="PASSED"?"vpass":v==="NO_CHECKS"?"":"vfail"}
 function renderResults(){
   const d=state.results;if(!d)return;
@@ -633,8 +661,38 @@ function renderResults(){
   renderDates(d.dates);
   fillRecord(d.record);renderThumbs(d.evidence);
   if(!res.filter)res.filter=open?"open":"all";
-  renderFindings();
+  renderFindings();renderDecisionSets();
 }
+/* FB-08: la misma revision, agrupada por decision set */
+function setView(v){res.view=v;document.querySelectorAll("#viewSeg [data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v));
+  $("#dsWrap").hidden=v!=="ds";$("#fWrap").hidden=v!=="findings";}
+function renderDecisionSets(){
+  const d=state.results;if(!d)return;const sets=d.decision_sets||[];
+  if(res.dsOpen===null)res.dsOpen=new Set(sets.filter(g=>["FAIL","REVIEW"].includes(g.status)).slice(0,1).map(g=>g.name));
+  const ivUsed=(d.innovid||{}).used;
+  const nPl=new Set(sets.flatMap(g=>g.placements.map(p=>p.placement_id))).size;
+  $("#dsLead").textContent=sets.length?`${fmt(sets.length)} decision set${sets.length>1?"s":""} shared by ${fmt(nPl)} placement${nPl===1?"":"s"}. Each row is a creative (or one date range of it) with what the Traffic Sheet asks next to what Innovid has.${ivUsed?"":" Innovid dates and hours come from the live Innovid check (step 3)."}`:"QA2 found no decision sets to group in this request.";
+  const dash='<span class="muted">—</span>';
+  const many=(o,fmtv)=>!o||(!o.value&&!o.varies)?"":o.varies?`<span class="alt">Differs across placements: ${o.values.map(v=>esc(fmtv?fmtv(v):v)).join(" · ")}</span>`:esc(fmtv?fmtv(o.value):o.value);
+  const span=(a,b)=>a||b?`${esc(a||"…")} → ${esc(b||"…")}`:dash;
+  const ivSpan=r=>{const a=many(r.innovid_start),b=many(r.innovid_end);if(!a&&!b)return ivUsed?'<span class="muted">Not found</span>':'<span class="muted">Not read</span>';
+    return r.innovid_start.varies||r.innovid_end.varies?a+b:`<span class="tm">${a||"…"} → ${b||"…"}</span>`};
+  const urlCell=r=>{const iv=r.innovid_url||{};let h=r.ts_url?`<span class="url">${esc(r.ts_url)}</span>`:dash;
+    if(iv.varies)h+=`<span class="url alt">Innovid differs across placements: ${iv.values.map(esc).join(" · ")}</span>`;
+    else if(iv.value&&iv.value!==r.ts_url)h+=`<span class="url alt">Innovid: ${esc(iv.value)}</span>`;return h};
+  const badge=st=>{const s=ST[st];return s?`<span class="badge" style="background:color-mix(in srgb,var(${s[1]}) 16%,transparent);color:var(${s[1]})">${s[0]}</span>`:'<span class="badge muted">No check</span>'};
+  $("#dsList").innerHTML=sets.map(g=>{const s=ST[g.status]||["","--line"];const open=res.dsOpen.has(g.name);
+    const iv=g.innovid_names.filter(n=>n!==g.name);
+    const cnt=Object.entries(g.counts).sort((a,b)=>(Object.keys(ST).indexOf(a[0]))-(Object.keys(ST).indexOf(b[0]))).map(([k,n])=>`${fmt(n)} ${(ST[k]||[k])[0].toLowerCase()}`).join(" · ");
+    const table=g.rows.length?`<div class="tablewrap"><table><thead><tr><th>Creative</th><th>Change</th><th>Traffic Sheet dates</th><th>Innovid dates</th><th>Weight</th><th>Landing page</th><th>Status</th></tr></thead><tbody>${g.rows.map(r=>`<tr><td class="cr">${esc(r.creative)}${r.is_default?' <span class="muted">(default)</span>':""}<br><span class="muted small">${fmt(r.placements.length)} placement${r.placements.length===1?"":"s"}</span></td><td>${esc(r.intent)}</td><td class="tm">${span(r.ts_start,r.ts_end)}</td><td class="tm">${ivSpan(r)}</td><td>${esc(r.weight||"—")}${many(r.innovid_weight)&&many(r.innovid_weight)!==esc(r.weight)?`<span class="alt">Innovid: ${many(r.innovid_weight)}</span>`:""}</td><td class="lp">${urlCell(r)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>`:'<p class="small muted" style="margin:0">No creatives declared through a rotation for these placements.</p>';
+    const pls=`<div><b class="small">Placements</b> <span class="small muted">Click one to see its findings.</span><div class="pls" style="margin-top:6px">${g.placements.map(p=>{const ps=ST[p.status]||["","--line"];return `<button class="pl" data-pl="${esc(p.placement_id)}" title="${esc(ps[0])}"><i style="background:var(${ps[1]})"></i><code>${esc(p.placement_id)}</code>${p.missing?'<b class="small" style="color:var(--fail);flex:none">Not in the export</b>':""}<span title="${esc(p.placement_name)}">${esc(p.placement_name)}</span></button>`}).join("")}</div></div>`;
+    return `<div class="ds${open?" open":""}" style="--sev:var(${s[1]})"><button aria-expanded="${open}" data-ds="${esc(g.name)}">${badge(g.status)}<span style="min-width:0"><span class="nm">${esc(g.name)}</span><br><span class="sub">${fmt(g.placements.length)} placement${g.placements.length===1?"":"s"} · ${fmt(g.rows.length)} creative row${g.rows.length===1?"":"s"}${cnt?" · "+cnt:""}${iv.length?" · In Innovid: "+iv.map(esc).join(", "):""}</span></span><span class="chev">›</span></button><div class="body">${table}${pls}</div></div>`}).join("");
+}
+$("#viewSeg").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b)setView(b.dataset.v)});
+$("#dsList").addEventListener("click",e=>{
+  const p=e.target.closest("[data-pl]");if(p){res.filter="all";res.q=p.dataset.pl;$("#search").value=res.q;setView("findings");renderFindings();$("#viewSeg").scrollIntoView({behavior:"smooth",block:"start"});return}
+  const b=e.target.closest(".ds>button");if(!b)return;const card=b.parentElement;card.classList.toggle("open");
+  const open=card.classList.contains("open");b.setAttribute("aria-expanded",open);if(open)res.dsOpen.add(b.dataset.ds);else res.dsOpen.delete(b.dataset.ds)});
 function renderDates(dt){
   const box=$("#dates");const c=dt&&dt.campaign;if(!c){box.innerHTML="";return}
   const line=(label,ts,iv,ok)=>`<div><small>${label}</small><span class="${ok===false?"diff":""}">Traffic Sheet <b>${esc(ts||"—")}</b> · Innovid <b>${esc(iv||"—")}</b></span></div>`;
@@ -725,7 +783,7 @@ $("#thumbs").addEventListener("click",async e=>{const b=e.target.closest("[data-
   try{const d=await post("/api/evidence/remove",{name:b.dataset.rmev});renderThumbs(d.evidence)}catch(err){toast(err.message)}});
 document.querySelectorAll(".dl a").forEach(a=>a.addEventListener("click",()=>toast("Preparing the file…")));
 $("#startOver").onclick=async()=>{try{await post("/api/reset")}catch(_){}
-  Object.assign(state,{data:null,files:null,results:null,intent:null});res.filter=null;res.q="";res.open.clear();$("#search").value="";fillRecord(Object.fromEntries([...document.querySelectorAll("#record [data-k]")].map(el=>[el.dataset.k,""])));renderThumbs([]);
+  Object.assign(state,{data:null,files:null,results:null,intent:null});res.filter=null;res.q="";res.open.clear();res.dsOpen=null;setView("findings");$("#search").value="";fillRecord(Object.fromEntries([...document.querySelectorAll("#record [data-k]")].map(el=>[el.dataset.k,""])));renderThumbs([]);
   $("#tsRead").hidden=true;$("#tsDrop").hidden=false;$("#tsNext").disabled=true;input.value="";go("ts")};
 fetch("/api/health").then(r=>r.json()).then(d=>{$("#ver").textContent=d.version}).catch(()=>{});
 renderSteps();

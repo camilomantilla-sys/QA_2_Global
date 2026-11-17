@@ -74,6 +74,18 @@ def test_signing_everything_moves_the_verdict(ran):
     assert before != "PASSED" and d["verdict"] == "PASSED"
 
 
+def test_results_come_grouped_by_decision_set_too(ran):
+    # FB-08: la misma corrida, agrupada por decision set.
+    _port, d = ran
+    sets = d["decision_sets"]
+    assert sets, "the made-up request has placements to group"
+    grouped = {p["placement_id"] for g in sets for p in g["placements"]}
+    with_findings = {f["placement_id"] for f in d["findings"] if f["placement_id"]}
+    assert with_findings <= grouped
+    for g in sets:
+        assert {"name", "status", "placements", "rows", "innovid_names"} <= set(g)
+
+
 def test_a_pass_cannot_be_signed(ran):
     port, d = ran
     passed = next(f["id"] for f in d["findings"] if f["status"] == "PASS")

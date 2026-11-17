@@ -36,7 +36,7 @@ interfaces. Una regla nueva se conecta allí una sola vez.
 | `GET /api/files` | El estado del paso 2 |
 | `GET /api/innovid` · `POST /api/innovid/sign-in` | Paso 3. Si hay sesión de Innovid guardada; abrir el inicio de sesión |
 | `GET /api/accounts` · `POST /api/run` | Paso 4. Cuentas y correr (`{"account", "innovid"}`) |
-| `GET /api/results` | Paso 5. El último resultado, con lo firmado ya contado |
+| `GET /api/results` | Paso 5. El último resultado, con lo firmado ya contado. Trae también `decision_sets` (la vista por decision set, `core/decision_sets.py`) |
 | `POST /api/review` | Paso 5. Firmar o deshacer (`{"ids": [...], "approved", "note"}`); solo REVIEW, FAIL y NOT_VERIFIED |
 | `GET /api/record` · `POST /api/record` | Paso 5. Implementation Record (campaña, Wrike, QA1, QA2, QA3, notas) y la lista del equipo |
 | `POST /api/evidence` · `POST /api/evidence/remove` · `GET /api/evidence/image?name=` | Paso 5. Capturas (PNG, JPG o GIF; Ctrl+V en la página) |

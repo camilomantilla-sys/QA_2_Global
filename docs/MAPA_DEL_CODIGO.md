@@ -104,6 +104,18 @@ Motor de fechas. Ataca los bugs B3 y B23. *(172 lineas)*
 | funcion | `resolve_date_column(raw_values: list[object], hint: str \| None=None) -> DateColumnResult` | Resuelve una columna de fechas completa |
 | funcion | `excel_serial_to_date(serial: float) -> date \| None` | Serial de Excel (base 1900, con el bug historico del 29-feb-1900) |
 
+### `core/decision_sets.py`
+
+La solicitud vista por decision set (FB-08). *(170 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `_date(value) -> str` |  |
+| funcion | `_worse(a: str, b: str) -> str` |  |
+| funcion | `_one_or_many(values: Iterable[str]) -> dict[str, Any]` | Un valor si todos los placements coinciden; si no, todos y la marca |
+| funcion | `_flight_index(reconciliation) -> dict[tuple, Any]` | Los nodos que se leyeron en Innovid, por placement, creativo y fechas de la TS |
+| funcion | `decision_set_view(match_result, findings: list[dict[str, Any]], innovid_reconciliation=None) -> list[dict[str, Any]]` | Los decision sets de la solicitud, el peor primero |
+
 ### `core/default_ads.py`
 
 Consistencia del default ad. *(147 lineas)*
@@ -330,7 +342,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1317 lineas)*
+Matching Engine. *(1324 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1342,6 +1354,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
 | `test_date_change_rows.py` | 7 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
+| `test_decision_set_view.py` | 7 | FB-08: revisar una solicitud por decision set |
 | `test_default_ads_and_dims.py` | 8 | El default ad de BlackRock, y la rotacion que no es del tamano del placement |
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
@@ -1401,9 +1414,9 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_url_macros.py` | 5 | Las macros de Innovid se resuelven en el tag, y eso no es otra URL |
 | `test_video_duration_dims.py` | 9 | "Dims or Duration" a veces trae la duracion, y eso no es una dimension |
 | `test_web_server.py` | 9 | La interfaz nueva (ui/web) cumple las mismas promesas que la de Streamlit |
-| `test_web_signoff.py` | 8 | Paso 5 de la interfaz nueva: firmar los Review, el Implementation Record, las capturas y las descargas (PDF, Excel, session bundle) |
+| `test_web_signoff.py` | 9 | Paso 5 de la interfaz nueva: firmar los Review, el Implementation Record, las capturas y las descargas (PDF, Excel, session bundle) |
 | `test_web_steps.py` | 12 | Pasos 2 a 5 de la interfaz nueva: exports, Innovid, correr y resultados |
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 765 funciones de prueba en 77 archivos (algunas se parametrizan y corren varias veces).
+Total: 773 funciones de prueba en 78 archivos (algunas se parametrizan y corren varias veces).
