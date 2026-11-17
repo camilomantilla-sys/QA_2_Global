@@ -99,6 +99,11 @@ class ExpectedCreative:
     sequence: str = ""
     dims: str = ""            # <-- NUEVA
 
+    # El nombre de la rotacion (Creative Rotation) tal como lo escribe
+    # la TS: es el decision set de Innovid. Lo usa la vista por
+    # decision set (FB-08) para juntar los placements que lo comparten.
+    group: str = ""
+
     # El default ad, enganchado por dimension y no declarado por el
     # placement. Vive en su propio decision set -- el oficial de su
     # dimension -- asi que no reparte el 100% de rotacion con los
@@ -532,6 +537,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 rotation_weight=str(row.values.get("rotation_weight") or ""),
                 sequence=str(row.values.get("sequence") or ""),
                 intent_fields=frozenset(row.intent_fields or ()),
+                group=str(row.values.get("group_name") or "").strip(),
             ))
 
     # --- lo que contiene un decision set cuya hoja esta oculta
@@ -592,6 +598,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 end=_as_date(row.values.get("end_date")),
                 rotation_weight=str(row.values.get("rotation_weight") or ""),
                 sequence=str(row.values.get("sequence") or ""),
+                group=str(row.values.get("group_name") or "").strip(),
             )
             if candidato.key_norm and candidato.key_norm not in ya:
                 by_group.setdefault(g, []).append(candidato)
