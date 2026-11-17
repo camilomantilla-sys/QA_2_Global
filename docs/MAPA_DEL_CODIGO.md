@@ -78,12 +78,13 @@ Adobe tag column policy: Ftrack / No Ftrack / Clicktag / Protected. *(284 lineas
 
 ### `core/callouts.py`
 
-Los callouts del reporte (FB-09). *(146 lineas)*
+Los callouts del reporte (FB-09). *(198 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_value(x) -> str` |  |
 | funcion | `_approval(reason: str) -> str` | La firma que dejo apply_review_overrides al final del reason, o "" |
+| funcion | `_signature(approval: str) -> tuple[str, str]` | "Approved by Ana: checked" -> ("Ana", "checked") |
 | funcion | `_group_key(f) -> str` |  |
 | funcion | `_label(f) -> str` |  |
 | funcion | `build_callouts(findings, names: dict[str, str] \| None=None) -> list[dict[str, Any]]` | Los callouts, los que bloquean primero |
@@ -189,7 +190,7 @@ Orquestador principal del Rule Engine QA2. *(144 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(745 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(808 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -200,12 +201,13 @@ Branded multi-tab Excel export of a QA2 run. *(745 lineas)*
 | funcion | `_callouts_sheet(wb: Workbook, callouts: list) -> None` | Los callouts con a quien aplica cada uno (FB-09) |
 | funcion | `_summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path \| None)` |  |
 | funcion | `_pair_agrees(left_column: str, left: str, right: str) -> bool` | Acuerdos que dependen de la columna (AdOps): - video: 0x0 en la TS es el 1920x1080 de Innovid; - el placement puede arrancar despues del inicio de la TS (se trafico tarde), nunca antes |
-| funcion | `_qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None` | El entregable en horizontal: una fila por creativo, los dos lados en columnas pareadas |
+| funcion | `_shows_cgen(account: str, qa_rows: list[dict]) -> bool` | CGEN solo en Adobe (AdOps) |
+| funcion | `_qa_sheet(wb: Workbook, qa_rows: list[dict], account: str='') -> None` | El entregable en horizontal: una fila por creativo, los dos lados en columnas pareadas |
 | funcion | `_audit_tab(ws) -> None` | Oculta, no borrada |
 | funcion | `_colour_legend(ws, row: int) -> None` | Que significa cada color, debajo de la tabla |
 | funcion | `_tags_sheet(wb, summary_rows, tags_df, coverage) -> None` | Los tags como se importarian, con el veredicto delante |
 | funcion | `_evidence_sheet(wb: Workbook, images: list[tuple[str, bytes]]) -> None` | Los pantallazos de que los tags sirven, dentro del entregable |
-| funcion | `build_excel_report(meta, findings_df, rules_df, files_df, placements_df, tag_coverage_df, logo_path, qa_rows, tags_df, tag_summary_rows, tag_coverage_counts, dv_tags_df, evidence_images, innovid_reconciliation) -> bytes` | Render the full branded QA2 workbook and return it as XLSX bytes |
+| funcion | `build_excel_report(meta, findings_df, rules_df, files_df, placements_df, tag_coverage_df, logo_path, qa_rows, tags_df, tag_summary_rows, tag_coverage_counts, dv_tags_df, evidence_images, innovid_reconciliation, account) -> bytes` | Render the full branded QA2 workbook and return it as XLSX bytes |
 
 ### `core/extraction.py`
 
@@ -542,7 +544,7 @@ El rastro del QA1 dentro del session bundle (FB-18, FB-21). *(64 lineas)*
 
 ### `core/qa_export.py`
 
-La hoja QA del entregable: una fila por creativo, TS contra Innovid. *(408 lineas)*
+La hoja QA del entregable: una fila por creativo, TS contra Innovid. *(406 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -557,6 +559,7 @@ La hoja QA del entregable: una fila por creativo, TS contra Innovid. *(408 linea
 | funcion | `_flights_index(reconciliation) -> dict` |  |
 | funcion | `_partners_index(reconciliation) -> dict[str, str]` |  |
 | funcion | `_findings_index(findings) -> dict` | Hallazgos por (placement, creativo) |
+| funcion | `_dset_note(check, ts_name: str) -> set` | "Decision set calls it X" cuando el decision set lo nombra distinto |
 | funcion | `_notes(index: dict, key: tuple) -> set` |  |
 
 ### `core/release.py`
@@ -580,7 +583,7 @@ Como se llama el archivo que alguien se descarga. *(53 lineas)*
 
 ### `core/reports.py`
 
-Los informes del QA (PDF y Excel) y las firmas de QA2 Review, sin interfaz. *(349 lineas)*
+Los informes del QA (PDF y Excel) y las firmas de QA2 Review, sin interfaz. *(352 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1017,7 +1020,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5481 lineas)*
+Interfaz de QA2 (Streamlit). *(5494 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1390,12 +1393,12 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
-| `test_callouts.py` | 17 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
+| `test_callouts.py` | 19 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
 | `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
 | `test_copilot_export.py` | 3 | The Copilot knowledge export carries all the code and never a secret |
-| `test_creative_dimensions.py` | 9 | El tamano al que se sirve un creativo, y por que no se veia |
+| `test_creative_dimensions.py` | 11 | El tamano al que se sirve un creativo, y por que no se veia |
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
 | `test_date_change_rows.py` | 7 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
@@ -1405,7 +1408,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
 | `test_dv_multiple_partners.py` | 12 | Una campana puede tener mas de un partner, y DV entrega un archivo por cada uno |
 | `test_dv_routing.py` | 9 | Donde se revisa DoubleVerify, segun lo que pide la TS y el formato |
-| `test_excel_innovid_sheets.py` | 2 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
+| `test_excel_innovid_sheets.py` | 3 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
 | `test_group_colour_does_not_decide.py` | 12 | El color de la celda del grupo no decide el de un creativo |
@@ -1465,4 +1468,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 794 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
+Total: 799 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).

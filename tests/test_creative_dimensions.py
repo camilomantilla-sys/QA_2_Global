@@ -123,7 +123,8 @@ def test_a_duration_does_not_invent_a_mismatch():
     en blanco, que es lo que significa: aqui no hay comparacion.
     """
     row = one_creative("15s", "1920x1080", placement_dims="1920x1080")
-    assert row["TS Creative Dims"] == "15s"
+    # Ni siquiera se muestra: una duracion no se puede validar (AdOps).
+    assert row["TS Creative Dims"] == ""
     assert row["Innovid Creative Dims"] == ""
 
 
@@ -183,6 +184,51 @@ def test_signing_a_mismatch_leaves_the_mismatch_on_the_record():
     for name in ("TS Creative Dims", "Innovid Creative Dims", "Status"):
         rgb = cell(name).fill.start_color.rgb or ""
         assert rgb.endswith(SIGNED_OFF_FILL.start_color.rgb[-6:]), name
+
+
+def _qa_sheet_of(rows):
+    import dataclasses
+    from datetime import datetime
+    from io import BytesIO
+
+    import pandas as pd
+    from openpyxl import load_workbook
+
+    from core.excel_report import build_excel_report
+    from core.pdf_report import ReportMeta
+
+    fields = {
+        f.name: (
+            f.default if f.default is not dataclasses.MISSING
+            else f.default_factory()
+            if f.default_factory is not dataclasses.MISSING else ""
+        )
+        for f in dataclasses.fields(ReportMeta)
+    }
+    fields.update(campaign="R", verdict="PASSED", verdict_label="x",
+                  generated_at=datetime.now(), metrics={})
+    empty = pd.DataFrame()
+    payload = build_excel_report(ReportMeta(**fields), empty, empty, empty, qa_rows=rows)
+    ws = load_workbook(BytesIO(payload))["QA"]
+    return ws, {c.value: c.column for c in ws[1] if c.value}
+
+
+def test_video_only_reports_have_no_creative_dims_columns():
+    ws, header = _qa_sheet_of([one_creative("15", "1920x1080", placement_dims="1920x1080")])
+    assert "TS Creative Dims" not in header
+    assert "Innovid Creative Dims" not in header
+
+
+def test_blank_cells_say_na_but_notes_stay_empty():
+    row = one_creative("728x90", "728x90")
+    row["Innovid Rotation"] = ""
+    row["Notes"] = ""
+    ws, header = _qa_sheet_of([row])
+    assert ws.cell(row=2, column=header["Innovid Rotation"]).value == "NA"
+    assert ws.cell(row=2, column=header["Notes"]).value in (None, "")
+    # NA no pinta: no hay acuerdo ni desacuerdo.
+    fill = ws.cell(row=2, column=header["Innovid Rotation"]).fill
+    assert fill.fill_type in (None, "none")
 
 
 if __name__ == "__main__":

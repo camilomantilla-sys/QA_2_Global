@@ -383,6 +383,7 @@ class Session:
             qa3_by=self.record.get("qa3_by", ""),
             qa3_date=self._record_date("qa3_date"),
             notes=self.record.get("notes", ""),
+            account=self.account,
         )
 
     def report(self, kind: str) -> tuple[str, bytes, str]:

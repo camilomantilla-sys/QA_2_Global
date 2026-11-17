@@ -260,6 +260,8 @@ class ReportInputs:
     qa3_by: str = ""
     qa3_date: date | None = None
     notes: str = ""
+    # La cuenta elegida: decide si la hoja QA lleva las columnas CGEN.
+    account: str = ""
 
 
 def report_meta(inputs: ReportInputs) -> ReportMeta:
@@ -346,4 +348,5 @@ def build_excel(inputs: ReportInputs) -> bytes:
         innovid_reconciliation=inputs.innovid_reconciliation,
         logo_path=logo_path(),
         qa_rows=build_qa_rows(inputs.match_result, findings, inputs.innovid_reconciliation),
+        account=inputs.account,
     )

@@ -39,20 +39,11 @@ COLUMNS = [
     # forma de saber cual de las dos se estaba mirando. Pedido de AdOps: "para
     # lo de los creativos especificar cual es el del export".
     "TS Creative Name", "Innovid Creative Name (Export)",
-    # El tercer nombre, y el unico que no se veia en ningun archivo.
-    #
-    # Innovid guarda dos etiquetas para el mismo creative id: el
-    # export Placement-Creative trae el nombre del ARCHIVO y el
-    # decision set suele mostrar el del CONCEPTO. Las columnas de
-    # arriba comparan contra el export, asi que salian iguales y en
-    # verde -- y la app, que mira el decision set, marcaba el mismo
-    # creativo. Para saber por que habia que abrir Innovid.
-    #
-    # Se llena SOLO cuando el decision set lo llama distinto. Una
-    # columna que casi siempre repite a la de al lado es ruido en una
-    # hoja de treinta; una celda con algo escrito quiere decir "aqui
-    # Innovid lo etiqueta asi", y ya no hay que ir a mirar.
-    "Innovid Creative Name (Decision Set)",
+    # El nombre que le da el decision set ya no tiene columna: casi
+    # siempre salia en blanco (solo se llena con Innovid conectado y
+    # cuando lo llama distinto) y AdOps preguntaba que validaba. No es
+    # una regla, es una etiqueta: cuando difiere va en Notes como
+    # "Decision set calls it ...".
     "TS Creative Dims", "Innovid Creative Dims",
     "TS Creative Dates", "Innovid Creative Dates",
     "TS Rotation", "Innovid Rotation",
@@ -289,12 +280,6 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                     (creative_actual.name or creative_actual.filename)
                     if creative_actual else ""
                 ),
-                # Solo si el decision set lo llama de otra forma. En
-                # blanco quiere decir "lo llama igual", que es lo que
-                # pasa casi siempre y no hace falta escribir.
-                "Innovid Creative Name (Decision Set)": _dset_name(
-                    check, cl.expected.name
-                ),
                 # La dimension de ESTE creativo, que no es la del
                 # placement.
                 #
@@ -306,11 +291,13 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                 # evidencie la diferencia".
                 #
                 # La Traffic Sheet escribe aqui la DURACION cuando es
-                # video ("15s"), que no se puede comparar contra
-                # 1920x1080: en ese caso se deja el lado de Innovid en
-                # blanco en vez de fabricar un desacuerdo que no
-                # existe.
-                "TS Creative Dims": _text(cl.expected.dims),
+                # video ("15s", o solo "15"), que no se puede validar
+                # contra Innovid: no se muestra (AdOps: "eso no lo
+                # podemos validar, mejor que no salga").
+                "TS Creative Dims": (
+                    _text(cl.expected.dims)
+                    if is_dimensions(cl.expected.dims) else ""
+                ),
                 "Innovid Creative Dims": _text(
                     creative_actual.dims
                     if creative_actual and is_dimensions(cl.expected.dims)
@@ -341,6 +328,7 @@ def build_qa_rows(match_result, findings=(), innovid_reconciliation=None,
                 ),
                 "Notes": " | ".join(sorted(
                     _notes(by_row, key) | _notes(by_row, (pid, ""))
+                    | _dset_note(check, cl.expected.name)
                 )),
             })
 
@@ -364,8 +352,12 @@ def _partners_index(reconciliation) -> dict[str, str]:
     if reconciliation is None:
         return index
     for check in reconciliation.partners:
+        # Partner y estado en la misma celda: la hoja "Innovid Partners"
+        # se quito (AdOps) y esto es lo que decia.
         if check.site_served_1x1:
             index[str(check.placement_id)] = "N/A (site-served 1x1)"
+        elif check.actual_partner and check.actual_status:
+            index[str(check.placement_id)] = f"{check.actual_partner} ({check.actual_status})"
         else:
             index[str(check.placement_id)] = check.actual_partner or "(not set)"
     return index
@@ -402,6 +394,12 @@ def _findings_index(findings) -> dict:
                 f"{finding.rule_id}: {finding.message}"
             )
     return index
+
+
+def _dset_note(check, ts_name: str) -> set:
+    """"Decision set calls it X" cuando el decision set lo nombra distinto."""
+    name = _dset_name(check, ts_name)
+    return {f"Decision set calls it {name}"} if name else set()
 
 
 def _notes(index: dict, key: tuple) -> set:

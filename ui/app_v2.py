@@ -3682,6 +3682,7 @@ if True:
         # Lo que hace distinto a un informe de otro: el veredicto, el
         # recuento por estado, lo firmado y los datos del registro.
         _report_signature = (
+            selected_account,
             scorecard.verdict,
             tuple(sorted(scorecard.by_status.items())),
             len(findings_buffer.findings),
@@ -3722,6 +3723,7 @@ if True:
             qa3_by=record_qa3_by,
             qa3_date=record_qa3_date,
             notes=record_notes,
+            account=selected_account,
         )
 
         trace("building the PDF")
@@ -4432,8 +4434,19 @@ if True:
                             })
 
                     if creative_rows:
+                        _creatives_df = pd.DataFrame(creative_rows)
+                        # El nombre del decision set solo se llena con
+                        # Innovid conectado y cuando difiere: una
+                        # columna siempre vacia confunde (AdOps).
+                        if not _creatives_df.get(
+                            "Innovid Creative (DS)", pd.Series(dtype=str)
+                        ).astype(str).str.strip().any():
+                            _creatives_df = _creatives_df.drop(
+                                columns=["Innovid Creative (DS)"],
+                                errors="ignore",
+                            )
                         st.dataframe(
-                            pd.DataFrame(creative_rows),
+                            _creatives_df,
                             use_container_width=True,
                             hide_index=True,
                         )

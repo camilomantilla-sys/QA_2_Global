@@ -89,8 +89,19 @@ def test_everything_read_from_innovid_is_in_the_excel():
     assert "Not in the Traffic Sheet" in results
     assert "Duplicated in DS (x2)" in results
     assert "Not read from Innovid: decision set could not be read" in results
-    partners = _rows(book["Innovid Partners"])
-    assert partners[0]["Verification Partner"] == "DoubleVerify"
+    # El partner va en la hoja QA (AdOps): ya no hay hoja propia.
+    assert "Innovid Partners" not in book.sheetnames
+    from core.qa_export import _partners_index
+    assert _partners_index(rec)["900101"] == "DoubleVerify (Active)"
+
+
+def test_sheet_order_and_hidden_audit_tabs():
+    book = _book(InnovidReconciliation())
+    visible = [ws.title for ws in book.worksheets if ws.sheet_state == "visible"]
+    hidden = [ws.title for ws in book.worksheets if ws.sheet_state == "hidden"]
+    assert visible[:3] == ["Summary", "QA", "Innovid Decision Sets"]
+    assert visible.index("Innovid Decision Sets") < visible.index("Worked Placements")
+    assert {"Findings", "Files & Extraction", "Rules Executed"} <= set(hidden)
 
 
 if __name__ == "__main__":

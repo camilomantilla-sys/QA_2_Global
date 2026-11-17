@@ -41,8 +41,42 @@ TEXTS = {
     "INV-002": "The rotation weight in the decision set differs from the Traffic Sheet for these creatives.",
     "INV-005": "The Traffic Sheet wants these placements running, but Innovid has them off today.",
     "TAG-015": "The tag file has empty cells after wrapping for these placements.",
-    "VID-001": ("Remove VPAID has to be confirmed by hand on these sites "
-                "(Video & Audio Settings > Media Filters)."),
+    "VID-001": ("Media Filters has to be Remove VPAID on these sites (Video & Audio Settings > "
+                "Verification Partner Media Filters). QA2 reads it when Innovid is connected; "
+                "without Innovid it's confirmed by hand."),
+}
+
+#: El encabezado corto de cada callout en el Excel. Los titulos de
+#: regla son afirmaciones ("The placement name matches") y como
+#: encabezado de algo que NO cuadra se leian al reves.
+HEADINGS = {
+    "PLC-001": "Placements missing from the export",
+    "PLC-002": "Placements in the export the Traffic Sheet doesn't ask for",
+    "PLC-003": "Placements off that should be running",
+    "PLC-004": "Placement flight dates",
+    "PLC-006": "Placement name",
+    "PLC-007": "Placement site",
+    "CRE-001": "Creatives",
+    "CRE-002": "Creatives",
+    "ROT-001": "Rotation",
+    "URL-001": "Landing pages",
+    "URL-002": "Landing pages",
+    "URL-003": "Landing pages",
+    "ATR-001": "Attribution",
+    "ATR-002": "Attribution (CGEN)",
+    "INV-001": "Creative dates in the decision set",
+    "INV-001/no-end": "Creatives with no end date",
+    "INV-002": "Rotation weights in the decision set",
+    "INV-003": "Verification partner",
+    "INV-004": "Decision set",
+    "INV-005": "Placements off in Innovid",
+    "TAG-015": "Empty cells in the tag file",
+    "DV-001": "DoubleVerify",
+    "DV-002": "DoubleVerify",
+    "DV-003": "DoubleVerify",
+    "PIX-002": "Pixels",
+    "PIX-A01": "Pixels",
+    "VID-001": "Remove VPAID (video sites)",
 }
 
 #: Grupos en los que el detalle (TS contra Innovid) es lo que hay que ver.
@@ -59,6 +93,14 @@ def _approval(reason: str) -> str:
     """La firma que dejo apply_review_overrides al final del reason, o ""."""
     last = str(reason or "").split(" | ")[-1].strip()
     return last if last.startswith("Approved") else ""
+
+
+def _signature(approval: str) -> tuple[str, str]:
+    """"Approved by Ana: checked" -> ("Ana", "checked")."""
+    rest = approval[len("Approved"):] if approval.startswith("Approved") else ""
+    who, _, note = rest.partition(":")
+    who = who.strip()
+    return (who[3:].strip() if who.startswith("by ") else who), note.strip()
 
 
 def _group_key(f) -> str:
@@ -98,6 +140,7 @@ def build_callouts(findings, names: dict[str, str] | None = None) -> list[dict[s
         key = _group_key(f)
         g = groups.setdefault(key, {
             "key": key, "rule": f.rule_id,
+            "title": HEADINGS.get(key) or RULE_TITLES.get(f.rule_id, f.rule_id),
             "text": TEXTS.get(key, ""),
             "items": [], "approved": 0, "pending": 0, "worst": status,
         })
@@ -108,8 +151,17 @@ def build_callouts(findings, names: dict[str, str] | None = None) -> list[dict[s
         pid = _value(f.placement_id)
         if pid and not _value(f.placement_name) and names.get(pid):
             label = label.replace(pid, f"{pid} {names[pid]}", 1)
-        g["items"].append({"label": label, "detail": detail,
-                           "approval": approval, "status": status})
+        signed_by, note = _signature(approval)
+        name = _value(f.placement_name) or names.get(pid, "")
+        g["items"].append({
+            "label": label, "detail": detail, "approval": approval, "status": status,
+            # Lo mismo, por separado, para la hoja Callouts del Excel:
+            # una celda por dato se lee mejor que todo en una.
+            "placement_id": pid, "name": name,
+            "creative": _value(f.creative_name) or _value(f.creative_id),
+            "ts": _value(f.expected), "innovid": _value(f.actual),
+            "signed_by": signed_by, "note": note,
+        })
         if approval:
             g["approved"] += 1
         elif status != "INFO":

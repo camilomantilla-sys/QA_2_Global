@@ -91,11 +91,12 @@ def test_the_audit_tabs_are_hidden_not_removed():
         nxt = source.find("create_sheet(", start + 20)
         return source[start:nxt if nxt != -1 else len(source)]
 
-    # Y las dos que se ocultan son las de auditoria, no las que se leen.
-    for sheet in ("Rules Executed", "Tag Coverage"):
+    # Las que se ocultan son las de auditoria, no las que se leen.
+    # Findings y Files & Extraction se ocultan desde 17-nov (AdOps).
+    for sheet in ("Rules Executed", "Tag Coverage", "Findings", "Files & Extraction"):
         assert "_audit_tab(ws)" in _block(sheet), sheet
 
-    for sheet in ("Findings", "Worked Placements", "Evidence"):
+    for sheet in ("Worked Placements", "Evidence"):
         assert "_audit_tab(ws)" not in _block(sheet), sheet
 
 

@@ -218,8 +218,26 @@ def test_the_excel_has_a_callouts_section_and_sheet():
     assert "Callouts" in summary and TEXTS["VID-001"] in summary
     sheet = [c.value for row in wb["Callouts"].iter_rows() for c in row if c.value]
     assert TEXTS["PLC-004"] in sheet
-    assert "Approved by Tester QA: checked in Innovid" in sheet
-    assert "To review" in sheet
+    # Cada dato en su celda: quien firmo y la nota van por separado.
+    assert {"Tester QA", "checked in Innovid", "Approved", "To review"} <= set(sheet)
+    assert "Remove VPAID (video sites)" in sheet
+    assert "Site Amazon · 2 video placements" in sheet
+
+
+def test_a_signature_splits_into_who_and_note():
+    from core.callouts import _signature
+    assert _signature("Approved by Ana Ruiz: checked in Innovid") == ("Ana Ruiz", "checked in Innovid")
+    assert _signature("Approved: ok") == ("", "ok")
+    assert _signature("Approved by Ana") == ("Ana", "")
+
+
+def test_cgen_columns_only_for_adobe():
+    from core.excel_report import _shows_cgen
+    rows = [{"CGEN TS (Adobe)": "", "CGEN Innovid (Adobe)": "123"}]
+    assert not _shows_cgen("Unilever", rows)
+    assert _shows_cgen("Adobe Firefly", [])
+    assert _shows_cgen("", rows)
+    assert not _shows_cgen("", [{}])
 
 
 def test_the_pdf_still_builds_with_callouts():

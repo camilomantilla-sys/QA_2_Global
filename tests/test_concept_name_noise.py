@@ -126,7 +126,10 @@ def test_both_surfaces_show_the_same_three_values():
     root = Path(__file__).resolve().parents[1]
     excel = (root / "core" / "qa_export.py").read_text(encoding="utf-8")
     app = (root / "ui" / "app_v2.py").read_text(encoding="utf-8")
-    assert '"Innovid Creative Name (Decision Set)"' in excel
+    # En el Excel ya no es columna (casi siempre salia vacia): va en
+    # Notes cuando difiere. La app la muestra solo si tiene algo.
+    assert '"Innovid Creative Name (Decision Set)"' not in excel
+    assert "Decision set calls it" in excel
     assert '"Innovid Creative (DS)"' in app
     # La misma funcion en los dos sitios: dos criterios de "se llama
     # distinto" es como vuelven a discrepar.

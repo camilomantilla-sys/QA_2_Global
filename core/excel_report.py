@@ -188,55 +188,74 @@ def _callouts_sheet(wb: Workbook, callouts: list) -> None:
     """
     Los callouts con a quien aplica cada uno (FB-09).
 
-    Una seccion por motivo: el texto predeterminado, cuantos se
-    aprobaron, y una fila por placement o site con lo que dice la TS
-    frente a Innovid y la firma de QA2.
+    Un bloque por motivo, cada dato en su celda (AdOps: "todo apretado
+    en una celda es dificil de leer"):
+
+        Placement flight dates            1 approved · 1 to review
+        The following placements have different flight dates ...
+        Placement ID | Placement / site | Creative | Traffic Sheet |
+        Innovid | Result | Signed by | Note
+        11310597     | P3LCCFN_...      |          | 2026-11-16 ... | ...
     """
     ws = wb.create_sheet("Callouts")
-    widths = {"A": 62, "B": 58, "C": 48, "D": 44}
+    widths = {"A": 14, "B": 46, "C": 30, "D": 34, "E": 40, "F": 13, "G": 20, "H": 36}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
-    headers = ["Callout", "Placement / site", "Traffic Sheet vs Innovid", "QA2 sign-off"]
-    for i, h in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=i, value=h)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-    ws.freeze_panes = "A2"
-    row = 2
-    group_fill = PatternFill("solid", start_color=WPP_BG, end_color=WPP_BG)
+    last = len(widths)
+    band = PatternFill("solid", start_color=WPP_BG, end_color=WPP_BG)
+    headers = ["Placement ID", "Placement / site", "Creative", "Traffic Sheet",
+               "Innovid", "Result", "Signed by", "Note"]
+    top = Alignment(wrap_text=True, vertical="top")
+    row = 1
     for c in callouts:
-        first = row
-        for n, item in enumerate(c["items"] or [{"label": "", "detail": "", "approval": ""}]):
-            if n == 0:
-                cell = ws.cell(row=row, column=1, value=c["text"])
-                cell.font = Font(color=WPP_INK, bold=True, size=10)
-            elif n == 1:
-                cell = ws.cell(row=row, column=1, value=c["state"])
-                cell.font = Font(color=WPP_MUTED, size=9)
-            values = (item["label"], item["detail"], item["approval"] or (
-                "" if item.get("status") == "INFO" else "To review"))
-            for col, value in enumerate(values, start=2):
-                ws.cell(row=row, column=col, value=_excel_safe(value)).font = BODY_FONT
-            for col in range(1, 5):
-                ws.cell(row=row, column=col).alignment = Alignment(wrap_text=True, vertical="top")
-                ws.cell(row=row, column=col).fill = group_fill if (callouts.index(c) % 2 == 0) else PatternFill()
+        # El motivo y su estado.
+        title = ws.cell(row=row, column=1, value=c.get("title") or c["key"])
+        title.font = Font(color=WPP_INDIGO_DARK, bold=True, size=12)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        state = ws.cell(row=row, column=6, value=c["state"])
+        state.font = Font(color=WPP_INK, bold=True, size=10)
+        ws.merge_cells(start_row=row, start_column=6, end_row=row, end_column=last)
+        for col in range(1, last + 1):
+            ws.cell(row=row, column=col).fill = band
+        ws.row_dimensions[row].height = 20
+        row += 1
+        # La explicacion, en su propia fila.
+        text = ws.cell(row=row, column=1, value=c["text"])
+        text.font = Font(color=WPP_MUTED, size=10, italic=True)
+        text.alignment = top
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last)
+        ws.row_dimensions[row].height = _height(c["text"], sum(widths.values()))
+        row += 1
+        for i, h in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=i, value=h)
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+        row += 1
+        for item in c["items"]:
+            result = ("Approved" if item.get("approval")
+                      else "Info" if item.get("status") == "INFO"
+                      else "To review")
+            values = [item.get("placement_id", ""), item.get("name", "") or item["label"],
+                      item.get("creative", ""), item.get("ts") or "NA", item.get("innovid") or "NA",
+                      result, item.get("signed_by", ""), item.get("note", "")]
+            for col, value in enumerate(values, start=1):
+                cell = ws.cell(row=row, column=col, value=_excel_safe(value))
+                cell.font = BODY_FONT
+                cell.alignment = top
+            fill = (SIGNED_OFF_FILL if result == "Approved"
+                    else PatternFill("solid", start_color=STATUS_FILLS["REVIEW"],
+                                     end_color=STATUS_FILLS["REVIEW"])
+                    if result == "To review" else None)
+            if fill is not None:
+                ws.cell(row=row, column=6).fill = fill
             ws.row_dimensions[row].height = max(
-                _height(ws.cell(row=row, column=1).value or "", widths["A"]),
-                _height(item["label"], widths["B"]),
-                _height(item["detail"], widths["C"]),
-                _height(values[2], widths["D"]),
-            )
-            row += 1
-        if len(c["items"]) == 1:
-            cell = ws.cell(row=row, column=1, value=c["state"])
-            cell.font = Font(color=WPP_MUTED, size=9)
+                _height(str(v or ""), widths[chr(64 + i)]) for i, v in enumerate(values, start=1))
             row += 1
         if c["more"]:
             ws.cell(row=row, column=2, value=f"… and {c['more']} more in the Findings sheet").font = (
                 Font(color=WPP_MUTED, size=9, italic=True))
             row += 1
-        if row - first > 0:
-            row += 1
+        row += 1
 
 
 def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
@@ -340,14 +359,20 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
             Font(color=WPP_MUTED, size=9)
         )
         row += 1
+        # Motivo, explicacion y estado en celdas distintas.
         for c in meta.callouts:
-            ws.cell(row=row, column=1, value=c["state"]).font = LABEL_FONT
+            ws.cell(row=row, column=1, value=c.get("title") or c["key"]).font = LABEL_FONT
             cell = ws.cell(row=row, column=2, value=c["text"])
             cell.font = VALUE_FONT
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            ws.cell(row=row, column=1).alignment = Alignment(vertical="top", wrap_text=True)
-            ws.row_dimensions[row].height = _height(c["text"], 60)
+            ws.cell(row=row, column=3, value=c["state"]).font = Font(
+                color=WPP_INK, bold=True, size=10)
+            for col in (1, 3):
+                ws.cell(row=row, column=col).alignment = Alignment(vertical="top", wrap_text=True)
+            ws.row_dimensions[row].height = max(
+                _height(c["text"], 60), _height(c.get("title") or "", 26))
             row += 1
+        ws.column_dimensions["C"].width = max(ws.column_dimensions["C"].width or 0, 26)
 
     # Quien firmo y cuando ya viven en el Implementation Record, unas
     # filas mas abajo. Aqui habia ademas una celda de texto libre que
@@ -446,7 +471,24 @@ def _pair_agrees(left_column: str, left: str, right: str) -> bool:
     return False
 
 
-def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
+OPTIONAL_PAIR = ("TS Creative Dims", "Innovid Creative Dims")
+
+
+CGEN_PAIR = ("CGEN TS (Adobe)", "CGEN Innovid (Adobe)")
+
+
+def _shows_cgen(account: str, qa_rows: list[dict]) -> bool:
+    """
+    CGEN solo en Adobe (AdOps). Sin cuenta elegida decide la hoja: se
+    queda si alguna fila trae un CGEN.
+    """
+    key = str(account or "").strip().lower()
+    if key:
+        return "adobe" in key
+    return any(str(r.get(c) or "").strip() for r in qa_rows for c in CGEN_PAIR)
+
+
+def _qa_sheet(wb: Workbook, qa_rows: list[dict], account: str = "") -> None:
     """
     El entregable en horizontal: una fila por creativo, los dos lados
     en columnas pareadas.
@@ -457,10 +499,29 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
         _write_table(ws, pd.DataFrame(columns=QA_COLUMNS), status_col="Status")
         return
 
-    df = pd.DataFrame(qa_rows, columns=QA_COLUMNS)
+    # Las dimensiones del creativo solo salen si alguna fila las tiene:
+    # en video la TS escribe la duracion, que no se valida, y dos
+    # columnas enteras de NA no dicen nada.
+    columns = [c for c in QA_COLUMNS if c not in OPTIONAL_PAIR or any(
+        str(r.get(a) or "").strip() or str(r.get(b) or "").strip()
+        for r in qa_rows for a, b in [OPTIONAL_PAIR])]
+    if not _shows_cgen(account, qa_rows):
+        columns = [c for c in columns if c not in CGEN_PAIR]
+    pairs = [(a, b) for a, b in PAIRS if a in columns and b in columns]
+
+    df = pd.DataFrame(qa_rows, columns=columns)
+    # Lo que no trae dato dice NA (AdOps): una celda en blanco se lee
+    # como "QA2 no lo miro" o "se perdio", y NA dice que no aplica o
+    # que el archivo no lo trae. El color se decide con los valores
+    # crudos, asi que un NA nunca pinta un acuerdo ni un desacuerdo.
+    for column in columns:
+        if column not in ("Status", "Notes"):
+            df[column] = df[column].map(
+                lambda v: "NA" if v is None or (isinstance(v, float) and pd.isna(v))
+                or not str(v).strip() else v)
     _write_table(ws, df, status_col="Status")
 
-    index = {name: pos for pos, name in enumerate(QA_COLUMNS, start=1)}
+    index = {name: pos for pos, name in enumerate(columns, start=1)}
 
     # Verde donde los dos lados coinciden, naranja donde no. Se pintan
     # LAS DOS celdas del par: pintar solo la de Innovid haria pensar
@@ -483,7 +544,7 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
         if signed_off:
             ws.cell(row=offset, column=index["Status"]).fill = SIGNED_OFF_FILL
 
-        for left, right in PAIRS:
+        for left, right in pairs:
             left_value = str(row.get(left) or "").strip()
             right_value = str(row.get(right) or "").strip()
 
@@ -683,15 +744,32 @@ def build_excel_report(
     dv_tags_df: pd.DataFrame | None = None,
     evidence_images: list[tuple[str, bytes]] | None = None,
     innovid_reconciliation=None,
+    account: str = "",
 ) -> bytes:
     """Render the full branded QA2 workbook and return it as XLSX bytes."""
     wb = Workbook()
 
     _summary_sheet(wb, meta, logo_path)
 
-    # Primero la hoja QA: es la que se revisa. Las demas son el
-    # detalle al que se baja cuando una fila no cuadra.
-    _qa_sheet(wb, qa_rows or [])
+    # El orden lo definio AdOps: Summary, QA, Decision Sets, Tags,
+    # Callouts, Worked Placements. Lo de auditoria (Findings, Files &
+    # Extraction, Rules Executed, Tag Coverage) va al final y oculto:
+    # sigue ahi con clic derecho > Mostrar.
+    _qa_sheet(wb, qa_rows or [], account)
+
+    # FB-17: lo leido de Innovid. Sin conexion no hay nada que poner.
+    # El Verification Partner ya va en la hoja QA (con su estado), asi
+    # que la hoja "Innovid Partners" se quito.
+    if innovid_reconciliation is not None:
+        from core.innovid_export_tables import decision_set_table
+
+        ws = wb.create_sheet("Innovid Decision Sets")
+        _write_table(ws, decision_set_table(innovid_reconciliation))
+
+    if tags_df is not None:
+        _tags_sheet(
+            wb, tag_summary_rows or [], tags_df, tag_coverage_counts
+        )
 
     if meta.callouts:
         _callouts_sheet(wb, meta.callouts)
@@ -702,43 +780,28 @@ def build_excel_report(
         status_col="Status",
     )
 
+    if dv_tags_df is not None:
+        ws = wb.create_sheet("DV Pinnacle Tags")
+        _write_table(ws, dv_tags_df, status_col="Status")
+
+    _evidence_sheet(wb, evidence_images or [])
+
     ws = wb.create_sheet("Findings")
     _write_table(ws, findings_df, status_col="Status")
+    _audit_tab(ws)
+
+    ws = wb.create_sheet("Files & Extraction")
+    _write_table(ws, files_df, status_col="Status")
+    _audit_tab(ws)
 
     ws = wb.create_sheet("Rules Executed")
     _write_table(ws, rules_df)
     _audit_tab(ws)
 
-    ws = wb.create_sheet("Files & Extraction")
-    _write_table(ws, files_df, status_col="Status")
-
-    if tags_df is not None:
-        _tags_sheet(
-            wb, tag_summary_rows or [], tags_df, tag_coverage_counts
-        )
-
-    if dv_tags_df is not None:
-        ws = wb.create_sheet("DV Pinnacle Tags")
-        _write_table(ws, dv_tags_df, status_col="Status")
-
     if tag_coverage_df is not None:
         ws = wb.create_sheet("Tag Coverage")
         _write_table(ws, tag_coverage_df)
         _audit_tab(ws)
-
-    # FB-17: lo leido de Innovid, completo, y no solo lo que cabe en
-    # la hoja QA. Sin conexion a Innovid no hay nada que poner.
-    if innovid_reconciliation is not None:
-        from core.innovid_export_tables import decision_set_table, partner_table
-
-        ws = wb.create_sheet("Innovid Decision Sets")
-        _write_table(ws, decision_set_table(innovid_reconciliation))
-        partners = partner_table(innovid_reconciliation)
-        if not partners.empty:
-            ws = wb.create_sheet("Innovid Partners")
-            _write_table(ws, partners)
-
-    _evidence_sheet(wb, evidence_images or [])
 
     buffer = io.BytesIO()
     wb.save(buffer)
