@@ -21,6 +21,7 @@ git pull origin main
 source .venv/Scripts/activate
 pip install -r requirements-dev.txt
 python -m streamlit run ui/app_v2.py
+python -m ui.web
 ```
 
 > El `git pull` va **antes** a propósito: `requirements-dev.txt` llegó
