@@ -179,7 +179,7 @@ DV (DoubleVerify) sub-type detection, shared by every DV-related check. *(91 lin
 
 ### `core/engine.py`
 
-Orquestador principal del Rule Engine QA2. *(143 lineas)*
+Orquestador principal del Rule Engine QA2. *(144 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -253,7 +253,7 @@ core/findings.py — Esquema canónico de hallazgos del motor QA2. *(570 lineas)
 
 ### `core/innovid_api.py`
 
-Innovid Campaign Manager API client (the UI-only fields). *(2256 lineas)*
+Innovid Campaign Manager API client (the UI-only fields). *(2295 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -303,6 +303,8 @@ Innovid Campaign Manager API client (the UI-only fields). *(2256 lineas)*
 | funcion | `_describe_inputs(page) -> str` | Lists the input boxes on the page by their identifying attributes |
 | funcion | `_first_visible(page, selectors)` |  |
 | funcion | `_api_get_json(page, url: str, csrf_token: str, method: str='GET', body=None, _retried: bool=False)` | Runs the API call inside the logged-in page, so the session cookie rides along automatically and we only have to add the CSRF header |
+| funcion | `media_filter_of(detail: dict)` | El valor de Media Filters en la respuesta de campaign-sites/{id} |
+| funcion | `read_site_media_filters(page, campaign_id: str, csrf: str, result) -> None` | Media Filters de cada site de la campana, en result.site_media_filters |
 | funcion | `_shape(value, prefix: str='', out: list \| None=None, depth: int=0) -> list[str]` | Los nombres de los campos de una respuesta, con el valor solo en los que parecen el ajuste que se busca |
 | funcion | `probe_site_settings(campaign_id, session_path, headless, limit, timeout_ms) -> list[str]` | Lee el panel de video de hasta `limit` sites de la campana y devuelve lineas para pegar en el chat: los campos de cada respuesta y el valor de los que parecen el filtro de medios |
 
@@ -330,7 +332,7 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(653 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(657 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -995,12 +997,14 @@ URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(395 lineas)*
 
 ### `rules/video.py`
 
-VID-001 -- Remove VPAID en el site de los placements de video (FB-03). *(55 lineas)*
+VID-001 -- Remove VPAID en el site de los placements de video (FB-03). *(107 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `applies_to(account: str) -> bool` |  |
-| funcion | `evaluate(match_result, buffer, account: str='') -> None` |  |
+| funcion | `is_remove_vpaid(value) -> bool` | El valor de Media Filters dice Remove VPAID ("REMOVE_VPAID", "Remove VPAID"...) |
+| funcion | `_setting_for(site: str, ts_site: str, settings: dict) -> dict \| None` | El ajuste del site: por el id que trae la TS ("Amazon (17627)") o por el nombre |
+| funcion | `evaluate(match_result, buffer, account: str='', innovid_reconciliation=None) -> None` |  |
 
 ## `ui/` — Interfaz (Streamlit)
 
@@ -1383,7 +1387,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
-| `test_callouts.py` | 8 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
+| `test_callouts.py` | 13 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
 | `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
@@ -1458,4 +1462,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 785 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
+Total: 790 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).

@@ -91,6 +91,46 @@ def test_vpaid_applies_to_wendys_and_not_to_blackrock_or_unknown():
     assert not _run(pms, "")
 
 
+def _vpaid_with(settings, account="Unilever"):
+    buffer = FindingsBuffer()
+    match = SimpleNamespace(matched=[_pm("1", fmt="video")], only_expected=[])
+    video.evaluate(match, buffer, account=account,
+                   innovid_reconciliation=SimpleNamespace(site_media_filters=settings))
+    return buffer.findings
+
+
+def test_with_innovid_remove_vpaid_passes_by_site_id():
+    [f] = _vpaid_with({"17627": {"name": "Amazon", "media_filter": "REMOVE_VPAID"}})
+    assert (f.rule_id, f.status.value) == ("VID-001", "PASS")
+
+
+def test_with_innovid_default_fails_matching_by_name():
+    [f] = _vpaid_with({"999": {"name": "Amazon", "media_filter": None}})
+    assert f.status.value == "FAIL"
+    assert "Default" in f.message
+
+
+def test_an_unknown_media_filter_value_goes_to_a_person():
+    [f] = _vpaid_with({"17627": {"name": "Amazon", "media_filter": 3}})
+    assert f.status.value == "REVIEW"
+    assert "says 3" in f.message
+
+
+def test_a_site_innovid_did_not_return_stays_manual():
+    [f] = _vpaid_with({"1": {"name": "Hulu", "media_filter": None}})
+    assert f.status.value == "REVIEW"
+    assert "didn't return" in f.actual
+
+
+def test_media_filter_is_read_where_innovid_puts_it():
+    from core.innovid_api import media_filter_of
+    detail = {"videoConfig": {"optionGroups": {"ctvOttGroup": {"id": 1, "mediaFilter": None}}}}
+    assert media_filter_of(detail) is None
+    detail["videoConfig"]["optionGroups"]["ctvOttGroup"]["mediaFilter"] = "REMOVE_VPAID"
+    assert media_filter_of(detail) == "REMOVE_VPAID"
+    assert media_filter_of({}) is None
+
+
 # --- callouts -------------------------------------------------------
 
 def _mixed_findings():

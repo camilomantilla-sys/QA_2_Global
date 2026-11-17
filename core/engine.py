@@ -112,7 +112,8 @@ def run_rules(
     dtree.evaluate(match_result, buffer)
     dset.evaluate(match_result, buffer)
     # FB-03: Remove VPAID por site, solo en las cuentas que lo piden.
-    video.evaluate(match_result, buffer, account=account)
+    video.evaluate(match_result, buffer, account=account,
+                   innovid_reconciliation=innovid_reconciliation)
 
     if adobe_pixel_reconciliation is not None:
         adobe_pixels.evaluate(adobe_pixel_reconciliation, buffer)

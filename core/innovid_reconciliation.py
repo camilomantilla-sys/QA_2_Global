@@ -169,6 +169,9 @@ class InnovidReconciliation:
     # Partner" escondia lo que de verdad pasa (FB-25).
     inactive: list[tuple[str, str]] = field(default_factory=list)
 
+    # FB-03: Media Filters por site, tal como lo leyo innovid_api.
+    site_media_filters: dict[str, dict] = field(default_factory=dict)
+
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -195,6 +198,7 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
         return out
 
     out.errors.extend(innovid_result.errors)
+    out.site_media_filters = dict(getattr(innovid_result, "site_media_filters", None) or {})
 
     innovid_by_placement = {
         row.placement_id: row

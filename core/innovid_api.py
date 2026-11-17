@@ -204,6 +204,11 @@ class InnovidFetchResult:
     creative_nodes: list[InnovidCreativeNode] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+    # FB-03: Media Filters de cada site de la campana (Video & Audio
+    # Settings). {site_id: {"name": ..., "media_filter": valor o None}}.
+    # None es "Default" en el desplegable. Vacio si no se pudo leer.
+    site_media_filters: dict[str, dict] = field(default_factory=dict)
+
     # The field names Innovid actually returned. Kept because "the
     # column came back blank" and "Innovid never sent that column"
     # look identical once parsed, and they need opposite fixes.
@@ -1797,6 +1802,13 @@ def fetch_campaign(
             for message in _summarise_dset_failures(failures, len(wanted_dsets)):
                 result.errors.append(message)
 
+            # FB-03: si falla, el resto de lo leido sigue valiendo y
+            # Remove VPAID vuelve a ser revision a mano.
+            try:
+                read_site_media_filters(page, campaign_id, csrf_token["value"], result)
+            except Exception as exc:
+                result.errors.append(f"Couldn't read the sites' Media Filters: {exc}")
+
             if skipped:
                 result.errors.append(
                     "Stopped early on sources that kept failing "
@@ -2168,6 +2180,33 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET",
 # Falta saber como se llama por dentro "Media Filters": esta sonda lo
 # averigua sin mostrar nada de la sesion.
 
+MAX_SITES = 40
+
+
+def media_filter_of(detail: dict):
+    """El valor de Media Filters en la respuesta de campaign-sites/{id}."""
+    group = (((detail or {}).get("videoConfig") or {}).get("optionGroups") or {}).get("ctvOttGroup") or {}
+    return group.get("mediaFilter")
+
+
+def read_site_media_filters(page, campaign_id: str, csrf: str, result) -> None:
+    """Media Filters de cada site de la campana, en result.site_media_filters."""
+    sites = _api_get_json(
+        page, f"https://{_API_HOST}/cm/v1/campaigns/{campaign_id}/campaign-sites?rpp=543", csrf)
+    items = sites.get("items", sites) if isinstance(sites, dict) else sites
+    for item in (items if isinstance(items, list) else [])[:MAX_SITES]:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        site = item.get("site") if isinstance(item.get("site"), dict) else {}
+        site_id = str(site.get("id") or item.get("siteId") or "")
+        detail = _api_get_json(
+            page, f"https://{_API_HOST}/tag/v1/ui/campaign-sites/{item['id']}", csrf)
+        result.site_media_filters[site_id] = {
+            "name": str(site.get("name") or ""),
+            "media_filter": media_filter_of(detail),
+        }
+
+
 _SETTING_HINTS = ("filter", "vpaid", "media", "verification", "wrapper", "vast")
 
 
@@ -2194,7 +2233,7 @@ def _shape(value, prefix: str = "", out: list | None = None, depth: int = 0) -> 
 
 
 def probe_site_settings(campaign_id: str, session_path: Path | None = None,
-                        headless: bool = True, limit: int = 3,
+                        headless: bool = True, limit: int = 20,
                         timeout_ms: int = 60_000) -> list[str]:
     """
     Lee el panel de video de hasta `limit` sites de la campana y

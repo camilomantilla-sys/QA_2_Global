@@ -122,7 +122,7 @@ def _site_settings(campaign_id: str, show: bool = False) -> int:
     campana. Imprime nombres de campos y, solo en los que parecen el
     filtro, su valor. Nada de la sesion.
     """
-    print("Reading the Video & Audio Settings of the first sites...\n")
+    print("Reading the Video & Audio Settings of the campaign's sites (up to 20)...\n")
     try:
         lines = probe_site_settings(campaign_id, headless=not show)
     except InnovidAuthError as exc:
