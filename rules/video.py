@@ -87,7 +87,8 @@ def evaluate(match_result, buffer, account: str = "", innovid_reconciliation=Non
         value = setting.get("media_filter")
         if is_remove_vpaid(value):
             buffer.pass_(message=f"Remove VPAID is set on the site {site}",
-                         actual=f"Media Filters = {value}", **common)
+                         actual=f"Media Filters = {value}. Video placements on this site: {ids}",
+                         **common)
         elif value in (None, ""):
             buffer.fail(
                 message=f"Remove VPAID is not set on the site {site}: Media Filters is Default",

@@ -157,6 +157,21 @@ def norm_dims(value: object) -> str:
         return f"{int(m.group(1))}x{int(m.group(2))}"
     return text.replace(" ", "").casefold()
 
+def dims_equivalent(left: object, right: object) -> bool:
+    """
+    Las dos dimensiones dicen lo mismo, para mostrar y comparar.
+
+    En video la TS escribe 0x0 y Innovid el tamano real (1920x1080):
+    es lo mismo (AdOps), igual que en dims_match.
+    """
+    a, b = norm_dims(left), norm_dims(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    return (a == "0x0" and is_dimensions(b)) or (b == "0x0" and is_dimensions(a))
+
+
 def dims_from_name(name: str | None) -> str | None:
     """
     Ultimo recurso: extraer dimensiones del nombre del placement.

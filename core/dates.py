@@ -192,3 +192,15 @@ def to_date(value) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def start_is_fine(ts_start, innovid_start) -> bool:
+    """
+    El inicio del placement en Innovid esta bien frente al de la TS.
+
+    Igual, o despues: si la TS dice 1-oct y se trafico el 20-oct, el
+    placement arranca el 20 y eso no es un problema (AdOps). Antes del
+    inicio de la TS si lo es.
+    """
+    a, b = to_date(ts_start), to_date(innovid_start)
+    return bool(a and b and b >= a)

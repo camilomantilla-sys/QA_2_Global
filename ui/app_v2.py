@@ -148,10 +148,12 @@ from core.tag_inventory import (
 from core.matching import match, norm_creative
 from core.qa_export import _dset_name as dset_name
 from core.urls import account_uses_cgen
+from core.dates import start_is_fine
 from core.normalize import (
     norm_compare,
     norm_dims,
     normalize_weights,
+    dims_equivalent,
     site_names_match,
 )
 from core.tag_matching import match_tags
@@ -810,6 +812,7 @@ def compare_value(
     normalizer=None,
     optional: bool = False,
     fuzzy: bool = False,
+    matcher=None,
 ) -> str:
     expected_text = clean_value(expected)
     actual_text = clean_value(actual)
@@ -830,6 +833,12 @@ def compare_value(
     if expected_comparable == actual_comparable:
         return "PASS"
 
+    # Iguales para AdOps aunque se escriban distinto: 0x0 y 1920x1080
+    # en video, o un placement que arranco despues del inicio de la TS
+    # porque se trafico tarde.
+    if matcher is not None and matcher(expected_text, actual_text):
+        return "PASS"
+
     # El nombre del site se escribe distinto en cada lado y sigue siendo
     # el mismo: "The Trade Desk" en la TS y "FC TradeDesk-DBM" en la
     # plataforma. Basta con que compartan una palabra significativa.
@@ -847,6 +856,7 @@ def comparison_row(
     normalizer=None,
     optional: bool = False,
     fuzzy: bool = False,
+    matcher=None,
 ) -> dict:
     return {
         "Validated Field": field_name,
@@ -858,6 +868,7 @@ def comparison_row(
             normalizer=normalizer,
             fuzzy=fuzzy,
             optional=optional,
+            matcher=matcher,
         ),
     }
 
@@ -1728,6 +1739,13 @@ with st.sidebar:
                         row.get("campaign", "").strip()
                         for row in load_adobe_vendor_rows()
                         if row.get("campaign", "").strip()
+                    } | {
+                        # Las mismas cuentas que ofrece el selector: sin
+                        # esto un bundle de Unilever volvia sin cuenta y
+                        # no corrian las reglas de la cuenta (VID-001).
+                        account
+                        for account in TEAM_ACCOUNTS
+                        if account != "Support"
                     }
                     if _manifest.get("account") in _valid_accounts:
                         st.session_state["qa2_account_select"] = (
@@ -3965,7 +3983,7 @@ if True:
                     f"{STATUS_ICON.get(status, '')} "
                     f"{placement_id}  |  "
                     f"{expected.request_type}  |  "
-                    f"{expected.dims or '-'}  |  "
+                    f"{(actual.dims if actual and expected.dims == '0x0' and actual.dims else expected.dims) or '-'}  |  "
                     f"{len(creative_links)} creative(s)  |  "
                     f"{len(tag_records)} tag row(s)  |  "
                     # Recortado para que la fila quepa en una linea:
@@ -4082,11 +4100,13 @@ if True:
                             expected.dims,
                             actual.dims if actual else "",
                             normalizer=norm_dims,
+                            matcher=dims_equivalent,
                         ),
                         comparison_row(
                             "Start Date",
                             expected.start,
                             actual.start if actual else "",
+                            matcher=start_is_fine,
                         ),
                         comparison_row(
                             "End Date",
@@ -4113,6 +4133,20 @@ if True:
                             ),
                         ),
                     ]
+
+                    # FB-03: Remove VPAID se mira por site, pero quien
+                    # revisa un placement de video tiene que verlo aqui.
+                    _on_site = "Video placements on this site: "
+                    for _vpaid in findings_buffer.findings:
+                        _ids = str(_vpaid.actual or "").split(_on_site)[-1].split(", ")
+                        if _vpaid.rule_id == "VID-001" and str(placement_id) in _ids:
+                            placement_comparisons.append({
+                                "Validated Field": "Remove VPAID (site)",
+                                "Expected in Traffic Sheet": "Remove VPAID",
+                                "Found in Innovid": str(_vpaid.actual or "").split(". " + _on_site)[0],
+                                "Visual Result": _vpaid.status.value,
+                            })
+                            break
 
                     st.dataframe(
                         pd.DataFrame(

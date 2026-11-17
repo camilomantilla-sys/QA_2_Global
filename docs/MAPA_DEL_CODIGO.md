@@ -105,7 +105,7 @@ Resolucion y clasificacion de colores de relleno. *(220 lineas)*
 
 ### `core/dates.py`
 
-Motor de fechas. Ataca los bugs B3 y B23. *(194 lineas)*
+Motor de fechas. Ataca los bugs B3 y B23. *(206 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -117,6 +117,7 @@ Motor de fechas. Ataca los bugs B3 y B23. *(194 lineas)*
 | funcion | `resolve_date_column(raw_values: list[object], hint: str \| None=None) -> DateColumnResult` | Resuelve una columna de fechas completa |
 | funcion | `excel_serial_to_date(serial: float) -> date \| None` | Serial de Excel (base 1900, con el bug historico del 29-feb-1900) |
 | funcion | `to_date(value) -> date \| None` | Una fecha suelta, venga como venga: date, datetime, '2026-11-02', '2026-11-02 00:00:00' (metadatos del export) o '11/02/2026' |
+| funcion | `start_is_fine(ts_start, innovid_start) -> bool` | El inicio del placement en Innovid esta bien frente al de la TS |
 
 ### `core/decision_sets.py`
 
@@ -188,7 +189,7 @@ Orquestador principal del Rule Engine QA2. *(144 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(729 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(745 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -198,6 +199,7 @@ Branded multi-tab Excel export of a QA2 run. *(729 lineas)*
 | funcion | `_height(text: str, width: int, line: float=13.0) -> float` | Alto de una fila con texto partido |
 | funcion | `_callouts_sheet(wb: Workbook, callouts: list) -> None` | Los callouts con a quien aplica cada uno (FB-09) |
 | funcion | `_summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path \| None)` |  |
+| funcion | `_pair_agrees(left_column: str, left: str, right: str) -> bool` | Acuerdos que dependen de la columna (AdOps): - video: 0x0 en la TS es el 1920x1080 de Innovid; - el placement puede arrancar despues del inicio de la TS (se trafico tarde), nunca antes |
 | funcion | `_qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None` | El entregable en horizontal: una fila por creativo, los dos lados en columnas pareadas |
 | funcion | `_audit_tab(ws) -> None` | Oculta, no borrada |
 | funcion | `_colour_legend(ws, row: int) -> None` | Que significa cada color, debajo de la tabla |
@@ -392,7 +394,7 @@ Matching Engine. *(1324 lineas)*
 
 ### `core/normalize.py`
 
-Normalizacion. Regla de oro: raw se conserva, normalizado es derivado. *(292 lineas)*
+Normalizacion. Regla de oro: raw se conserva, normalizado es derivado. *(307 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -405,6 +407,7 @@ Normalizacion. Regla de oro: raw se conserva, normalizado es derivado. *(292 lin
 | funcion | `is_dimensions(value: object) -> bool` | Si el valor normalizado es de verdad un ancho por alto |
 | funcion | `dims_match(left: object, right: object) -> bool` | Compara dimensiones tolerando como se declara el video |
 | funcion | `norm_dims(value: object) -> str` | '160 x 600' / '160X600' / '160×600' -> '160x600' |
+| funcion | `dims_equivalent(left: object, right: object) -> bool` | Las dos dimensiones dicen lo mismo, para mostrar y comparar |
 | funcion | `dims_from_name(name: str \| None) -> str \| None` | Ultimo recurso: extraer dimensiones del nombre del placement |
 | funcion | `to_bool(value: object) -> bool \| None` | 'Yes'/'No' de Innovid |
 | funcion | `normalize_weights(values, removed=None) -> list[str]` | Pesos de rotacion de un grupo, en porcentajes que suman 100 |
@@ -942,7 +945,7 @@ PIX-002 -- el pixel de cada vendor esta en su columna. *(71 lineas)*
 
 ### `rules/placements.py`
 
-PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(253 lineas)*
+PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(264 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -997,7 +1000,7 @@ URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(395 lineas)*
 
 ### `rules/video.py`
 
-VID-001 -- Remove VPAID en el site de los placements de video (FB-03). *(107 lineas)*
+VID-001 -- Remove VPAID en el site de los placements de video (FB-03). *(108 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1014,7 +1017,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5447 lineas)*
+Interfaz de QA2 (Streamlit). *(5481 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1041,8 +1044,8 @@ Interfaz de QA2 (Streamlit). *(5447 lineas)*
 | funcion | `result_is_fatal(result) -> bool` |  |
 | funcion | `placement_findings(placement_id: str, findings_buffer)` |  |
 | funcion | `clean_value(value) -> str` |  |
-| funcion | `compare_value(expected, actual, *, normalizer=None, optional: bool=False, fuzzy: bool=False) -> str` |  |
-| funcion | `comparison_row(field_name, expected, actual, normalizer, optional, fuzzy) -> dict` |  |
+| funcion | `compare_value(expected, actual, normalizer, optional, fuzzy, matcher) -> str` |  |
+| funcion | `comparison_row(field_name, expected, actual, normalizer, optional, fuzzy, matcher) -> dict` |  |
 | funcion | `render_status_badge(status: str) -> None` |  |
 | funcion | `show_verdict(verdict: str, findings=None) -> None` |  |
 | funcion | `brand_font_css() -> str` | @font-face rules for the WPP typeface, embedded as base64 so Streamlit doesn't need to serve the files |
@@ -1387,7 +1390,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
-| `test_callouts.py` | 13 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
+| `test_callouts.py` | 17 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
 | `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
@@ -1462,4 +1465,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 790 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
+Total: 794 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).

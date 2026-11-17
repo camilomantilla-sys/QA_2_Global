@@ -126,7 +126,11 @@ def _evaluate_flight_dates(pm, buffer):
         return
     ts_start, ts_end = _to_date(pm.expected.start), _to_date(pm.expected.end)
     in_start, in_end = _to_date(pm.actual.start), _to_date(pm.actual.end)
-    start_off = bool(ts_start and in_start and ts_start != in_start)
+    # Arrancar despues del inicio de la TS es lo normal cuando se
+    # trafica tarde: el inicio de la TS ya habia pasado. Solo cuenta
+    # arrancar ANTES.
+    start_off = bool(ts_start and in_start and in_start < ts_start)
+    started_late = bool(ts_start and in_start and in_start > ts_start)
     end_off = bool(ts_end and in_end and ts_end != in_end)
     if not ((ts_start and in_start) or (ts_end and in_end)):
         return
@@ -139,12 +143,19 @@ def _evaluate_flight_dates(pm, buffer):
         actual=_span(in_start, in_end),
     )
     if not (start_off or end_off):
-        buffer.pass_(message="The placement flights on the Traffic Sheet dates", **common)
+        buffer.pass_(
+            message=(f"The placement went live on {in_start.isoformat()}, after the Traffic "
+                     f"Sheet start ({ts_start.isoformat()}): it was trafficked later"
+                     if started_late else "The placement flights on the Traffic Sheet dates"),
+            **common)
         return
-    what = "start and end dates" if start_off and end_off else (
-        "start date" if start_off else "end date")
+    message = (
+        "The placement starts in Innovid before the Traffic Sheet start, and ends on another date"
+        if start_off and end_off else
+        "The placement starts in Innovid before the Traffic Sheet start" if start_off else
+        "The placement has another end date in Innovid than in the Traffic Sheet")
     buffer.info(
-        message=f"The placement has another {what} in Innovid than in the Traffic Sheet",
+        message=message,
         reason=("Placement dates don't block the QA. They are listed in the "
                 "report callouts so someone confirms the difference is intended "
                 "(for example, it went live on the implementation date)."),

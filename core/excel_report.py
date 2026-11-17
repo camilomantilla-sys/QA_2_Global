@@ -430,6 +430,22 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
 
 
 
+def _pair_agrees(left_column: str, left: str, right: str) -> bool:
+    """
+    Acuerdos que dependen de la columna (AdOps):
+      - video: 0x0 en la TS es el 1920x1080 de Innovid;
+      - el placement puede arrancar despues del inicio de la TS (se
+        trafico tarde), nunca antes.
+    """
+    from core.dates import start_is_fine
+    from core.normalize import dims_equivalent
+    if left_column in ("TS Dimensions", "TS Creative Dims"):
+        return dims_equivalent(left, right)
+    if left_column == "TS Start Date":
+        return start_is_fine(left, right)
+    return False
+
+
 def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
     """
     El entregable en horizontal: una fila por creativo, los dos lados
@@ -484,7 +500,7 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None:
                         ).fill = SIGNED_OFF_FILL
                 continue
 
-            if cells_agree(left_value, right_value):
+            if cells_agree(left_value, right_value) or _pair_agrees(left, left_value, right_value):
                 # Coinciden de verdad: verde, aunque la fila lleve
                 # firma. Lo firmado era otra cosa, y pintar esto de
                 # morado diria que aqui hubo una discrepancia que no

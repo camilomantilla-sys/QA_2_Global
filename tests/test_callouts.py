@@ -64,12 +64,42 @@ def test_same_dates_written_differently_pass():
 def test_other_placement_dates_are_info_and_do_not_block():
     found = _run([_pm("1", innovid=("2026-11-15", "2026-12-31"))], "dates")
     assert [(f.rule_id, f.status.value) for f in found] == [("PLC-004", "INFO")]
-    assert "start date" in found[0].message
+    assert "before the Traffic Sheet start" in found[0].message
     assert found[0].expected == "2026-11-16 → 2026-12-31"
     assert found[0].actual == "2026-11-15 → 2026-12-31"
     other = FindingsBuffer()
     other.pass_("PLC-001", Domain.SCOPE, "Placement found", placement_id="1")
     assert overall(found + other.findings) == "PASSED"
+
+
+def test_going_live_after_the_ts_start_is_fine():
+    # Se trafico el 20-oct; la TS decia 1-oct. No es un problema (AdOps).
+    found = _run([_pm("1", ts=(date(2026, 10, 1), date(2026, 11, 30)),
+                      innovid=("2026-10-20", "2026-11-30"))], "dates")
+    assert [f.status.value for f in found] == ["PASS"]
+    assert "trafficked later" in found[0].message
+
+
+def test_a_different_end_date_still_goes_to_the_callouts():
+    found = _run([_pm("1", innovid=("2026-11-20", "2026-12-15"))], "dates")
+    assert [f.status.value for f in found] == ["INFO"]
+    assert "end date" in found[0].message
+
+
+def test_video_0x0_is_the_same_as_1920x1080():
+    from core.excel_report import _pair_agrees
+    from core.normalize import dims_equivalent
+    assert dims_equivalent("0x0", "1920x1080")
+    assert dims_equivalent("1920 x 1080", "0x0")
+    assert not dims_equivalent("300x250", "728x90")
+    assert _pair_agrees("TS Dimensions", "0x0", "1920x1080")
+    assert _pair_agrees("TS Start Date", "2026-10-01", "2026-10-20")
+    assert not _pair_agrees("TS Start Date", "2026-10-20", "2026-10-01")
+
+
+def test_twitch_tv_and_twitch_are_the_same_site():
+    from core.normalize import site_names_match
+    assert site_names_match("TWITCH.TV", "Twitch")
 
 
 # --- FB-03: Remove VPAID por site -----------------------------------
