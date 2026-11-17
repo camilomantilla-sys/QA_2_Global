@@ -253,7 +253,7 @@ core/findings.py — Esquema canónico de hallazgos del motor QA2. *(570 lineas)
 
 ### `core/innovid_api.py`
 
-Innovid Campaign Manager API client (the UI-only fields). *(2135 lineas)*
+Innovid Campaign Manager API client (the UI-only fields). *(2256 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -283,13 +283,14 @@ Innovid Campaign Manager API client (the UI-only fields). *(2135 lineas)*
 | funcion | `session_has_expired(session_path: Path \| None=None) -> bool` | True solo cuando consta que caduco |
 | funcion | `redact_url(url: str) -> str` | Prepares a recorded URL for someone to paste somewhere |
 | funcion | `redact_body(url: str, body: str \| None) -> str` | Summarises a request body as keys, with values shown only for the keys that describe the request |
-| funcion | `record_api_calls(campaign_id, credentials, session_path, timeout_ms) -> list[str]` | Opens Innovid in a normal window and writes down which API calls its own interface makes while a person clicks around |
+| funcion | `record_api_calls(campaign_id, credentials, session_path, timeout_ms, live) -> list[str]` | Opens Innovid in a normal window and writes down which API calls its own interface makes while a person clicks around |
 | funcion | `diagnose_session(campaign_id: str, session_path: Path \| None=None, headless: bool=True) -> list[str]` | Reports why a saved session can't call Innovid's API |
 | funcion | `establish_session(session_path: Path \| None=None, login_url: str=APP_ORIGIN, timeout_ms: int=300000) -> str` | Opens a normal browser window and waits for a human to sign in, then saves the session so later runs don't have to |
 | funcion | `_csrf_from_page(page) -> str` | Lee el token CSRF de donde Innovid lo guarda: sessionStorage |
 | funcion | `_csrf_from_cookies(context) -> str` | Ultimo recurso: una cookie CSRF, pero solo de Innovid |
 | funcion | `_wait_for_csrf(page, captured: dict, timeout_ms: int) -> bool` | Waits for the app to make an API call of its own, which is where the CSRF token comes from |
 | funcion | `_looks_like_sign_in(page) -> bool` | True when the browser is showing a sign-in rather than the app -- either a password box, or a URL that left the Innovid domain for an identity provider |
+| funcion | `_wait_until_all_closed(context, timeout_ms: int) -> bool` | Blocks until every tab of the window is closed, or the time runs out |
 | funcion | `_wait_until_window_closed(page, timeout_ms: int) -> bool` | Blocks until the person closes the browser window, or the time runs out |
 | funcion | `_wait_for_api_cookies(api_ok: dict, timeout_ms: int, page) -> bool` | Waits until Innovid's API has answered the app at least once |
 | funcion | `_wait_until_signed_in(page, timeout_ms: int) -> bool` | True once the browser is sitting on Innovid itself with no password box in sight |
@@ -302,6 +303,8 @@ Innovid Campaign Manager API client (the UI-only fields). *(2135 lineas)*
 | funcion | `_describe_inputs(page) -> str` | Lists the input boxes on the page by their identifying attributes |
 | funcion | `_first_visible(page, selectors)` |  |
 | funcion | `_api_get_json(page, url: str, csrf_token: str, method: str='GET', body=None, _retried: bool=False)` | Runs the API call inside the logged-in page, so the session cookie rides along automatically and we only have to add the CSRF header |
+| funcion | `_shape(value, prefix: str='', out: list \| None=None, depth: int=0) -> list[str]` | Los nombres de los campos de una respuesta, con el valor solo en los que parecen el ajuste que se busca |
+| funcion | `probe_site_settings(campaign_id, session_path, headless, limit, timeout_ms) -> list[str]` | Lee el panel de video de hasta `limit` sites de la campana y devuelve lineas para pegar en el chat: los campos de cada respuesta y el valor de los que parecen el filtro de medios |
 
 ### `core/innovid_export_tables.py`
 
@@ -1359,11 +1362,12 @@ Arranca QA2: anota su PID, abre el navegador, y avisa si no levanta. *(271 linea
 
 ### `check_innovid_connection.py`
 
-Checks that QA2 can talk to Innovid, before wiring any of it into the app. Run it once after filling in config/innovid_credentials.env: *(464 lineas)*
+Checks that QA2 can talk to Innovid, before wiring any of it into the app. Run it once after filling in config/innovid_credentials.env: *(493 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_record_what_innovid_asks_for(campaign_id: str) -> int` | Watches Innovid's own interface to learn an endpoint QA2 can't find on its own |
+| funcion | `_site_settings(campaign_id: str, show: bool=False) -> int` | FB-03: como se llama por dentro "Media Filters" (Remove VPAID) |
 | funcion | `_sign_in_by_hand() -> int` | Opens a normal browser window so the sign-in happens the usual way -- SSO, verification code and all -- and keeps the session |
 | funcion | `main() -> int` |  |
 

@@ -1005,6 +1005,7 @@ def record_api_calls(
     credentials: InnovidCredentials | None = None,
     session_path: Path | None = None,
     timeout_ms: int = 600_000,
+    live: bool = False,
 ) -> list[str]:
     """
     Opens Innovid in a normal window and writes down which API calls
@@ -1054,8 +1055,15 @@ def record_api_calls(
             line = f"{url}\n      body: {body}" if body else url
             if line not in seen:
                 seen.append(line)
+                if live:
+                    # En vivo: quien navega ve que si se esta anotando,
+                    # sin esperar a cerrar la ventana.
+                    print(f"  {line}", flush=True)
 
-        page.on("request", _note)
+        # En todo el contexto, no solo en la primera pestana: buscar
+        # la campana o abrir un panel puede abrir otra pestana, y sus
+        # llamadas se perdian.
+        context.on("request", _note)
 
         try:
             if not saved_session.exists():
@@ -1072,8 +1080,10 @@ def record_api_calls(
                 timeout=60_000,
             )
 
-            # The person drives from here.
-            _wait_until_window_closed(page, timeout_ms)
+            # The person drives from here. "Closed" means every tab:
+            # closing only the first one used to end the recording
+            # while the campaign was still open in another.
+            _wait_until_all_closed(context, timeout_ms)
         finally:
             try:
                 context.close()
@@ -1428,6 +1438,20 @@ def _looks_like_sign_in(page) -> bool:
         return _first_visible(page, PASS_SELECTORS) is not None
     except Exception:
         return False
+
+
+def _wait_until_all_closed(context, timeout_ms: int) -> bool:
+    """Blocks until every tab of the window is closed, or the time runs out."""
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        try:
+            pages = [p for p in context.pages if not p.is_closed()]
+            if not pages:
+                return True
+            pages[0].wait_for_timeout(500)
+        except Exception:
+            return True
+    return False
 
 
 def _wait_until_window_closed(page, timeout_ms: int) -> bool:
@@ -2133,3 +2157,100 @@ def _api_get_json(page, url: str, csrf_token: str, method: str = "GET",
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{url} did not return JSON ({exc})") from exc
+
+
+# ------------------------------------------------------------------
+# Ajustes de video del site (FB-03, Remove VPAID)
+#
+# El panel "Video & Audio Settings" de un site carga
+# tag/v1/ui/campaign-sites/{id}, y el id sale de
+# cm/v1/campaigns/{campana}/campaign-sites. Visto con --record.
+# Falta saber como se llama por dentro "Media Filters": esta sonda lo
+# averigua sin mostrar nada de la sesion.
+
+_SETTING_HINTS = ("filter", "vpaid", "media", "verification", "wrapper", "vast")
+
+
+def _shape(value, prefix: str = "", out: list | None = None, depth: int = 0) -> list[str]:
+    """
+    Los nombres de los campos de una respuesta, con el valor solo en
+    los que parecen el ajuste que se busca. Nunca los demas valores.
+    """
+    out = [] if out is None else out
+    if depth > 4:
+        return out
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(inner, (dict, list)):
+                _shape(inner, path, out, depth + 1)
+            elif any(h in str(key).lower() for h in _SETTING_HINTS):
+                out.append(f"{path} = {inner!r}")
+            else:
+                out.append(path)
+    elif isinstance(value, list) and value:
+        _shape(value[0], f"{prefix}[0]", out, depth + 1)
+    return out
+
+
+def probe_site_settings(campaign_id: str, session_path: Path | None = None,
+                        headless: bool = True, limit: int = 3,
+                        timeout_ms: int = 60_000) -> list[str]:
+    """
+    Lee el panel de video de hasta `limit` sites de la campana y
+    devuelve lineas para pegar en el chat: los campos de cada
+    respuesta y el valor de los que parecen el filtro de medios.
+    """
+    saved_session = session_path or SESSION_PATH
+    if not saved_session.exists():
+        raise InnovidAuthError("No saved Innovid session. Run the connection check with --login first.")
+    from playwright.sync_api import sync_playwright
+
+    lines: list[str] = []
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless)
+        context = browser.new_context(storage_state=str(saved_session))
+        page = context.new_page()
+        csrf = {"value": ""}
+
+        def _capture(request):
+            if _API_HOST in request.url and request.headers.get("x-csrf-token"):
+                csrf["value"] = request.headers["x-csrf-token"]
+
+        page.on("request", _capture)
+        try:
+            page.goto(f"{APP_ORIGIN}/{campaign_id}/summary/",
+                      wait_until="domcontentloaded", timeout=timeout_ms)
+            if _looks_like_sign_in(page):
+                raise InnovidAuthError("The saved Innovid session has expired. Run --login again.")
+            if not _wait_for_csrf(page, csrf, timeout_ms=30_000):
+                csrf["value"] = _csrf_from_page(page) or _csrf_from_cookies(context)
+
+            sites = _api_get_json(
+                page, f"https://{_API_HOST}/cm/v1/campaigns/{campaign_id}/campaign-sites?rpp=543",
+                csrf["value"])
+            items = sites.get("items", sites) if isinstance(sites, dict) else sites
+            items = items if isinstance(items, list) else []
+            lines.append(f"campaign-sites: {len(items)} site(s)")
+            lines += [f"  {s}" for s in _shape(items[:1])]
+
+            for item in items[:limit]:
+                cs_id = item.get("id") if isinstance(item, dict) else None
+                if not cs_id:
+                    continue
+                name = item.get("name") or (item.get("site") or {}).get("name", "") \
+                    if isinstance(item.get("site", {}), dict) else item.get("name", "")
+                lines.append(f"\ncampaign-site {cs_id} {name}:")
+                try:
+                    detail = _api_get_json(
+                        page, f"https://{_API_HOST}/tag/v1/ui/campaign-sites/{cs_id}", csrf["value"])
+                    lines += [f"  {s}" for s in _shape(detail)]
+                except Exception as exc:  # una por site; las demas siguen
+                    lines.append(f"  could not read it: {exc}")
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+            browser.close()
+    return lines

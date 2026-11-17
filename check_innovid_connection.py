@@ -32,6 +32,7 @@ from core.innovid_api import (  # noqa: E402
     establish_session,
     fetch_campaign,
     load_credentials,
+    probe_site_settings,
     record_api_calls,
     session_is_saved,
 )
@@ -43,9 +44,10 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
     find on its own.
     """
     print("Opening the campaign in a browser window.\n")
-    print("Click around the way you normally would -- in particular,")
-    print("open a decision set so its panel loads. When you're done,")
-    print("just close the window.\n")
+    print("Click around the way you normally would -- open the panel")
+    print("you want QA2 to learn (a decision set, a site's Video & Audio")
+    print("Settings...). Each address shows up below as Innovid calls it.")
+    print("When you're done, close the browser window (all its tabs).\n")
     print("Only the addresses Innovid calls are written down --")
     print("no headers, no cookies, no request or response contents.")
     print("Sign-in addresses are dropped entirely, and query values")
@@ -54,7 +56,7 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
 
     try:
         calls = record_api_calls(
-            campaign_id=campaign_id, credentials=load_credentials()
+            campaign_id=campaign_id, credentials=load_credentials(), live=True
         )
     except InnovidAuthError as exc:
         print(f"Didn't work out:\n  {exc}")
@@ -76,7 +78,8 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
 
     # Decision sets are the reason this exists, and the summary's
     # field list is how Innovid says which columns it wants.
-    interesting = ("dset", "dtree", "decision", "column", "summary")
+    interesting = ("dset", "dtree", "decision", "column", "summary",
+                   "site", "video", "audio", "setting", "filter", "vpaid", "transcod")
 
     def _is_interesting(shape: str) -> bool:
         return any(k in shape.lower() for k in interesting)
@@ -108,6 +111,29 @@ def _record_what_innovid_asks_for(campaign_id: str) -> int:
         "are hidden unless they describe the request -- but give it a "
         "glance anyway before pasting it anywhere."
     )
+    return 0
+
+
+def _site_settings(campaign_id: str, show: bool = False) -> int:
+    """
+    FB-03: como se llama por dentro "Media Filters" (Remove VPAID).
+
+    Lee el panel Video & Audio Settings de los primeros sites de la
+    campana. Imprime nombres de campos y, solo en los que parecen el
+    filtro, su valor. Nada de la sesion.
+    """
+    print("Reading the Video & Audio Settings of the first sites...\n")
+    try:
+        lines = probe_site_settings(campaign_id, headless=not show)
+    except InnovidAuthError as exc:
+        print(f"Didn't work out:\n  {exc}")
+        return 1
+    except Exception as exc:
+        print(f"Didn't work out:\n  {exc}")
+        return 1
+    print("Send these lines:\n")
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -153,7 +179,7 @@ def main() -> int:
 
     if not args:
         print("Usage: python check_innovid_connection.py "
-              "<CAMPAIGN_ID> [--show] [--record] [--diagnose]")
+              "<CAMPAIGN_ID> [--show] [--record] [--diagnose] [--site-settings]")
         print("       python check_innovid_connection.py --login")
         print("Example: python check_innovid_connection.py 323492")
         return 2
@@ -162,6 +188,9 @@ def main() -> int:
 
     if "--record" in sys.argv:
         return _record_what_innovid_asks_for(campaign_id)
+
+    if "--site-settings" in sys.argv:
+        return _site_settings(campaign_id, show="--show" in sys.argv)
 
     if "--diagnose" in sys.argv:
         print("Looking at what the saved session actually carries.\n")
@@ -289,7 +318,7 @@ def main() -> int:
         filled = {k: v for k, v in result.field_coverage.items() if v}
         empty = sorted(k for k, v in result.field_coverage.items() if not v)
 
-        seen = result.rows_seen or total
+        seen = result.rows_seen or len(result.placements or [])
         print(
             f"\nOf the {len(result.field_coverage)} fields Innovid "
             f"sent, {len(filled)} carry data, counted over all {seen} "
