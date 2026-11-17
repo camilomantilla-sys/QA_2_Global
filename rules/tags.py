@@ -14,6 +14,7 @@ Initial validations:
   TAG-010 Empty tag.
   TAG-011 Duplicate placement within the file.
   TAG-014 Landing page carried inside a 1x1 click tag.
+  TAG-015 Every column of the row is filled after wrapping (FB-02).
 """
 from __future__ import annotations
 
@@ -275,6 +276,7 @@ def evaluate(
         # delante una revision que no existia.
 
         _landing_page_in_click_tag(link, buffer)
+        _empty_after_wrapping(link, buffer)
 
         # TAG-010: the row must contain at least one tag.
 
@@ -430,6 +432,45 @@ def _clicked_url(raw: str) -> str:
         return ""
     tail = text.rsplit("&url=", 1)[1].strip()
     return tail if tail.lower().startswith(("http://", "https://")) else ""
+
+
+# TAG-015: despues del wrapping no queda ninguna celda vacia (FB-02).
+#
+# El Excel que se usaba antes tenia una formula que avisaba si quedaba
+# una celda vacia: era la senal de que un tag no se proceso. Estas
+# columnas no entran porque ya tienen su propia regla, que sabe cuando
+# pueden venir vacias:
+#   - ftrack, protected pixel, DISQO, iSpot: TAG-012 y PIX-A01, segun
+#     la politica de cada placement;
+#   - las de DoubleVerify: DV-003.
+_EMPTY_OK = ("ftrack", "protected pixel", "disqo", "ispot", "doubleverify")
+
+
+def _empty_after_wrapping(link, buffer: FindingsBuffer) -> None:
+    if link.expected is None:   # fuera de la solicitud: TAG-003 ya lo dice
+        return
+    row = link.tag_row
+    empty = [c for c in getattr(row, "empty_columns", []) or []
+             if not any(k in c.casefold() for k in _EMPTY_OK)]
+    common = dict(
+        rule_id="TAG-015",
+        domain=Domain.TAG,
+        entity_type=EntityType.PLACEMENT,
+        placement_id=row.placement_id,
+        placement_name=row.placement_name,
+        expected="Every column filled",
+    )
+    if empty:
+        buffer.fail(
+            message=f"Empty after wrapping: {', '.join(empty)}",
+            actual=f"Empty: {', '.join(empty)}",
+            reason=("After wrapping every column of the tag file comes filled. "
+                    "An empty cell usually means a tag wasn't processed."),
+            recommended_action="Wrap the tags again for this placement, or fill the missing column.",
+            **common,
+        )
+    else:
+        buffer.pass_(message="Every column of the tag file is filled", **common)
 
 
 def _landing_page_in_click_tag(link, buffer: FindingsBuffer) -> None:

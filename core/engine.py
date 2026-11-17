@@ -19,6 +19,7 @@ from rules import placements
 from rules import rotation
 from rules import tags
 from rules import urls
+from rules import video
 from rules import adobe_pixels  # revisar la firma: recibe `reconciliation`, no `match_result`
 from rules import adobe_tag_policy  # idem: recibe `reconciliation`
 from rules import pixels  # idem: recibe `reconciliation`
@@ -110,6 +111,8 @@ def run_rules(
     attribution.evaluate(match_result, buffer, account=account)
     dtree.evaluate(match_result, buffer)
     dset.evaluate(match_result, buffer)
+    # FB-03: Remove VPAID por site, solo en las cuentas que lo piden.
+    video.evaluate(match_result, buffer, account=account)
 
     if adobe_pixel_reconciliation is not None:
         adobe_pixels.evaluate(adobe_pixel_reconciliation, buffer)

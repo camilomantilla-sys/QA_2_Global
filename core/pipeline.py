@@ -300,20 +300,10 @@ def run_checks(
 
 # ------------------------------------------------------------------ fechas
 
-def _to_date(value) -> "date | None":
-    """Fecha de una celda o de los metadatos ('2026-11-02 00:00:00')."""
-    from datetime import date, datetime
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    text = str(value or "").strip().replace("T", " ").split(" ")[0]
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
-        try:
-            return datetime.strptime(text, fmt).date()
-        except ValueError:
-            continue
-    return None
+def _to_date(value):
+    """Fecha de una celda o de los metadatos. Vive en core.dates."""
+    from core.dates import to_date
+    return to_date(value)
 
 
 def _date_text(value) -> str:

@@ -5,12 +5,16 @@ PLC-001: el placement que pide la TS existe en Innovid.
 PLC-002: en una desasignacion, el placement quedo detenido.
 PLC-003 (REVIEW): la TS quiere el placement corriendo y el export lo
 muestra apagado.
+PLC-004 (INFO): las fechas del placement en Innovid no son las de la TS.
+No bloquea el QA (decision de AdOps, FB-09): va a los callouts del
+reporte para que alguien confirme que es a proposito.
 PLC-007 (REVIEW): la rotacion que declara el placement tiene al menos
 un creativo de su dimension.
 """
 
 from core.colors import GREEN, RED
 from core import placement_state
+from core.dates import to_date as _to_date
 from core.findings import Domain
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
@@ -41,6 +45,7 @@ def evaluate(match_result, buffer):
 
         _evaluate_disassignment(pm, buffer)
         _evaluate_switched_off(pm, buffer)
+        _evaluate_flight_dates(pm, buffer)
 
     # PLC-007 mira la TS, no Innovid: vale igual para un placement que
     # volvio y para uno que no.
@@ -98,6 +103,53 @@ def _evaluate_rotation_dims(ep, buffer):
             f"this placement is {ep.dims} and the rotation it names is "
             "not."
         ),
+    )
+
+
+def _span(start, end) -> str:
+    return f"{start.isoformat() if start else '?'} → {end.isoformat() if end else '?'}"
+
+
+def _evaluate_flight_dates(pm, buffer):
+    """
+    PLC-004 -- las fechas del placement, TS contra el export.
+
+    Se comparan como fechas, no como texto: la TS escribe 11/16/2026 y
+    el export 2026-11-16, y eso es el mismo dia.
+
+    Una diferencia no bloquea el QA. Suele ser a proposito (el placement
+    salio el dia de la implementacion porque el inicio de la TS ya
+    habia pasado), pero alguien tiene que verla: por eso es INFO y va a
+    los callouts del reporte, todos juntos en una sola lista.
+    """
+    if pm.actual is None or placement_state.wants_it_off(pm):
+        return
+    ts_start, ts_end = _to_date(pm.expected.start), _to_date(pm.expected.end)
+    in_start, in_end = _to_date(pm.actual.start), _to_date(pm.actual.end)
+    start_off = bool(ts_start and in_start and ts_start != in_start)
+    end_off = bool(ts_end and in_end and ts_end != in_end)
+    if not ((ts_start and in_start) or (ts_end and in_end)):
+        return
+    common = dict(
+        rule_id="PLC-004",
+        domain=Domain.DATES,
+        placement_id=pm.placement_id,
+        placement_name=pm.expected.name,
+        expected=_span(ts_start, ts_end),
+        actual=_span(in_start, in_end),
+    )
+    if not (start_off or end_off):
+        buffer.pass_(message="The placement flights on the Traffic Sheet dates", **common)
+        return
+    what = "start and end dates" if start_off and end_off else (
+        "start date" if start_off else "end date")
+    buffer.info(
+        message=f"The placement has another {what} in Innovid than in the Traffic Sheet",
+        reason=("Placement dates don't block the QA. They are listed in the "
+                "report callouts so someone confirms the difference is intended "
+                "(for example, it went live on the implementation date)."),
+        recommended_action="Check that the difference is intended, or correct the placement dates.",
+        **common,
     )
 
 

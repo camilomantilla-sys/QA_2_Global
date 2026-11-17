@@ -193,6 +193,10 @@ class TagRow:
     end_date: Any = None
     prisma_id: str = ""
     tags: list[TagValue] = field(default_factory=list)
+    # Las columnas del encabezado (tal como se escriben) que en esta
+    # fila vienen vacias. Despues del wrapping no deberia quedar
+    # ninguna (FB-02); las reglas deciden cuales importan.
+    empty_columns: list[str] = field(default_factory=list)
 
     @property
     def dimensions(self) -> str:
@@ -213,6 +217,8 @@ class TagsResult:
     header_row: int | None = None
     columns: dict[str, int] = field(default_factory=dict)
     tag_columns: dict[str, int] = field(default_factory=dict)
+    # Todas las columnas con encabezado, con el texto original.
+    headers: dict[str, int] = field(default_factory=dict)
     rows: list[TagRow] = field(default_factory=list)
     anomalies: list[Anomaly] = field(default_factory=list)
 
@@ -478,6 +484,7 @@ def parse_innovid_tags(path: Path) -> TagsResult:
 
             key = norm_key(header)
             result.columns[key] = col
+            result.headers[header] = col
 
             tag_type = _classify_tag_header(header)
 
@@ -556,6 +563,11 @@ def parse_innovid_tags(path: Path) -> TagsResult:
                 tag_row.tags.append(
                     _parse_tag_value(column_name, raw)
                 )
+
+            tag_row.empty_columns = [
+                header for header, column_number in result.headers.items()
+                if not _cell_text(ws.cell(row_number, column_number).value)
+            ]
 
             result.rows.append(tag_row)
 

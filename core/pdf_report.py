@@ -159,6 +159,10 @@ class ReportMeta:
     qa3_date: date | None = None
     notes: str = ""
 
+    # Lo que pide una mirada humana, agrupado y con su texto
+    # predeterminado (core.callouts). Vacio si no hay nada que mirar.
+    callouts: list = field(default_factory=list)
+
     # QA2 approval is recorded on the delivered Excel itself (edited
     # in SharePoint), not in the app -- these reports just carry the
     # line QA2 fills in.
@@ -410,6 +414,10 @@ def _record_flowable(meta: ReportMeta, styles):
     )
     flowables = [caption, Spacer(1, 4), t]
 
+    if meta.callouts:
+        flowables += [Spacer(1, 8), Paragraph("CALLOUTS", styles["muted"]),
+                      Spacer(1, 4), _callouts_table(meta.callouts, styles)]
+
     if meta.notes:
         notes_para = Paragraph(
             _esc(meta.notes).replace("\n", "<br/>"), styles["body"]
@@ -429,12 +437,37 @@ def _record_flowable(meta: ReportMeta, styles):
         )
         flowables += [
             Spacer(1, 8),
-            Paragraph("NOTES / CALLOUTS", styles["muted"]),
+            Paragraph("NOTES", styles["muted"]),
             Spacer(1, 4),
             notes_table,
         ]
 
     return flowables
+
+
+def _callouts_table(callouts: list, styles, per_callout: int = 12):
+    """Cada callout con su texto, cuantos se aprobaron y a quien aplica."""
+    rows = []
+    for c in callouts:
+        lines = [f"<b>{_esc(c['text'])}</b> <font color='#6B7194'>({_esc(c['state'])})</font>"]
+        for item in c["items"][:per_callout]:
+            extra = " &middot; ".join(_esc(x) for x in (item["detail"], item["approval"]) if x)
+            lines.append(f"&bull; {_esc(item['label'])}" + (f" &mdash; {extra}" if extra else ""))
+        rest = c["total"] - min(len(c["items"]), per_callout)
+        if rest > 0:
+            lines.append(f"<font color='#6B7194'>&hellip; and {rest} more (see the Callouts sheet of the Excel)</font>")
+        rows.append([Paragraph("<br/>".join(lines), styles["body"])])
+    t = Table(rows, colWidths=[170 * mm])
+    t.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.75, WPP_BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, WPP_BORDER),
+        ("BACKGROUND", (0, 0), (-1, -1), WPP_BG),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    return t
 
 
 def _metrics_flowable(meta: ReportMeta, styles):

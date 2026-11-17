@@ -170,3 +170,25 @@ def excel_serial_to_date(serial: float) -> date | None:
         return date.fromordinal(date(1899, 12, 31).toordinal() + n)
     except (ValueError, OverflowError):
         return None
+
+
+def to_date(value) -> date | None:
+    """
+    Una fecha suelta, venga como venga: date, datetime, '2026-11-02',
+    '2026-11-02 00:00:00' (metadatos del export) o '11/02/2026'.
+
+    Sirve para comparar dos fechas que llegan escritas distinto: la TS
+    y el export rara vez usan el mismo formato, y como texto nunca
+    serian iguales.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip().replace("T", " ").split(" ")[0]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None

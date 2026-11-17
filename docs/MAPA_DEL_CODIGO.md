@@ -76,6 +76,19 @@ Adobe tag column policy: Ftrack / No Ftrack / Clicktag / Protected. *(284 lineas
 | funcion | `_worked_policy_placements(ts_result) -> dict[str, dict]` |  |
 | funcion | `reconcile_adobe_tag_policy(ts_result, inventory: TagInventory) -> TagPolicyReconciliation` |  |
 
+### `core/callouts.py`
+
+Los callouts del reporte (FB-09). *(146 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `_value(x) -> str` |  |
+| funcion | `_approval(reason: str) -> str` | La firma que dejo apply_review_overrides al final del reason, o "" |
+| funcion | `_group_key(f) -> str` |  |
+| funcion | `_label(f) -> str` |  |
+| funcion | `build_callouts(findings, names: dict[str, str] \| None=None) -> list[dict[str, Any]]` | Los callouts, los que bloquean primero |
+| funcion | `state_line(g: dict[str, Any]) -> str` | "3 approved · 2 to review", o "Doesn't block the QA" para un INFO |
+
 ### `core/colors.py`
 
 Resolucion y clasificacion de colores de relleno. *(220 lineas)*
@@ -92,7 +105,7 @@ Resolucion y clasificacion de colores de relleno. *(220 lineas)*
 
 ### `core/dates.py`
 
-Motor de fechas. Ataca los bugs B3 y B23. *(172 lineas)*
+Motor de fechas. Ataca los bugs B3 y B23. *(194 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -103,6 +116,7 @@ Motor de fechas. Ataca los bugs B3 y B23. *(172 lineas)*
 | funcion | `_build(a: int, b: int, c: int, order: str) -> date \| None` |  |
 | funcion | `resolve_date_column(raw_values: list[object], hint: str \| None=None) -> DateColumnResult` | Resuelve una columna de fechas completa |
 | funcion | `excel_serial_to_date(serial: float) -> date \| None` | Serial de Excel (base 1900, con el bug historico del 29-feb-1900) |
+| funcion | `to_date(value) -> date \| None` | Una fecha suelta, venga como venga: date, datetime, '2026-11-02', '2026-11-02 00:00:00' (metadatos del export) o '11/02/2026' |
 
 ### `core/decision_sets.py`
 
@@ -165,7 +179,7 @@ DV (DoubleVerify) sub-type detection, shared by every DV-related check. *(91 lin
 
 ### `core/engine.py`
 
-Orquestador principal del Rule Engine QA2. *(140 lineas)*
+Orquestador principal del Rule Engine QA2. *(143 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -174,13 +188,15 @@ Orquestador principal del Rule Engine QA2. *(140 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(639 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(729 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_excel_safe(value)` |  |
 | funcion | `_write_table(ws: Worksheet, df: pd.DataFrame, start_row: int=1, status_col: str \| None=None) -> int` | Write a dataframe as a styled, filterable table |
 | funcion | `_blank(value, fallback: str='') -> str` |  |
+| funcion | `_height(text: str, width: int, line: float=13.0) -> float` | Alto de una fila con texto partido |
+| funcion | `_callouts_sheet(wb: Workbook, callouts: list) -> None` | Los callouts con a quien aplica cada uno (FB-09) |
 | funcion | `_summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path \| None)` |  |
 | funcion | `_qa_sheet(wb: Workbook, qa_rows: list[dict]) -> None` | El entregable en horizontal: una fila por creativo, los dos lados en columnas pareadas |
 | funcion | `_audit_tab(ws) -> None` | Oculta, no borrada |
@@ -404,7 +420,7 @@ Where QA2 reads and writes its own files. *(106 lineas)*
 
 ### `core/pdf_report.py`
 
-Branded PDF export of a QA2 run. *(738 lineas)*
+Branded PDF export of a QA2 run. *(771 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -419,6 +435,7 @@ Branded PDF export of a QA2 run. *(738 lineas)*
 | funcion | `_blank(value: str \| None, width: int=28) -> str` | Render a filled value, or an underscored blank line to fill by hand |
 | funcion | `_blank_date(value: date \| None) -> str` |  |
 | funcion | `_record_flowable(meta: ReportMeta, styles)` |  |
+| funcion | `_callouts_table(callouts: list, styles, per_callout: int=12)` | Cada callout con su texto, cuantos se aprobaron y a quien aplica |
 | funcion | `_metrics_flowable(meta: ReportMeta, styles)` |  |
 | funcion | `_df_to_table(df: pd.DataFrame, styles, col_widths=None, status_col: str \| None=None, max_rows: int=400)` |  |
 | funcion | `_evidence_flowables(evidence_images: list[tuple[str, bytes]], styles)` |  |
@@ -440,7 +457,7 @@ QA2 deja escrito su numero de proceso, para que se le pueda encontrar. *(110 lin
 
 ### `core/pipeline.py`
 
-El QA completo, sin interfaz. *(375 lineas)*
+El QA completo, sin interfaz. *(365 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -456,7 +473,7 @@ El QA completo, sin interfaz. *(375 lineas)*
 | funcion | `understand_files(ts_name, ts_result, pc_name, pc_result, pl_name, pl_result, tags_results, dv_result) -> tuple[list[dict], list[dict]]` | Que es cada archivo y que problemas trae |
 | clase | `QAChecks` | Lo que dejan las reglas: los hallazgos y cada conciliacion que la interfaz muestra en sus tablas |
 | funcion | `run_checks(match_result, ts_result, pc_result, pl_result, tags_results, dv_result, account, innovid_reconciliation) -> QAChecks` | Todas las familias de reglas, en el orden de siempre |
-| funcion | `_to_date(value) -> 'date \| None'` | Fecha de una celda o de los metadatos ('2026-11-02 00:00:00') |
+| funcion | `_to_date(value)` | Fecha de una celda o de los metadatos |
 | funcion | `_date_text(value) -> str` |  |
 | funcion | `compare_dates(ts, pc, pl, match_result) -> dict[str, Any]` | Fechas de la TS frente a las de Innovid, solo para mostrar |
 
@@ -555,7 +572,7 @@ Como se llama el archivo que alguien se descarga. *(53 lineas)*
 
 ### `core/reports.py`
 
-Los informes del QA (PDF y Excel) y las firmas de QA2 Review, sin interfaz. *(346 lineas)*
+Los informes del QA (PDF y Excel) y las firmas de QA2 Review, sin interfaz. *(349 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -583,6 +600,10 @@ Agrupado de hallazgos para la revision de QA2. *(77 lineas)*
 | funcion | `_reason_key(finding) -> str` | El mensaje sin los nombres que cambian de una fila a otra |
 | funcion | `group_review_findings(findings: Iterable) -> dict[tuple[str, str], list]` | Agrupa por (regla + estado, motivo) conservando el orden |
 | funcion | `bulk_groups(findings: Iterable) -> dict[str, list]` | Los grupos que vale la pena aprobar en bloque, etiquetados para el selector |
+
+### `core/rule_titles.py`
+
+Que revisa cada regla, en una frase. *(53 lineas)*
 
 ### `core/schema.py`
 
@@ -751,7 +772,7 @@ Parser del export de Innovid Campaign Manager. *(363 lineas)*
 
 ### `parsers/innovid_tags.py`
 
-Parser de archivos de tags exportados desde Innovid. *(574 lineas)*
+Parser de archivos de tags exportados desde Innovid. *(586 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -916,12 +937,14 @@ PIX-002 -- el pixel de cada vendor esta en su columna. *(71 lineas)*
 
 ### `rules/placements.py`
 
-PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(201 lineas)*
+PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(253 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `evaluate(match_result, buffer)` |  |
 | funcion | `_evaluate_rotation_dims(ep, buffer)` | PLC-007 -- la rotacion que el placement declara no es de su tamano |
+| funcion | `_span(start, end) -> str` |  |
+| funcion | `_evaluate_flight_dates(pm, buffer)` | PLC-004 -- las fechas del placement, TS contra el export |
 | funcion | `_evaluate_switched_off(pm, buffer)` | PLC-003 -- la TS quiere el placement corriendo y esta apagado |
 | funcion | `_evaluate_disassignment(pm, buffer)` | PLC-002 - desasignacion de placement |
 
@@ -945,13 +968,14 @@ TAG-013 -- cobertura del archivo de tags. *(39 lineas)*
 
 ### `rules/tags.py`
 
-QA2 rules for tag files. *(504 lineas)*
+QA2 rules for tag files. *(545 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_date_text(value: object) -> str` |  |
 | funcion | `evaluate(tag_match: TagMatchResult, buffer: FindingsBuffer) -> None` |  |
 | funcion | `_clicked_url(raw: str) -> str` | A donde manda un click tag de 1x1 |
+| funcion | `_empty_after_wrapping(link, buffer: FindingsBuffer) -> None` |  |
 | funcion | `_landing_page_in_click_tag(link, buffer: FindingsBuffer) -> None` | TAG-014 -- el tag dice a donde va el click, y la TS tambien |
 
 ### `rules/urls.py`
@@ -965,6 +989,15 @@ URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(395 lineas)*
 | funcion | `_is_retired(pm) -> bool` | El placement ya no sirve: la TS lo desasigna, o Innovid lo apago |
 | funcion | `evaluate_direct_placement_urls(match_result, buffer)` | URL-003 -- la landing page de un placement sin creativos propios |
 | funcion | `evaluate(match_result, buffer)` |  |
+
+### `rules/video.py`
+
+VID-001 -- Remove VPAID en el site de los placements de video (FB-03). *(55 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `applies_to(account: str) -> bool` |  |
+| funcion | `evaluate(match_result, buffer, account: str='') -> None` |  |
 
 ## `ui/` — Interfaz (Streamlit)
 
@@ -1346,6 +1379,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
+| `test_callouts.py` | 8 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
 | `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
@@ -1404,6 +1438,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_site_served_tracker.py` | 6 | Un 1x1 de Adobe: la TS dice N/A y QA2 no comprobaba nada |
 | `test_startup_leaves_a_trace.py` | 5 | "Solo me dice que no le abre nada." |
 | `test_tag_analysis.py` | 17 | Que se ve de un archivo de tags |
+| `test_tag_empty_cells.py` | 4 | FB-02: despues del wrapping no queda ninguna celda vacia en el archivo de tags |
 | `test_tag_landing_page.py` | 12 | La landing page viaja dentro del click tag de un 1x1 |
 | `test_ts_reading.py` | 3 | Que lee QA de cada Traffic Sheet, formato por formato |
 | `test_ts_rotation_filters.py` | 5 | Que filas de Creative Rotations se descartan |
@@ -1419,4 +1454,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 773 funciones de prueba en 78 archivos (algunas se parametrizan y corren varias veces).
+Total: 785 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).

@@ -172,6 +172,73 @@ def _blank(value, fallback: str = "") -> str:
     return str(value) if value else fallback
 
 
+def _height(text: str, width: int, line: float = 13.0) -> float:
+    """
+    Alto de una fila con texto partido. Excel no recalcula el alto de
+    una fila que escribio otro programa, y sin esto el texto queda
+    cortado en una sola linea.
+    """
+    import math
+    lines = sum(max(1, math.ceil(len(part) / max(width - 2, 1)))
+                for part in str(text or "").split("\n"))
+    return max(15.0, lines * line + 2)
+
+
+def _callouts_sheet(wb: Workbook, callouts: list) -> None:
+    """
+    Los callouts con a quien aplica cada uno (FB-09).
+
+    Una seccion por motivo: el texto predeterminado, cuantos se
+    aprobaron, y una fila por placement o site con lo que dice la TS
+    frente a Innovid y la firma de QA2.
+    """
+    ws = wb.create_sheet("Callouts")
+    widths = {"A": 62, "B": 58, "C": 48, "D": 44}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+    headers = ["Callout", "Placement / site", "Traffic Sheet vs Innovid", "QA2 sign-off"]
+    for i, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+    ws.freeze_panes = "A2"
+    row = 2
+    group_fill = PatternFill("solid", start_color=WPP_BG, end_color=WPP_BG)
+    for c in callouts:
+        first = row
+        for n, item in enumerate(c["items"] or [{"label": "", "detail": "", "approval": ""}]):
+            if n == 0:
+                cell = ws.cell(row=row, column=1, value=c["text"])
+                cell.font = Font(color=WPP_INK, bold=True, size=10)
+            elif n == 1:
+                cell = ws.cell(row=row, column=1, value=c["state"])
+                cell.font = Font(color=WPP_MUTED, size=9)
+            values = (item["label"], item["detail"], item["approval"] or (
+                "" if item.get("status") == "INFO" else "To review"))
+            for col, value in enumerate(values, start=2):
+                ws.cell(row=row, column=col, value=_excel_safe(value)).font = BODY_FONT
+            for col in range(1, 5):
+                ws.cell(row=row, column=col).alignment = Alignment(wrap_text=True, vertical="top")
+                ws.cell(row=row, column=col).fill = group_fill if (callouts.index(c) % 2 == 0) else PatternFill()
+            ws.row_dimensions[row].height = max(
+                _height(ws.cell(row=row, column=1).value or "", widths["A"]),
+                _height(item["label"], widths["B"]),
+                _height(item["detail"], widths["C"]),
+                _height(values[2], widths["D"]),
+            )
+            row += 1
+        if len(c["items"]) == 1:
+            cell = ws.cell(row=row, column=1, value=c["state"])
+            cell.font = Font(color=WPP_MUTED, size=9)
+            row += 1
+        if c["more"]:
+            ws.cell(row=row, column=2, value=f"… and {c['more']} more in the Findings sheet").font = (
+                Font(color=WPP_MUTED, size=9, italic=True))
+            row += 1
+        if row - first > 0:
+            row += 1
+
+
 def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
     ws = wb.active
     ws.title = "Summary"
@@ -262,6 +329,26 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
         )
         row += 1
 
+    # FB-09: lo que pide una mirada humana, una linea por motivo. El
+    # detalle (a quien aplica) esta en la hoja Callouts.
+    if meta.callouts:
+        row += 1
+        ws.cell(row=row, column=1, value="Callouts").font = Font(
+            color=WPP_INDIGO_DARK, bold=True, size=11
+        )
+        ws.cell(row=row, column=2, value="Who each one applies to: see the Callouts sheet").font = (
+            Font(color=WPP_MUTED, size=9)
+        )
+        row += 1
+        for c in meta.callouts:
+            ws.cell(row=row, column=1, value=c["state"]).font = LABEL_FONT
+            cell = ws.cell(row=row, column=2, value=c["text"])
+            cell.font = VALUE_FONT
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            ws.cell(row=row, column=1).alignment = Alignment(vertical="top", wrap_text=True)
+            ws.row_dimensions[row].height = _height(c["text"], 60)
+            row += 1
+
     # Quien firmo y cuando ya viven en el Implementation Record, unas
     # filas mas abajo. Aqui habia ademas una celda de texto libre que
     # repetia lo mismo y pedia editarla a mano: dos sitios donde
@@ -327,7 +414,7 @@ def _summary_sheet(wb: Workbook, meta: ReportMeta, logo_path: Path | None):
 
     if meta.notes:
         row += 1
-        ws.cell(row=row, column=1, value="Notes / Callouts").font = Font(
+        ws.cell(row=row, column=1, value="Notes").font = Font(
             color=WPP_INDIGO_DARK, bold=True, size=11
         )
         row += 1
@@ -589,6 +676,9 @@ def build_excel_report(
     # Primero la hoja QA: es la que se revisa. Las demas son el
     # detalle al que se baja cuando una fila no cuadra.
     _qa_sheet(wb, qa_rows or [])
+
+    if meta.callouts:
+        _callouts_sheet(wb, meta.callouts)
 
     ws = wb.create_sheet("Worked Placements")
     _write_table(

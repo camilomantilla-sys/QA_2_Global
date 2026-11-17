@@ -20,6 +20,7 @@ import pandas as pd  # type: ignore
 
 from core.findings import Scorecard, Severity, Status
 from core.pdf_report import ReportMeta, build_pdf_report
+from core.callouts import build_callouts
 from core.excel_report import build_excel_report
 from core.qa_export import build_qa_rows
 from core.tag_analysis import analyse_tags, dv_table, import_table
@@ -301,6 +302,8 @@ def report_meta(inputs: ReportInputs) -> ReportMeta:
         qa3_by=inputs.qa3_by,
         qa3_date=inputs.qa3_date,
         notes=inputs.notes,
+        callouts=build_callouts(findings, {
+            str(pm.placement_id): pm.expected.name for pm in match_result.matched}),
     )
 
 
