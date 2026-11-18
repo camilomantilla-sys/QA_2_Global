@@ -229,6 +229,14 @@ class ActualCreative:
     # Excel le mostro los dos lados identicos.
     dims: str = ""
 
+    # Las fechas de la fila del export placement-creative. En los
+    # exports reales (9 campanas, 1.302 filas, 18-nov) son siempre las
+    # del placement: Innovid no exporta las fechas del creativo dentro
+    # del decision set. Se leen igual, porque son lo unico que hay sin
+    # Innovid conectado, y quien las use tiene que saber eso.
+    start: object = None
+    end: object = None
+
     @property
     def running(self) -> bool:
         """
@@ -281,6 +289,10 @@ class ActualPlacement:
     dims: str = ""
     start: date | None = None
     end: date | None = None
+    # Las fechas segun el export de PLACEMENT, aparte: `start`/`end`
+    # salen de la primera fila placement-creative cuando existe.
+    pl_start: date | None = None
+    pl_end: date | None = None
     status: str = ""
     placement_type: str = ""
     group_name: str = ""
@@ -731,6 +743,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 url=str(row.values.get("lp_ref") or ""),
                 cgen=str(row.values.get("cgen") or ""),
                 dims=norm_dims(row.values.get("dimensions")),
+                start=row.values.get("start_date"),
+                end=row.values.get("end_date"),
             ))
 
     # --- inyectar los creativos del grupo que el placement declara,
@@ -967,6 +981,8 @@ def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
                 clicktags=list(row.multi.get("clicktag", [])),
                 export_row=row.row,
                 dims=norm_dims(row.values.get("dimensions")),
+                start=row.values.get("start_date"),
+                end=row.values.get("end_date"),
             ))
 
     if export_pl is not None:
@@ -989,6 +1005,8 @@ def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:
                 )
                 ap.name_norm, _ = split_platform_id(ap.name)
                 out[pid] = ap
+            ap.pl_start = row.values.get("start_date")
+            ap.pl_end = row.values.get("end_date")
             ap.third_party_id = str(row.values.get("third_party_id") or "")
             ap.clicktags = list(row.multi.get("clicktag", []))
             ap.impressions = list(row.multi.get("third_party_impression", []))

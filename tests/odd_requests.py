@@ -238,12 +238,24 @@ SCENARIOS2 = [
          expect={"9230001": "dims mismatch flagged"}),
 ]
 
-SCENARIOS2.append(
+SCENARIOS2.extend([
     # 24. La URL nueva (verde) va ARRIBA de la vieja (roja) bajo el mismo nombre.
     dict(id="s24_green_above_red",
          placements=[plc("9240001", "P4XX001", fill="green", group="HOL NEW")],
          rotations=[rot("HOL NEW", "N_300x250_1", "8240001", "Holiday Display GM", fill="green")],
          lps=[dict(name="Holiday Display GM", url=NEW, fill={"url": "green"}), dict(name=None, url=OLD, fill={"url": "red"})],
          innovid=[inv("9240001", "P4XX001", [cr("8240001", "N_300x250_1", NEW)])],
-         expect={"9240001": "URL-001 PASS (green wins)"}))
+         expect={"9240001": "URL-001 PASS (green wins)"}),
+
+    # 25. Cambio de fechas sin Innovid, como en los exports reales: la
+    # fila del creativo trae las fechas del placement. Uno pide las
+    # mismas (PASS); el otro pide otras y el export no lo puede mostrar.
+    dict(id="s25_dates_from_export",
+         placements=[plc("9250001", "P4YY001"), plc("9250002", "P4YY002", group="HOL B")],
+         rotations=[rot("HOL 300x250", "HOL_300x250_A", "8250001", "Holiday Display GM", start="2026-11-16", end="2026-12-31", fill={"end": "green"}),
+                    rot("HOL B", "HOL_300x250_B", "8250002", "Holiday Display GM", start="2026-11-16", end="2027-01-15", fill={"end": "green"})],
+         lps=[dict(name="Holiday Display GM", url=NEW)],
+         innovid=[inv("9250001", "P4YY001", [cr("8250001", "HOL_300x250_A", NEW)]),
+                  inv("9250002", "P4YY002", [cr("8250002", "HOL_300x250_B", NEW)])],
+         expect={"9250001": "INV-001 PASS", "9250002": "INV-001 REVIEW (export only has the placement's flight)"})])
 ALL = SCENARIOS + SCENARIOS2

@@ -179,6 +179,62 @@ class URLComparison:
     def is_ok(self) -> bool:
         return self.result == URL_MATCH
 
+_PART_LABELS = (("scheme", "protocol"), ("host", "domain"), ("path", "path"))
+
+
+def destination_difference(e: ParsedURL, a: ParsedURL) -> str:
+    """
+    Que parte del destino cambia, partida: "only the protocol differs:
+    http / https" en vez de las dos URLs enteras una al lado de la otra,
+    que obligaban a buscar la letra (AdOps, 18-nov).
+    """
+    parts = [(label, getattr(e, attr), getattr(a, attr))
+             for attr, label in _PART_LABELS if getattr(e, attr) != getattr(a, attr)]
+    if len(parts) == 1:
+        label, left, right = parts[0]
+        return f"only the {label} differs: {left} / {right} (TS / Innovid)"
+    return " · ".join(
+        f"{label}: {left} / {right}" for label, left, right in parts) + " (TS / Innovid)"
+
+
+def highlight_url_difference(expected: object, actual: object):
+    """
+    Las dos URLs partidas en trozos (texto, difiere) para pintar en
+    negrilla lo que cambia. None si no se pueden partir o si coinciden.
+    """
+    c = compare_urls(expected, actual)
+    if c.result not in (URL_BASE_DIFF, URL_PARAMS_DIFF):
+        return None
+    keys = set(c.params_only_expected) | set(c.params_only_actual) | set(c.params_diff_value)
+    if c.result == URL_BASE_DIFF:
+        e, a = c.expected.params, c.actual.params
+        keys = {k for k in set(e) | set(a) if e.get(k) != a.get(k)}
+    sides = []
+    for raw, parsed, other in ((c.expected.raw, c.expected, c.actual),
+                               (c.actual.raw, c.actual, c.expected)):
+        try:
+            sp = urlsplit(raw)
+        except ValueError:
+            return None
+        pieces = [(sp.scheme, parsed.scheme != other.scheme), ("://", False),
+                  (sp.netloc, parsed.host != other.host),
+                  (sp.path, parsed.path != other.path)]
+        if sp.query:
+            pieces.append(("?", False))
+            for i, pair in enumerate(sp.query.split("&")):
+                if i:
+                    pieces.append(("&", False))
+                key = pair.split("=", 1)[0].strip().lower()
+                pieces.append((pair, key in keys))
+        if sp.fragment:
+            pieces.append(("#" + sp.fragment, False))
+        pieces = [(text, bold) for text, bold in pieces if text]
+        if "".join(text for text, _ in pieces) != raw:
+            return None
+        sides.append(pieces)
+    return sides[0], sides[1]
+
+
 def compare_urls(expected: object, actual: object,
                  known_macros: dict[str, str] | None = None) -> URLComparison:
     """
@@ -209,7 +265,7 @@ def compare_urls(expected: object, actual: object,
 
     if e.base != a.base:
         c.result = URL_BASE_DIFF
-        c.note = f"different destination: '{e.base}' vs '{a.base}'"
+        c.note = destination_difference(e, a)
         return c
 
     ek, ak = set(e.params), set(a.params)
@@ -225,13 +281,13 @@ def compare_urls(expected: object, actual: object,
         c.result = URL_PARAMS_DIFF
         bits = []
         if c.params_diff_value:
-            bits.append(", ".join(f"{k}: {v[0]} -> {v[1]}"
+            bits.append(", ".join(f"{k}: {v[0]} / {v[1]}"
                                   for k, v in list(c.params_diff_value.items())[:3]))
         if c.params_only_expected:
             bits.append(f"missing: {', '.join(list(c.params_only_expected)[:3])}")
         if c.params_only_actual:
             bits.append(f"extra: {', '.join(list(c.params_only_actual)[:3])}")
-        c.note = " · ".join(bits)
+        c.note = " · ".join(bits) + " (TS / Innovid)"
         return c
 
     c.result = URL_MATCH

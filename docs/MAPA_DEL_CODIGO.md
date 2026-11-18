@@ -89,7 +89,7 @@ Adobe tag column policy: Ftrack / No Ftrack / Clicktag / Protected. *(284 lineas
 
 ### `core/callouts.py`
 
-Los callouts del reporte (FB-09). *(200 lineas)*
+Los callouts del reporte (FB-09). *(204 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ Orquestador principal del Rule Engine QA2. *(144 lineas)*
 
 ### `core/excel_report.py`
 
-Branded multi-tab Excel export of a QA2 run. *(808 lineas)*
+Branded multi-tab Excel export of a QA2 run. *(839 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -214,6 +214,7 @@ Branded multi-tab Excel export of a QA2 run. *(808 lineas)*
 | funcion | `_pair_agrees(left_column: str, left: str, right: str) -> bool` | Acuerdos que dependen de la columna (AdOps): - video: 0x0 en la TS es el 1920x1080 de Innovid; - el placement puede arrancar despues del inicio de la TS (se trafico tarde), nunca antes |
 | funcion | `_shows_cgen(account: str, qa_rows: list[dict]) -> bool` | CGEN solo en Adobe (AdOps) |
 | funcion | `_qa_sheet(wb: Workbook, qa_rows: list[dict], account: str='') -> None` | El entregable en horizontal: una fila por creativo, los dos lados en columnas pareadas |
+| funcion | `_bold_url_difference(ws, row: int, left_col: int, right_col: int, left: str, right: str) -> None` | En las dos URLs, la parte que cambia va en negrilla: "http" contra "https" no se ve a simple vista en dos URLs de 200 caracteres (AdOps, 18-nov) |
 | funcion | `_audit_tab(ws) -> None` | Oculta, no borrada |
 | funcion | `_colour_legend(ws, row: int) -> None` | Que significa cada color, debajo de la tabla |
 | funcion | `_tags_sheet(wb, summary_rows, tags_df, coverage) -> None` | Los tags como se importarian, con el veredicto delante |
@@ -382,7 +383,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1430 lineas)*
+Matching Engine. *(1448 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -740,7 +741,7 @@ Lo que QA leyo de una Traffic Sheet, en forma comparable. *(167 lineas)*
 
 ### `core/urls.py`
 
-URL and attribution engine. *(327 lineas)*
+URL and attribution engine. *(383 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -750,6 +751,8 @@ URL and attribution engine. *(327 lineas)*
 | funcion | `_template_match(template: str, value: str, known: dict[str, str]) -> bool` | ¿`value` es `template` con sus macros de Innovid resueltas? |
 | funcion | `_same_value(expected: str, actual: str, known: dict[str, str]) -> bool` |  |
 | clase | `URLComparison` |  |
+| funcion | `destination_difference(e: ParsedURL, a: ParsedURL) -> str` | Que parte del destino cambia, partida: "only the protocol differs: http / https" en vez de las dos URLs enteras una al lado de la otra, que obligaban a buscar la letra (AdOps, 18-nov) |
+| funcion | `highlight_url_difference(expected: object, actual: object)` | Las dos URLs partidas en trozos (texto, difiere) para pintar en negrilla lo que cambia |
 | funcion | `compare_urls(expected: object, actual: object, known_macros: dict[str, str] \| None=None) -> URLComparison` | Compara destino y parametros |
 | clase | `AttributionTriangle` | Three vertices that must match: ts       = CGENS declared in the Traffic Sheet export   = Third_Party_ID of the row in Innovid url      = sdid param extracted from the ClickTag |
 | funcion | `check_triangle(ts_cgen: object, export_tpid: object, url_value: object) -> AttributionTriangle` |  |
@@ -989,13 +992,15 @@ PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(317 line
 
 ### `rules/rotation.py`
 
-ROT-001 -- la rotacion que se pidio cambiar. *(153 lineas)*
+ROT-001 -- la rotacion que se pidio cambiar. *(244 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_weights_label(creatives) -> str` | Los pesos pedidos, en porcentaje y sin repetir |
 | funcion | `_requested_rotation(creative) -> bool` | ¿La TS pinto la celda de rotacion de este creativo? |
 | funcion | `evaluate(match_result, buffer)` |  |
+| funcion | `_day(value)` | Una fecha comparable: el export trae datetime, la TS date |
+| funcion | `_flight(start, end) -> str` |  |
 | funcion | `_dates_not_verified(match_result, buffer)` | Un cambio de fechas de creativo pedido, sin Innovid conectado |
 
 ### `rules/tag_coverage.py`
@@ -1020,7 +1025,7 @@ QA2 rules for tag files. *(545 lineas)*
 
 ### `rules/urls.py`
 
-URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(538 lineas)*
+URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(551 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1028,6 +1033,7 @@ URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(538 lineas)*
 | funcion | `_still_on_old_page(pm, expected_url: str) -> list[str]` | Creativos que siguen con la landing page que el swap retira |
 | funcion | `_creative_urls(ap, names) -> list[str]` |  |
 | funcion | `evaluate_placement_urls(match_result, buffer)` | URL-002 - swap de solo URL |
+| funcion | `_sentence(note: str) -> str` | La diferencia de URL como frase: "Only the protocol differs: http / https" |
 | funcion | `_is_retired(pm) -> bool` | El placement ya no sirve: la TS lo desasigna, o Innovid lo apago |
 | funcion | `evaluate_direct_placement_urls(match_result, buffer)` | URL-003 -- la landing page de un placement sin creativos propios |
 | funcion | `evaluate(match_result, buffer)` |  |
@@ -1465,7 +1471,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_lp_new_placements.py` | 5 | Una landing page verde que es de los placements nuevos no es un URL swap |
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
-| `test_odd_requests.py` | 16 | Solicitudes raras inventadas (estilo Wendy's, 18-nov) y lo que QA2 tiene que decir de cada una |
+| `test_odd_requests.py` | 19 | Solicitudes raras inventadas (estilo Wendy's, 18-nov) y lo que QA2 tiene que decir de cada una |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
 | `test_paste_image.py` | 4 | Las capturas pegadas (FB-04) entran como cualquier archivo subido, y viajan en el session bundle |
 | `test_pipeline.py` | 5 | Una sola cadena de QA para las dos interfaces |
@@ -1503,4 +1509,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 840 funciones de prueba en 84 archivos (algunas se parametrizan y corren varias veces).
+Total: 843 funciones de prueba en 84 archivos (algunas se parametrizan y corren varias veces).

@@ -581,7 +581,38 @@ def _qa_sheet(wb: Workbook, qa_rows: list[dict], account: str = "") -> None:
             for column in (left, right):
                 ws.cell(row=offset, column=index[column]).fill = fill
 
+            if fill is not AGREE_FILL and (left, right) == URL_PAIR:
+                _bold_url_difference(ws, offset, index[left], index[right],
+                                     left_value, right_value)
+
     _colour_legend(ws, len(qa_rows) + 3)
+
+
+URL_PAIR = ("TS URL", "Innovid URL")
+
+
+def _bold_url_difference(ws, row: int, left_col: int, right_col: int,
+                         left: str, right: str) -> None:
+    """
+    En las dos URLs, la parte que cambia va en negrilla: "http" contra
+    "https" no se ve a simple vista en dos URLs de 200 caracteres
+    (AdOps, 18-nov).
+    """
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
+
+    from core.urls import highlight_url_difference
+
+    pieces = highlight_url_difference(left, right)
+    if not pieces:
+        return
+    normal = InlineFont(sz=BODY_FONT.sz, color=WPP_INK)
+    bold = InlineFont(sz=BODY_FONT.sz, color="C00000", b=True)
+    for col, side in ((left_col, pieces[0]), (right_col, pieces[1])):
+        if not any(diff for _text, diff in side):
+            continue
+        ws.cell(row=row, column=col).value = CellRichText(
+            *[TextBlock(bold if diff else normal, text) for text, diff in side])
 
 
 def _audit_tab(ws) -> None:

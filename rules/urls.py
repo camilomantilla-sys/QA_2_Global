@@ -244,7 +244,9 @@ def evaluate_placement_urls(match_result, buffer):
             buffer.fail(
                 message=(
                     "The new landing page from the Traffic Sheet isn't "
-                    "the one configured in Innovid."
+                    "the one configured in Innovid"
+                    + (". " + _sentence(best.note)
+                       if best.result in (URL_BASE_DIFF, URL_PARAMS_DIFF) else ".")
                 ),
                 actual=best.actual.raw,
                 reason=best.note,
@@ -253,6 +255,12 @@ def evaluate_placement_urls(match_result, buffer):
                 ),
                 **common,
             )
+
+
+def _sentence(note: str) -> str:
+    """La diferencia de URL como frase: "Only the protocol differs: http / https"."""
+    note = str(note or "").strip()
+    return (note[:1].upper() + note[1:] + ".") if note else ""
 
 
 _NOT_RUNNING = ("stopped", "disabled", "inactive", "paused")
@@ -348,7 +356,9 @@ def evaluate_direct_placement_urls(match_result, buffer):
             buffer.fail(
                 message=(
                     "The placement's landing page isn't the one the "
-                    "Traffic Sheet declares."
+                    "Traffic Sheet declares"
+                    + (". " + _sentence(pm.url.note)
+                       if pm.url.result in (URL_BASE_DIFF, URL_PARAMS_DIFF) else ".")
                 ),
                 reason=pm.url.note,
                 recommended_action=(
@@ -512,7 +522,10 @@ def evaluate(match_result, buffer):
 
             elif result in (URL_BASE_DIFF, URL_PARAMS_DIFF):
                 buffer.fail(
-                    message="The URL configured in Innovid doesn't match the TS.",
+                    message=(
+                        "The URL configured in Innovid doesn't match the TS. "
+                        + _sentence(cl.url.note)
+                    ),
                     reason=cl.url.note,
                     recommended_action=(
                         "Correct the Clicktag destination or parameters in Innovid."

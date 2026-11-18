@@ -73,10 +73,16 @@ def test_removed_creative_still_running_fails():
     assert status("s03", "CRE-001", "9300002", "HOL_300x250_OLD") == ["FAIL"]
 
 
-def test_date_only_change_is_a_field_change_and_says_it_was_not_compared():
+def test_date_only_change_is_a_field_change_compared_against_the_export():
     ts, _ = run("s04")
     assert ts.scope["9400001"].request_type == "FIELD_CHANGE"
-    assert status("s04", "INV-001", "9400001") == ["NOT_VERIFIED"]
+    # El export trae fechas propias del creativo (12-15) y la TS pide 01-15.
+    assert status("s04", "INV-001", "9400001") == ["FAIL"]
+
+
+def test_export_dates_that_are_the_placement_flight_cannot_prove_a_creative_date():
+    assert status("s25", "INV-001", "9250001") == ["PASS"]
+    assert status("s25", "INV-001", "9250002") == ["REVIEW"]
 
 
 def test_new_placement_missing_from_innovid():
@@ -128,6 +134,37 @@ def test_placement_size_differs():
 
 def test_green_url_above_the_red_one_still_wins():
     assert status("s24", "URL-001", "9240001") == ["PASS"]
+
+
+def test_http_against_https_says_exactly_what_differs():
+    _ts, found = run("s20")
+    fail = [f.message for f in found if f.rule_id == "URL-002" and f.status.value == "FAIL"]
+    assert fail and "Only the protocol differs: https / http (TS / Innovid)" in fail[0]
+
+
+def test_the_excel_puts_the_differing_part_in_bold():
+    from io import BytesIO
+
+    import pandas as pd
+    from openpyxl import load_workbook
+
+    from core.excel_report import build_excel_report
+    from core.qa_export import COLUMNS
+    from tests.test_excel_signed_off import _meta
+
+    row = {column: "" for column in COLUMNS}
+    row.update({"Status": "FAIL", "TS URL": "https://brand.example/a?u=1&v=2",
+                "Innovid URL": "http://brand.example/a?v=2&u=1"})
+    empty = pd.DataFrame()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        data = build_excel_report(_meta(), empty, empty, empty, qa_rows=[row])
+    ws = load_workbook(BytesIO(data), rich_text=True)["QA"]
+    header = {c.value: c.column for c in ws[1] if c.value}
+    bold = [[b.text for b in ws.cell(2, header[col]).value
+             if not isinstance(b, str) and b.font.b]
+            for col in ("TS URL", "Innovid URL")]
+    assert bold == [["https"], ["http"]]
 
 
 def test_clean_cases_stay_clean():

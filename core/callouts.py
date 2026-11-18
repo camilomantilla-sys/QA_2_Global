@@ -39,6 +39,7 @@ TEXTS = {
     "PLC-006": "The placement name in Innovid differs from the Traffic Sheet for these placements.",
     "INV-001": "These creatives run on other dates in their decision set than the Traffic Sheet asks.",
     "INV-001/no-end": "These creatives have no end date in Innovid, and the Traffic Sheet closes them.",
+    "INV-001/export": "The Traffic Sheet changes these creatives' dates, and the export only carries the placement's flight. Check them in the decision set.",
     "INV-002": "The rotation weight in the decision set differs from the Traffic Sheet for these creatives.",
     "INV-005": "The Traffic Sheet wants these placements running, but Innovid has them off today.",
     "TAG-015": "The tag file has empty cells after wrapping for these placements.",
@@ -68,6 +69,7 @@ HEADINGS = {
     "ATR-002": "Attribution (CGEN)",
     "INV-001": "Creative dates in the decision set",
     "INV-001/no-end": "Creatives with no end date",
+    "INV-001/export": "Creative dates the export can't show",
     "INV-002": "Rotation weights in the decision set",
     "INV-003": "Verification partner",
     "INV-004": "Decision set",
@@ -82,7 +84,7 @@ HEADINGS = {
 }
 
 #: Grupos en los que el detalle (TS contra Innovid) es lo que hay que ver.
-SHOW_VALUES = {"PLC-004", "PLC-005", "PLC-006", "INV-001", "INV-001/no-end", "INV-002", "TAG-015"}
+SHOW_VALUES = {"PLC-004", "PLC-005", "PLC-006", "INV-001", "INV-001/no-end", "INV-001/export", "INV-002", "TAG-015"}
 
 MAX_ITEMS = 60
 
@@ -109,6 +111,8 @@ def _group_key(f) -> str:
     rule = f.rule_id
     if rule == "INV-001" and "no end date" in _value(f.message):
         return "INV-001/no-end"
+    if rule == "INV-001" and "placement's flight" in _value(f.message):
+        return "INV-001/export"
     return rule
 
 

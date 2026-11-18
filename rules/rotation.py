@@ -112,42 +112,133 @@ DATE_FIELDS = {"start_date", "end_date"}
 IDENTITY_FIELDS = {"creative_name", "creative_id", "universal_ad_id"}
 
 
+def _day(value):
+    """Una fecha comparable: el export trae datetime, la TS date."""
+    if value is None or value == "":
+        return None
+    return value.date() if hasattr(value, "date") and callable(value.date) else value
+
+
+def _flight(start, end) -> str:
+    return f"{_day(start) or '?'} → {_day(end) or '?'}"
+
+
 def _dates_not_verified(match_result, buffer):
     """
     Un cambio de fechas de creativo pedido, sin Innovid conectado.
 
     Las fechas del creativo dentro del decision set solo las trae la API
-    de Innovid (INV-001). Sin ella, CRE-001 encontraba el creativo y el
-    placement cerraba en verde sobre una solicitud que solo cambiaba
-    fechas: lo unico que se pidio no se habia mirado.
+    de Innovid. Sin ella se comparan contra el export placement-creative
+    (Camilo, 18-nov: "hagamoslo desde el export"), con un limite: en
+    todos los exports reales esas fechas son las del placement, asi que
+    no distinguen un creativo que corre en otras fechas dentro de su
+    decision set.
+
+      export = TS                             -> PASS
+      export = fechas del placement, != TS    -> REVIEW: el export no
+                                                 puede mostrar las del
+                                                 creativo
+      export con fechas propias, != TS        -> FAIL
+      export sin fechas                       -> NOT_VERIFIED
     """
     for pm in match_result.matched:
         changed = [
-            cl.expected for cl in pm.creative_links
+            cl for cl in pm.creative_links
             if cl.expected.intent == GREEN
             and DATE_FIELDS & set(cl.expected.intent_fields or ())
             and not IDENTITY_FIELDS & set(cl.expected.intent_fields or ())
         ]
         if not changed:
             continue
-        names = ", ".join(dict.fromkeys(c.name for c in changed))
-        buffer.aggregate(
-            rule_id="INV-001",
-            domain=Domain.ROTATION,
-            status=Status.NOT_VERIFIED,
-            message=(
-                f"The Traffic Sheet changes the dates of {names} here, and "
-                "they were not compared: Innovid was not connected in this run."
-            ),
-            count=len(changed),
-            reason=buffer.capabilities.reason(Capability.ROTATION_WEIGHT),
-            entity_type=EntityType.ROTATION,
-            placement_id=pm.placement_id,
-            expected=" | ".join(dict.fromkeys(
-                f"{c.start or '?'} → {c.end or '?'}" for c in changed)),
-            requires=[Capability.ROTATION_WEIGHT],
-            recommended_action=(
-                "Connect Innovid in the sidebar and run again: the "
-                "creative's dates live in the decision set."
-            ),
-        )
+
+        placement = getattr(pm, "actual", None)
+        placement_flight = (None, None)
+        if placement is not None:
+            placement_flight = (
+                _day(placement.pl_start or placement.start),
+                _day(placement.pl_end or placement.end),
+            )
+        groups: dict[Status, list] = {}
+        for cl in changed:
+            want = (_day(cl.expected.start), _day(cl.expected.end))
+            actual = cl.actual
+            have = (_day(actual.start), _day(actual.end)) if actual else (None, None)
+            if actual is None or have == (None, None):
+                status = Status.NOT_VERIFIED
+            elif have == want:
+                status = Status.PASS
+            elif have == placement_flight:
+                status = Status.REVIEW
+            else:
+                status = Status.FAIL
+            groups.setdefault(status, []).append((cl, want, have))
+
+        for status, items in groups.items():
+            names = ", ".join(dict.fromkeys(cl.expected.name for cl, _w, _h in items))
+            expected = " | ".join(dict.fromkeys(_flight(*w) for _cl, w, _h in items))
+            actual = " | ".join(dict.fromkeys(_flight(*h) for _cl, _w, h in items))
+            common = dict(
+                count=len(items),
+                entity_type=EntityType.ROTATION,
+                placement_id=pm.placement_id,
+                expected=expected,
+            )
+            if status == Status.PASS:
+                buffer.aggregate(
+                    rule_id="INV-001", domain=Domain.ROTATION, status=status,
+                    message=f"The export shows the dates the Traffic Sheet asks for {names}.",
+                    actual=actual,
+                    reason=(
+                        "Read from the placement-creative export. Innovid was "
+                        "not connected, so the decision set itself was not opened."
+                    ),
+                    **common,
+                )
+            elif status == Status.REVIEW:
+                buffer.aggregate(
+                    rule_id="INV-001", domain=Domain.ROTATION, status=status,
+                    message=(
+                        f"The Traffic Sheet changes the dates of {names}, and "
+                        "the export only shows the placement's flight."
+                    ),
+                    actual=f"{actual} (placement)",
+                    reason=(
+                        "The placement-creative export repeats the placement's "
+                        "dates on every creative row. A creative's own dates "
+                        "live in the decision set, and Innovid was not "
+                        "connected in this run."
+                    ),
+                    recommended_action=(
+                        "Check the creative's dates in the decision set, or "
+                        "connect Innovid in the sidebar and run again."
+                    ),
+                    **common,
+                )
+            elif status == Status.FAIL:
+                buffer.aggregate(
+                    rule_id="INV-001", domain=Domain.ROTATION, status=status,
+                    message=(
+                        f"{names} run(s) on other dates in the export than "
+                        "the Traffic Sheet asks."
+                    ),
+                    actual=actual,
+                    reason="Read from the placement-creative export.",
+                    recommended_action="Update the creative's dates in Innovid.",
+                    **common,
+                )
+            else:
+                buffer.aggregate(
+                    rule_id="INV-001", domain=Domain.ROTATION, status=status,
+                    message=(
+                        f"The Traffic Sheet changes the dates of {names} here, and "
+                        "they were not compared: the export has no dates for "
+                        "them and Innovid was not connected in this run."
+                    ),
+                    reason=buffer.capabilities.reason(Capability.ROTATION_WEIGHT),
+                    requires=[Capability.ROTATION_WEIGHT],
+                    recommended_action=(
+                        "Connect Innovid in the sidebar and run again: the "
+                        "creative's dates live in the decision set."
+                    ),
+                    **common,
+                )
