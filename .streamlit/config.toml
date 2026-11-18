@@ -1,10 +1,27 @@
+# Los colores de WPP Media, como en el SBA Hub y RQ Rotation (ui/brand.py).
 [theme]
 base = "light"
-primaryColor = "#4B5EEA"
-backgroundColor = "#F5F7FD"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#171B2E"
-font = "sans serif"
+primaryColor = "#5465FF"
+backgroundColor = "#F7F9F2"
+secondaryBackgroundColor = "#F3F4FB"
+textColor = "#000050"
+linkColor = "#5465FF"
+borderColor = "#E2E5F1"
+showWidgetBorder = true
+baseRadius = "10px"
+buttonRadius = "10px"
+dataframeHeaderBackgroundColor = "#EEF0FF"
+dataframeBorderColor = "#E2E5F1"
+headingFontWeights = 700
+font = "WPP, 'Segoe UI', -apple-system, sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4FB"
+
+[client]
+# Sin "Deploy" arriba a la derecha: QA2 corre en el equipo de cada uno.
+toolbarMode = "minimal"
 
 [server]
 maxUploadSize = 500

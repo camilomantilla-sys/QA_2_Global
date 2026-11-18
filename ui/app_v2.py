@@ -173,6 +173,7 @@ from rules import pixels as pixel_rules
 from rules import defaults as default_rules
 from ui.help_content import DOWNLOAD_PURPOSE, help_markdown
 from ui.paste_image import paste_images
+from ui import brand
 from core.qa1_trail import describe_origin, describe_result, result_snapshot
 from core.session_bundle import write_bundle
 
@@ -1355,18 +1356,24 @@ st.markdown(
 )
 
 
-st.markdown(
-    """
-    <div class="qa-header">
-        <h1>INNOVID QA AUTOMATION</h1>
-        <p>
-            Validation of Traffic Sheet, Placement-Creative View,
-            Placement View, and Tag files
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# El aspecto de las otras apps del equipo (SBA Hub, RQ Rotation):
+# barra blanca con el logo y un hero navy. Ver ui/brand.py.
+st.markdown(brand.BRAND_CSS, unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False)
+def _logo_data() -> tuple[str, str]:
+    path = logo_path()
+    if path is None:
+        return "", ""
+    mime = "image/svg+xml" if path.suffix.lower() == ".svg" else "image/png"
+    return base64.b64encode(path.read_bytes()).decode(), mime
+
+
+st.markdown(brand.topbar_html(*_logo_data(), qa2_version()), unsafe_allow_html=True)
+# El hero se llena despues del sidebar: hasta entonces no se sabe si
+# esta pasada ya trae resultados (y con resultados va compacto).
+_hero_slot = st.empty()
 
 
 # ============================================================
@@ -1624,25 +1631,7 @@ with st.expander("👥 Team by account"):
 # ============================================================
 
 with st.sidebar:
-    _logo_path = logo_path()
-
-    if _logo_path is not None:
-        _logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode()
-        _logo_mime = (
-            "image/svg+xml"
-            if _logo_path.suffix.lower() == ".svg"
-            else "image/png"
-        )
-        st.markdown(
-            f"""
-            <div class="wpp-logo-wrap">
-                <img src="data:{_logo_mime};base64,{_logo_b64}"
-                     style="width:100%; display:block;">
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
+    # El logo va en la barra de arriba, como en las otras apps.
     st.header("QA Files")
 
     with st.expander("📂 Load a saved session (optional)"):
@@ -2258,6 +2247,12 @@ with st.sidebar:
     if analyze_button:
         st.session_state.qa2_has_run = True
 
+    # Un placeholder escribe en su sitio, aunque se llame desde aqui.
+    _hero_slot.markdown(
+        brand.hero_html(compact=bool(st.session_state.get("qa2_has_run"))),
+        unsafe_allow_html=True,
+    )
+
     # Cuantas revisiones hay, y nada mas.
     #
     # Los controles de firma vivian aqui, y la barra lateral se dibuja
@@ -2364,40 +2359,15 @@ if not st.session_state.qa2_has_run:
         "Innovid Placement-Creative View."
     )
 
-    st.subheader("Analysis Flow")
-
-    flow_columns = st.columns(4)
-
-    flow_columns[0].markdown(
-        """
-        **1. Traffic Sheet**
-
-        Detects account, profile, colors, scope, and worked placements.
-        """
-    )
-
-    flow_columns[1].markdown(
-        """
-        **2. Placement-Creative**
-
-        Validates creatives, association, status, Decision Tree, URL, and attribution.
-        """
-    )
-
-    flow_columns[2].markdown(
-        """
-        **3. Placement View**
-
-        Adds supporting info for 1x1 placements, URLs, and pixels.
-        """
-    )
-
-    flow_columns[3].markdown(
-        """
-        **4. Tags**
-
-        Validates IDs, dimensions, Campaign ID, and delivered content.
-        """
+    st.markdown(brand.section_html("How it works", "Analysis flow"), unsafe_allow_html=True)
+    st.markdown(
+        brand.cards_html([
+            ("Traffic Sheet", "Detects account, profile, colors, scope, and worked placements."),
+            ("Placement-Creative", "Validates creatives, association, status, Decision Tree, URL, and attribution."),
+            ("Placement View", "Adds supporting info for 1x1 placements, URLs, and pixels."),
+            ("Tags", "Validates IDs, dimensions, Campaign ID, and delivered content."),
+        ]),
+        unsafe_allow_html=True,
     )
 
     st.stop()

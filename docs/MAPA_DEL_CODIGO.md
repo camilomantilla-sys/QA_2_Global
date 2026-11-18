@@ -1057,7 +1057,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5681 lineas)*
+Interfaz de QA2 (Streamlit). *(5651 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1089,6 +1089,18 @@ Interfaz de QA2 (Streamlit). *(5681 lineas)*
 | funcion | `render_status_badge(status: str) -> None` |  |
 | funcion | `show_verdict(verdict: str, findings=None) -> None` |  |
 | funcion | `brand_font_css() -> str` | @font-face rules for the WPP typeface, embedded as base64 so Streamlit doesn't need to serve the files |
+| funcion | `_logo_data() -> tuple[str, str]` |  |
+
+### `ui/brand.py`
+
+The WPP Media look for the Streamlit app. *(317 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `topbar_html(logo_b64: str, logo_mime: str, version: str) -> str` |  |
+| funcion | `hero_html(compact: bool) -> str` |  |
+| funcion | `section_html(kicker: str, title: str) -> str` |  |
+| funcion | `cards_html(cards: list[tuple[str, str]]) -> str` |  |
 
 ### `ui/help_content.py`
 
