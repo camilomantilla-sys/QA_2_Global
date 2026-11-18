@@ -1370,7 +1370,7 @@ def _logo_data() -> tuple[str, str]:
     return base64.b64encode(path.read_bytes()).decode(), mime
 
 
-st.markdown(brand.topbar_html(*_logo_data(), qa2_version()), unsafe_allow_html=True)
+st.markdown(brand.topbar_html(qa2_version()), unsafe_allow_html=True)
 # El hero se llena despues del sidebar: hasta entonces no se sabe si
 # esta pasada ya trae resultados (y con resultados va compacto).
 _hero_slot = st.empty()
@@ -1631,7 +1631,15 @@ with st.expander("👥 Team by account"):
 # ============================================================
 
 with st.sidebar:
-    # El logo va en la barra de arriba, como en las otras apps.
+    # El logo, arriba de QA Files (AdOps, 18-nov: ahi se ve mejor).
+    _logo_b64, _logo_mime = _logo_data()
+    if _logo_b64:
+        st.markdown(
+            f'<div class="wpp-logo-wrap"><img src="data:{_logo_mime};base64,'
+            f'{_logo_b64}" style="width:100%; display:block;" alt="WPP Media"></div>',
+            unsafe_allow_html=True,
+        )
+
     st.header("QA Files")
 
     with st.expander("📂 Load a saved session (optional)"):

@@ -259,14 +259,11 @@ div[data-testid="stAlert"] > div {{ border-radius: 12px; }}
 """
 
 
-def topbar_html(logo_b64: str, logo_mime: str, version: str) -> str:
-    logo = (f'<img src="data:{logo_mime};base64,{logo_b64}" alt="WPP Media">'
-            if logo_b64 else "<b>WPP Media</b>")
+def topbar_html(version: str) -> str:
+    # El logo va en el sidebar, arriba de QA Files (AdOps, 18-nov).
     return f"""
 <div class="wm-topbar">
   <div class="wm-brand">
-    {logo}
-    <div class="wm-divider"></div>
     <div>
       <div class="wm-name">Innovid QA</div>
       <div class="wm-sub">WPP Media · QA2</div>
