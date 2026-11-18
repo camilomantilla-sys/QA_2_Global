@@ -10,6 +10,17 @@ Para entender **cómo** encaja todo, empieza por [`REFERENCIA_TECNICA.md`](REFER
 
 Motor de QA2: todo lo que no es interfaz ni lectura de archivos. *(17 lineas)*
 
+### `core/account_detect.py`
+
+De que cuenta es la solicitud, deducido de los archivos. *(118 lineas)*
+
+| Tipo | Nombre | Que hace |
+| --- | --- | --- |
+| funcion | `_tokens(text: str) -> list[str]` |  |
+| funcion | `detect_account(advertiser: str='', advertiser_id: str='', campaign: str='', file_names=()) -> tuple[str, str]` | (cuenta, de donde salio) o ("", "") si no hay como saberlo |
+| funcion | `peek_ts_identity(data: bytes) -> dict[str, str]` | Advertiser, Advertiser ID y Campaign Name de la hoja Campaign Information, sin leer la TS entera |
+| funcion | `detect_from_files(ts_name: str, ts_data: bytes, other_names=()) -> tuple[str, str]` | La cuenta de una solicitud a partir de la TS y los nombres de los exports |
+
 ### `core/adobe_no_ftrack_reconciliation.py`
 
 Adobe No Ftrack tag reconciliation. *(495 lineas)*
@@ -1027,7 +1038,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5643 lineas)*
+Interfaz de QA2 (Streamlit). *(5675 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1394,6 +1405,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 
 | Archivo | Pruebas | Que protege |
 | --- | --- | --- |
+| `test_account_detect.py` | 5 | La cuenta deducida de la TS (18-nov): los bundles de BlackRock y Wendy's se guardaron sin cuenta, y la cuenta decide el pixel oficial, Remove VPAID y el CGEN |
 | `test_adobe_direct.py` | 11 | Adobe Direct / Site-Served: lo que se revisa cuando no hay creativos |
 | `test_adobe_official_pixels.py` | 9 | Los pixeles oficiales de Adobe: uno universal y uno por linea de negocio |
 | `test_anonimizar_ts.py` | 4 | La copia anónima de una TS sirve para reproducir un caso: QA2 la lee igual que la original, y no queda ningún nombre ni ID de la original |
@@ -1476,4 +1488,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 809 funciones de prueba en 81 archivos (algunas se parametrizan y corren varias veces).
+Total: 814 funciones de prueba en 82 archivos (algunas se parametrizan y corren varias veces).

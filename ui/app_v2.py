@@ -1835,6 +1835,19 @@ with st.sidebar:
                 st.session_state["qa2_record_campaign"] = _peeked_name
             st.session_state["_campaign_autofill_source"] = _campaign_source
 
+            # La cuenta, deducida de la TS (Advertiser, su ID o las
+            # siglas del nombre). Decide el pixel oficial, VPAID y el
+            # CGEN, y se olvidaba: se preselecciona si nadie escogio.
+            from core.account_detect import detect_from_files
+            _detected = detect_from_files(
+                uploaded_ts.name, bytes(uploaded_ts.getbuffer())
+            )
+            st.session_state["qa2_detected_account"] = _detected
+            if _detected[0] and st.session_state.get(
+                "qa2_account_select"
+            ) in (None, "All / unknown"):
+                st.session_state["qa2_account_select"] = _detected[0]
+
     st.markdown(
         """
         <div class="upload-help">
@@ -2130,6 +2143,25 @@ with st.sidebar:
     )
     if selected_account == "All / unknown":
         selected_account = ""
+
+    _detected_account, _detected_why = st.session_state.get(
+        "qa2_detected_account"
+    ) or ("", "")
+    if _detected_account and uploaded_ts is not None:
+        from core.team_roster import base_account as _base_account
+        if not selected_account:
+            st.warning(
+                f"These files look like {_detected_account} "
+                f"({_detected_why}). Pick the account so its rules apply."
+            )
+        elif _base_account(selected_account) != _detected_account:
+            st.warning(
+                f"{selected_account} is picked, but these files look like "
+                f"{_detected_account} ({_detected_why}). The account "
+                "decides the official pixel, Remove VPAID and CGEN."
+            )
+        else:
+            st.caption(f"Account detected from {_detected_why}.")
 
     st.divider()
 

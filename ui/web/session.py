@@ -234,6 +234,12 @@ class Session:
         tags = [(u.name, u.result) for u in self.files["tags"]]
         dv = self.dv_result()
 
+        # Sin cuenta escogida, la que dice la TS (Advertiser, su ID o
+        # las siglas): decide el pixel oficial, VPAID y el CGEN.
+        if not account:
+            from core.account_detect import detect_from_files
+            account, _why = detect_from_files(ts.name, ts.data, [pc.name] + ([pl.name] if pl else []))
+
         match_result = match(ts.result, pc.result, pl.result if pl else None)
 
         innovid = {"used": False}
