@@ -40,7 +40,7 @@ PL_HEADERS = ["Site Name", "Placement ID", "Placement Name", "Start Date",
               "End Date", "Dimensions", "Creative Rotation", "Landing Page"]
 
 
-def build(lp_paint: str = "row", new_claims_lp: bool = True) -> Path:
+def build(lp_paint: str = "row", new_claims_lp: bool = True, dims: str = "300x250") -> Path:
     """
     2 placements existentes en blanco y 2 nuevos en verde, misma LP.
 
@@ -55,7 +55,7 @@ def build(lp_paint: str = "row", new_claims_lp: bool = True) -> Path:
     ws.append(PL_HEADERS)
     for i, new in enumerate((False, False, True, True)):
         ws.append(["Site", 1100 + i, f"DEMO_P{i}", date(2027, 1, 1),
-                   date(2027, 3, 31), "1x1", f"Group {i}", "LP_DEMO"])
+                   date(2027, 3, 31), dims, f"Group {i}", "LP_DEMO"])
         if new:
             for col in range(1, 9):
                 if col == 8 and not new_claims_lp:
@@ -121,6 +121,15 @@ def test_a_new_placement_keeps_an_existing_white_lp():
     assert expected["1103"].url == "https://landing.example"
     # Un blanco no es un cambio: los existentes no entran al QA.
     assert "1100" not in {p.placement_id for p in ts.worked}
+
+
+def test_a_white_site_served_1x1_is_not_worked_by_a_url_swap():
+    """
+    Wendy's 18-nov: un 1x1 site-served no lleva landing page en
+    Innovid. Con su fila en blanco, el swap de URL no lo trabaja.
+    """
+    ts = parse(lp_paint="url", dims="1x1")
+    assert not ts.request_counts.get("URL_SWAP")
 
 
 if __name__ == "__main__":

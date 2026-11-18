@@ -811,7 +811,7 @@ Parser de archivos de tags exportados desde Innovid. *(586 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(1175 lineas)*
+Parser de Traffic Sheets. *(1182 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1437,7 +1437,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_session.py` | 0 | El 401 que salio en pruebas con una sesion guardada |
 | `test_innovid_session_expiry.py` | 8 | Que exista el archivo de sesion no es que la sesion sirva |
 | `test_intent_fields.py` | 10 | La celda pintada manda: se valida lo que se pidio |
-| `test_lp_new_placements.py` | 5 | Una landing page verde que es de los placements nuevos no es un URL swap |
+| `test_lp_new_placements.py` | 6 | Una landing page verde que es de los placements nuevos no es un URL swap |
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
@@ -1476,4 +1476,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 809 funciones de prueba en 81 archivos (algunas se parametrizan y corren varias veces).
+Total: 810 funciones de prueba en 81 archivos (algunas se parametrizan y corren varias veces).
