@@ -29,9 +29,19 @@ def evaluate(match_result, buffer):
             cl for cl in pm.creative_links
             if cl.expected.ts_sheet == ROTATION_SHEET
         ]
+        # Solo cuenta una variante que sigue en la rotacion: la que la
+        # TS manda quitar (roja) o que ya no corre no prueba que el
+        # grupo este sirviendo. Con el creativo viejo desactivado y el
+        # nuevo sin subir, QA2 decia "posible swap de rotacion" en vez
+        # de que faltaba el nuevo.
         rotation_has_match = any(
-            cl.actual is not None for cl in rotation_links
-        )
+            cl.actual is not None and cl.actual.running
+            and cl.expected.intent != RED
+            for cl in rotation_links
+        ) and any(cl.expected.intent == RED for cl in rotation_links)
+        # ...y solo cuando el grupo de verdad esta rotando creativos (hay
+        # alguno en rojo). En un decision set nuevo, o donde solo se
+        # agregan creativos, uno que no esta en Innovid simplemente falta.
 
         # Adobe Direct & Site-Served 1x1s: Innovid represents these
         # as Placement_Type=Pixel rows (row_type TRACKER), whose

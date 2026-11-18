@@ -12,6 +12,7 @@ RULE_TITLES = {
     "PLC-001": "The placement in the Traffic Sheet exists in Innovid",
     "PLC-002": "A full disassignment left the placement stopped",
     "PLC-003": "The placement the Traffic Sheet wants running is on",
+    "PLC-005": "The placement size matches the Traffic Sheet",
     "PLC-004": "The placement flight dates match the Traffic Sheet",
     "PLC-006": "The placement name matches",
     "PLC-007": "The rotation the placement declares has creatives of its size",

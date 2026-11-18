@@ -33,6 +33,7 @@ INFO_RULES = {"PLC-004"}
 TEXTS = {
     "PLC-001": "These placements from the Traffic Sheet are not in the Innovid export.",
     "PLC-003": "The Traffic Sheet wants these placements running, but the export shows them off.",
+    "PLC-005": "The following placements have another size in Innovid than in the Traffic Sheet.",
     "PLC-004": ("The following placements have different flight dates in the Traffic Sheet "
                 "and in Innovid. This doesn't block the QA; confirm the difference is intended."),
     "PLC-006": "The placement name in Innovid differs from the Traffic Sheet for these placements.",
@@ -54,6 +55,7 @@ HEADINGS = {
     "PLC-002": "Placements in the export the Traffic Sheet doesn't ask for",
     "PLC-003": "Placements off that should be running",
     "PLC-004": "Placement flight dates",
+    "PLC-005": "Placement size",
     "PLC-006": "Placement name",
     "PLC-007": "Placement site",
     "CRE-001": "Creatives",
@@ -80,7 +82,7 @@ HEADINGS = {
 }
 
 #: Grupos en los que el detalle (TS contra Innovid) es lo que hay que ver.
-SHOW_VALUES = {"PLC-004", "PLC-006", "INV-001", "INV-001/no-end", "INV-002", "TAG-015"}
+SHOW_VALUES = {"PLC-004", "PLC-005", "PLC-006", "INV-001", "INV-001/no-end", "INV-002", "TAG-015"}
 
 MAX_ITEMS = 60
 

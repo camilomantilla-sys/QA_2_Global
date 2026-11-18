@@ -76,10 +76,13 @@ class GroupScope:
     # usa cuando coincide con un nombre real de landing page, asi que la
     # URL de Adobe nunca engancha por accidente.
     lp_names: set[str] = field(default_factory=set)
+    #: Filas verdes que solo cambian un dato del creativo (fechas, peso,
+    #: landing page): el creativo ya estaba y se queda.
+    field_changes: int = 0
 
     @property
     def worked(self) -> bool:
-        return bool(self.green_creatives or self.red_creatives)
+        return bool(self.green_creatives or self.red_creatives or self.field_changes)
 
     @property
     def intent(self) -> str:
@@ -127,6 +130,8 @@ class TSSheetResult:
     #: esperan a que el export diga cual es su Placement ID: ver
     #: recover_unreadable_rows.
     pending: list[TSRow] = field(default_factory=list)
+    #: Filas con texto verde o rojo en una celda SIN relleno.
+    font_coloured: list[int] = field(default_factory=list)
 
 @dataclass
 class TSResult:
@@ -602,6 +607,10 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
             if f.name in intent_fields and cell is not None:
                 fam, _c, _rgb = resolver.family(cell.fill_rgb)
                 colors[f.name] = fam
+                if fam == WHITE and cell.font_rgb:
+                    font_fam, _c, _rgb = resolver.family(cell.font_rgb)
+                    if font_fam in (GREEN, RED):
+                        res.font_coloured.append(cell.ref.row)
                 if cell.fill_rgb:
                     region.append((sheet_name, f.name, cell))
 
@@ -810,7 +819,10 @@ def _build_groups(sr: TSSheetResult | None) -> dict[str, GroupScope]:
         if lp_ref:
             g.lp_names.add(lp_ref)
 
-        if row.intent == GREEN:
+        if row.intent == GREEN and row.intent_fields \
+                and set(row.intent_fields) <= FIELD_ONLY_CHANGES:
+            g.field_changes += 1
+        elif row.intent == GREEN:
             g.green_creatives += 1
         elif row.intent == RED:
             g.red_creatives += 1
@@ -820,6 +832,12 @@ def _build_groups(sr: TSSheetResult | None) -> dict[str, GroupScope]:
         elif row.intent == WHITE:
             g.white_creatives += 1
     return out
+
+
+#: Lo que se puede pintar en una fila de rotacion sin que el creativo
+#: entre o salga: con solo esto en verde es un cambio de datos (FB-13,
+#: principio 5), no un creativo nuevo.
+FIELD_ONLY_CHANGES = {"start_date", "end_date", "rotation_weight", "lp_url"}
 
 def _merge_hidden_lp_refs(groups: dict[str, GroupScope],
                           sr: TSSheetResult | None) -> None:
@@ -974,7 +992,7 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
         own = bool(sc.green_rows or sc.red_rows)
 
         # propagacion desde grupos (solo si el perfil lo permite)
-        prop_green = prop_red = 0
+        prop_green = prop_red = prop_fields = 0
         if propagate:
             for g in sc.groups:
                 if g.startswith("__lp__"):
@@ -983,6 +1001,7 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
                 if gs and gs.worked:
                     prop_green += gs.green_creatives
                     prop_red += gs.red_creatives
+                    prop_fields += gs.field_changes
 
         # Propagacion desde landing pages. La TS puede enganchar el
         # placement con su landing page por dos caminos:
@@ -1009,13 +1028,13 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
             )
             prop_lp = direct or via_rotation
 
-        propagated = bool(prop_green or prop_red or prop_lp)
+        propagated = bool(prop_green or prop_red or prop_lp or prop_fields)
 
         if own and propagated:
             sc.source = SRC_BOTH
         elif own:
             sc.source = SRC_OWN
-        elif prop_lp and not (prop_green or prop_red):
+        elif prop_lp and not (prop_green or prop_red or prop_fields):
             sc.source = SRC_LANDING
         elif propagated:
             sc.source = SRC_ROTATION
@@ -1029,16 +1048,38 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
             sc.fields_touched & {"placement_name", "start_date",
                                  "end_date", "dimensions"})
 
+        # Solo la celda Landing Page del placement va pintada: le
+        # cambian la landing page a ESE placement, no los creativos.
+        # Leido como "creativo agregado" no se revisaba ninguna URL,
+        # porque ningun creativo venia en verde.
+        if own and sc.fields_touched and sc.fields_touched <= {"lp_ref"} \
+                and not (prop_green or prop_red or prop_fields):
+            sc.request_type = REQ_URL_SWAP
+            continue
+
         if not g_tot and not r_tot:
-            if prop_lp:
+            if prop_lp and not prop_fields:
                 sc.request_type = REQ_URL_SWAP
-            elif sc.fields_touched:
+            elif sc.fields_touched or prop_fields:
                 sc.request_type = REQ_FIELD_CHANGE
             else:
                 sc.request_type = REQ_NOT_WORKED
             continue
 
-        if g_tot and not r_tot and touched_placement_level and not sc.white_rows:
+        # El placement entero en rojo (su ID o su nombre pintados) se
+        # apaga, aunque su rotacion traiga un creativo verde: ese verde
+        # es para los otros placements que comparten el decision set.
+        # Antes se leia como swap de creativo y QA2 pedia el placement
+        # corriendo, justo lo contrario de lo que pidio la TS.
+        whole_row_red = (sc.red_rows and not sc.green_rows and not sc.white_rows
+                         and sc.fields_touched & {"placement_id", "placement_name"})
+
+        if whole_row_red:
+            sc.request_type = REQ_CREATIVE_REMOVE
+            sc.visual_review = True
+            sc.note = ("placement en rojo · revision visual "
+                       "(desasignar/apagar lo ejecuta Digital)")
+        elif g_tot and not r_tot and touched_placement_level and not sc.white_rows:
             sc.request_type = REQ_NEW_PLACEMENT
         elif g_tot and r_tot:
             sc.request_type = REQ_CREATIVE_SWAP
@@ -1369,5 +1410,82 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     res.propagate = profile.propagate_from_rotations
     _finish_scope(res)
 
+    res.anomalies += _reading_warnings(res)
     res.region_palette = inventory_region(all_region, resolver)
     return res
+
+
+#: Cambios marcados pintando la letra y no la celda.
+FONT_COLOUR = "TS-FONT-COLOUR"
+#: Filas ocultas con color: no se leen, pero se dice.
+HIDDEN_COLOURED = "TS-HIDDEN-ROWS"
+#: Un placement o una rotacion nombra una landing page que no esta en
+#: la hoja Landing Pages.
+LP_UNKNOWN = "TS-LP-UNKNOWN"
+
+
+def _reading_warnings(res: TSResult) -> list[Anomaly]:
+    """
+    Lo que QA2 deja de leer a proposito, dicho en voz alta (principio 8).
+    Casos de prueba de AdOps, 18-nov: TS marcadas con la letra en color,
+    filas ocultas pintadas y landing pages con el nombre mal escrito.
+    """
+    out: list[Anomaly] = []
+    for sr in (res.placements, res.rotations, res.landing_pages):
+        if sr is None:
+            continue
+        rows = sorted(set(sr.font_coloured))
+        if rows:
+            out.append(Anomaly(
+                FONT_COLOUR, "WARNING",
+                f"{sr.sheet}: {len(rows)} row(s) have green or red text in cells "
+                f"with no fill (rows {', '.join(str(r) for r in rows[:12])}"
+                f"{'...' if len(rows) > 12 else ''}). QA2 reads changes from the "
+                "cell fill, so these were not read as changes. Paint the cells or "
+                "check those rows by hand.",
+                detail={"sheet": sr.sheet, "rows": rows},
+            ))
+        hidden = [a for a in sr.anomalies if a.code == "EXT-HIDDEN-ROWS"]
+        if hidden and sr is res.placements:
+            rows = hidden[0].detail.get("rows", [])
+            out.append(Anomaly(
+                HIDDEN_COLOURED, "INFO",
+                f"{sr.sheet}: {len(rows)} hidden row(s) were skipped "
+                f"(rows {', '.join(str(r) for r in rows[:12])}). A hidden row "
+                "isn't part of the request; unhide it if it should be checked.",
+                detail={"sheet": sr.sheet, "rows": rows},
+            ))
+    if res.landing_pages is not None and res.landing_pages.rows:
+        known = {norm_compare(str(r.values.get("lp_name") or ""))
+                 for r in res.landing_pages.rows}
+        whites: dict[str, set[str]] = {}
+        for r in res.landing_pages.rows:
+            if r.intent == WHITE and r.values.get("lp_name") and r.values.get("lp_url"):
+                whites.setdefault(str(r.values["lp_name"]).strip(), set()).add(
+                    str(r.values["lp_url"]).strip())
+        dupes = [n for n, urls in whites.items() if len(urls) > 1]
+        if dupes:
+            out.append(Anomaly(
+                "TS-LP-DUPLICATE", "WARNING",
+                "Landing Pages lists " + ", ".join(f'"{n}"' for n in dupes[:5])
+                + " more than once with different URLs and no colour to say "
+                "which one is new. QA2 sends their creatives to review.",
+                detail={"names": dupes},
+            ))
+        missing: dict[str, int] = {}
+        for sr, col in ((res.placements, "lp_ref"),):
+            for row in (sr.rows if sr else []):
+                name = str(row.values.get(col) or "").strip()
+                key = norm_compare(name)
+                if key and key not in known and not key.startswith(("http", "see ", "n/a")) \
+                        and "rotation" not in key:
+                    missing.setdefault(name, row.row)
+        if missing:
+            listed = ", ".join(f"\"{n}\" (row {r})" for n, r in list(missing.items())[:5])
+            out.append(Anomaly(
+                LP_UNKNOWN, "WARNING",
+                f"Placements names landing page(s) that aren't in Landing Pages: "
+                f"{listed}. Check the spelling; QA2 can't tell which URL they mean.",
+                detail={"names": list(missing)},
+            ))
+    return out

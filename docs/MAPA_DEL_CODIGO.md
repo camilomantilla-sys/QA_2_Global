@@ -89,7 +89,7 @@ Adobe tag column policy: Ftrack / No Ftrack / Clicktag / Protected. *(284 lineas
 
 ### `core/callouts.py`
 
-Los callouts del reporte (FB-09). *(198 lineas)*
+Los callouts del reporte (FB-09). *(200 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ Branded multi-tab Excel export of a QA2 run. *(808 lineas)*
 
 ### `core/extraction.py`
 
-Capa de EXTRACCION (L1). Aqui estaba el bloqueo original. *(647 lineas)*
+Capa de EXTRACCION (L1). Aqui estaba el bloqueo original. *(671 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -230,6 +230,7 @@ Capa de EXTRACCION (L1). Aqui estaba el bloqueo original. *(647 lineas)*
 | clase | `SheetSpec` | Como se lee una hoja concreta |
 | clase | `SheetGrid` | La hoja completa, celda por celda, con provenance |
 | funcion | `_fill_rgb(cell_obj: Any) -> str \| None` | Extrae el relleno solido como token |
+| funcion | `_font_rgb(cell_obj: Any) -> str \| None` | El color de la letra si es un RGB explicito; None si es el de siempre |
 | funcion | `read_sheet(path, sheet_name, capture_fill, max_rows_cap, skip_hidden) -> tuple[SheetGrid, list[Anomaly]]` | Lee una hoja completa |
 | funcion | `list_sheets(path: Path, only_visible: bool=False) -> list[str]` | Lista hojas |
 | funcion | `sheet_states(path: Path) -> dict[str, str]` | {nombre: 'visible' \| 'hidden' \| 'veryHidden'} |
@@ -381,7 +382,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1350 lineas)*
+Matching Engine. *(1430 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -398,6 +399,8 @@ Matching Engine. *(1350 lineas)*
 | funcion | `_retire_old_groups(out: dict, group_text: dict[str, str]) -> None` | Principio 4 y 6: en un swap de decision set, el viejo queda en gris |
 | funcion | `_inject_group(ep: 'ExpectedPlacement', creatives: list, have: set[str]) -> None` | Los creativos de un decision set que el placement declara, filtrados por dimension |
 | funcion | `build_expected(ts) -> dict[str, ExpectedPlacement]` | Expected Model, solo con los placements TRABAJADOS |
+| funcion | `_white_lp_urls(ts) -> dict[str, list[str]]` |  |
+| funcion | `_infer_new_landing_page(ep, retired_names, new_landing_pages) -> None` | La landing page del placement sale (roja) y la TS trae otra nueva (nombre en verde) sin engancharla al placement |
 | funcion | `build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]` | Actual Model desde los exports de Innovid |
 | funcion | `_match_group(ep: ExpectedPlacement, ap: ActualPlacement, ts_declares_groups: bool=True) -> tuple[str, MatchTrace]` | ts_declares_groups: la TS de este perfil TIENE columna de grupo |
 | funcion | `is_site_served_1x1(expected) -> bool` | Un 1x1 de tracking servido por el sitio |
@@ -532,7 +535,7 @@ Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(685 lineas)*
 
 ### `core/placement_state.py`
 
-Lo que la TS pide de un placement frente a si esta encendido en Innovid. *(55 lineas)*
+Lo que la TS pide de un placement frente a si esta encendido en Innovid. *(56 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -542,7 +545,7 @@ Lo que la TS pide de un placement frente a si esta encendido en Innovid. *(55 li
 
 ### `core/provenance.py`
 
-Provenance: cada valor extraido conserva su origen exacto. *(66 lineas)*
+Provenance: cada valor extraido conserva su origen exacto. *(70 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -632,7 +635,7 @@ Agrupado de hallazgos para la revision de QA2. *(77 lineas)*
 
 ### `core/rule_titles.py`
 
-Que revisa cada regla, en una frase. *(53 lineas)*
+Que revisa cada regla, en una frase. *(54 lineas)*
 
 ### `core/schema.py`
 
@@ -822,7 +825,7 @@ Parser de archivos de tags exportados desde Innovid. *(586 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(1373 lineas)*
+Parser de Traffic Sheets. *(1491 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -851,6 +854,7 @@ Parser de Traffic Sheets. *(1373 lineas)*
 | funcion | `_undo_recovery(ts: TSResult) -> None` |  |
 | funcion | `_surfaced(sr: TSSheetResult) -> list[Anomaly]` | Lo de una hoja que sube al resultado: lo fatal y las filas sin leer |
 | funcion | `parse_ts(path: Path, profile_name: str \| None=None) -> TSResult` |  |
+| funcion | `_reading_warnings(res: TSResult) -> list[Anomaly]` | Lo que QA2 deja de leer a proposito, dicho en voz alta (principio 8) |
 
 ## `rules/` — Reglas de QA, una familia por archivo
 
@@ -890,7 +894,7 @@ ATR-001 / ATR-002 -- atribucion (CGEN). *(188 lineas)*
 
 ### `rules/creatives.py`
 
-CRE-001 / CRE-002 -- creativos del placement. *(250 lineas)*
+CRE-001 / CRE-002 -- creativos del placement. *(260 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -971,11 +975,12 @@ PIX-002 -- el pixel de cada vendor esta en su columna. *(71 lineas)*
 
 ### `rules/placements.py`
 
-PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(284 lineas)*
+PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(317 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `evaluate(match_result, buffer)` |  |
+| funcion | `_evaluate_size(pm, buffer)` | PLC-005 (REVIEW) -- el tamano del placement en la TS no es el de Innovid |
 | funcion | `_evaluate_rotation_dims(ep, buffer)` | PLC-007 -- la rotacion que el placement declara no es de su tamano |
 | funcion | `_span(start, end) -> str` |  |
 | funcion | `_evaluate_flight_dates(pm, buffer)` | PLC-004 -- las fechas del placement, TS contra el export |
@@ -984,13 +989,14 @@ PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(284 line
 
 ### `rules/rotation.py`
 
-ROT-001 -- la rotacion que se pidio cambiar. *(104 lineas)*
+ROT-001 -- la rotacion que se pidio cambiar. *(153 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_weights_label(creatives) -> str` | Los pesos pedidos, en porcentaje y sin repetir |
 | funcion | `_requested_rotation(creative) -> bool` | ¿La TS pinto la celda de rotacion de este creativo? |
 | funcion | `evaluate(match_result, buffer)` |  |
+| funcion | `_dates_not_verified(match_result, buffer)` | Un cambio de fechas de creativo pedido, sin Innovid conectado |
 
 ### `rules/tag_coverage.py`
 
@@ -1014,7 +1020,7 @@ QA2 rules for tag files. *(545 lineas)*
 
 ### `rules/urls.py`
 
-URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(452 lineas)*
+URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(538 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1045,7 +1051,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5679 lineas)*
+Interfaz de QA2 (Streamlit). *(5681 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1459,6 +1465,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_lp_new_placements.py` | 5 | Una landing page verde que es de los placements nuevos no es un URL swap |
 | `test_missing_creative_noise.py` | 5 | Un creativo que no esta en Innovid es UN problema, no tres |
 | `test_no_window_launch.py` | 12 | El equipo abre QA2 con doble clic y nada mas |
+| `test_odd_requests.py` | 16 | Solicitudes raras inventadas (estilo Wendy's, 18-nov) y lo que QA2 tiene que decir de cada una |
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
 | `test_paste_image.py` | 4 | Las capturas pegadas (FB-04) entran como cualquier archivo subido, y viajan en el session bundle |
 | `test_pipeline.py` | 5 | Una sola cadena de QA para las dos interfaces |
@@ -1496,4 +1503,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 824 funciones de prueba en 83 archivos (algunas se parametrizan y corren varias veces).
+Total: 840 funciones de prueba en 84 archivos (algunas se parametrizan y corren varias veces).

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from parsers.ts_parser import (
     REQ_CREATIVE_ADD, REQ_CREATIVE_REMOVE, REQ_CREATIVE_SWAP,
-    REQ_NEW_PLACEMENT, REQ_URL_SWAP,
+    REQ_FIELD_CHANGE, REQ_NEW_PLACEMENT, REQ_URL_SWAP,
 )
 
 #: Como llama Innovid a un placement que ya no sirve. "Draft" no esta:
@@ -27,6 +27,7 @@ _ASKS = {
     REQ_CREATIVE_SWAP: "it asks for a creative swap",
     REQ_CREATIVE_ADD: "it asks for new creatives",
     REQ_URL_SWAP: "it asks for a landing page change",
+    REQ_FIELD_CHANGE: "it changes its creatives' dates, weights or landing pages",
 }
 
 

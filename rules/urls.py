@@ -9,7 +9,7 @@ La comparacion de URLs (base, parametros, malformadas) esta en
 core/urls.py.
 """
 
-from core.colors import GREEN
+from core.colors import GREEN, RED
 from core.findings import Domain
 from core.intent import requested
 from core.urls import (
@@ -107,6 +107,36 @@ def evaluate_placement_urls(match_result, buffer):
         }
 
         if not expected_url:
+            stale = _still_on_old_page(pm, "")
+            candidates = getattr(pm.expected, "url_candidates", [])
+            if stale:
+                buffer.fail(
+                    message=(
+                        "The Traffic Sheet retires this landing page (red), "
+                        "but Innovid still uses it on: "
+                        + ", ".join(stale[:5]) + "."
+                    ),
+                    actual=" | ".join(dict.fromkeys(_creative_urls(pm.actual, stale))),
+                    recommended_action="Update the Clicktag to the new landing page.",
+                    **common,
+                )
+                continue
+            if pm.expected.retired_urls and not pm.expected.url_is_default_only:
+                buffer.review(
+                    message=(
+                        "The Traffic Sheet retires this placement's landing "
+                        "page, but doesn't say which new one replaces it"
+                        + (": it could be " + " or ".join(candidates) if candidates else "")
+                        + ". Innovid no longer uses the old one."
+                    ),
+                    actual=" | ".join(_actual_urls(pm.actual)[:2]),
+                    recommended_action=(
+                        "Confirm the new landing page with the request and "
+                        "check the Clicktag in Innovid."
+                    ),
+                    **common,
+                )
+                continue
             if pm.expected.url_is_default_only:
                 buffer.not_verified(
                     message=(
@@ -146,6 +176,12 @@ def evaluate_placement_urls(match_result, buffer):
 
         stale = _still_on_old_page(pm, expected_url)
 
+        inferred = getattr(pm.expected, "url_inferred_from", "")
+        inferred_note = (
+            f"The Traffic Sheet retires the old landing page and brings "
+            f"{inferred} in green; QA2 takes that one as the new landing page."
+            if inferred else "")
+
         if best.result == URL_MATCH and stale:
             names = ", ".join(stale[:5]) + (
                 f" and {len(stale) - 5} more" if len(stale) > 5 else "")
@@ -174,6 +210,34 @@ def evaluate_placement_urls(match_result, buffer):
             buffer.pass_(
                 message="The new landing page is live in Innovid.",
                 actual=best.actual.raw,
+                reason=inferred_note,
+                **common,
+            )
+        elif stale:
+            buffer.fail(
+                message=(
+                    "The Traffic Sheet retires this landing page (red), but "
+                    "Innovid still uses it on: " + ", ".join(stale[:5]) + "."
+                ),
+                actual=" | ".join(dict.fromkeys(_creative_urls(pm.actual, stale))),
+                reason=inferred_note or best.note,
+                recommended_action="Update the Clicktag to the new landing page.",
+                **common,
+            )
+        elif inferred:
+            # La nueva es una deduccion: si Innovid tiene otra, puede
+            # ser la TS la que no lo dijo. Que lo mire una persona.
+            buffer.review(
+                message=(
+                    "The Traffic Sheet retires this placement's landing page "
+                    f"and QA2 expected {inferred}, the new one in green, but "
+                    "Innovid has another."
+                ),
+                actual=best.actual.raw,
+                reason=inferred_note,
+                recommended_action=(
+                    "Confirm which landing page replaces the old one."
+                ),
                 **common,
             )
         else:
@@ -310,7 +374,9 @@ def evaluate(match_result, buffer):
             if cl.expected.ts_sheet == ROTATION_SHEET
         ]
         rotation_has_match = any(
-            cl.actual is not None for cl in rotation_links
+            cl.actual is not None and cl.actual.running
+            and cl.expected.intent != RED
+            for cl in rotation_links
         )
 
         for cl in pm.creative_links:
@@ -369,6 +435,10 @@ def evaluate(match_result, buffer):
                 "actual": cl.url.actual.raw,
             }
 
+            if getattr(cl.expected, "url_alternatives", ()) and result in (
+                    URL_MATCH, URL_BASE_DIFF, URL_PARAMS_DIFF):
+                result = "AMBIGUOUS"
+
             if result == URL_MATCH:
                 buffer.pass_(
                     message="Traffic Sheet and Innovid URLs match.",
@@ -420,6 +490,22 @@ def evaluate(match_result, buffer):
                     reason=cl.url.note,
                     recommended_action=(
                         "Confirm whether a URL applies to this implementation."
+                    ),
+                    **common,
+                )
+
+            elif result == "AMBIGUOUS":
+                buffer.review(
+                    message=(
+                        "The Traffic Sheet lists this landing page more than "
+                        "once with different URLs ("
+                        + " / ".join(cl.expected.url_alternatives[:3])
+                        + "), so QA2 can't tell which one Innovid should have."
+                    ),
+                    reason=cl.url.note,
+                    recommended_action=(
+                        "Confirm which URL is right and fix the Traffic Sheet "
+                        "or the Clicktag."
                     ),
                     **common,
                 )

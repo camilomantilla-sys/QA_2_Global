@@ -16,7 +16,7 @@ no se sabia. Esta regla dice esa segunda parte.
 Cuando Innovid si esta conectado, quien compara es INV-002, y esta
 regla se calla para no duplicar el hallazgo.
 """
-from core.colors import RED, WHITE
+from core.colors import GREEN, RED, WHITE
 from core.matching import is_site_served_1x1
 from core.findings import Capability, Domain, EntityType, Status
 from core.normalize import normalize_weights
@@ -60,6 +60,8 @@ def evaluate(match_result, buffer):
         # decision set. Repetirlo aqui solo duplicaria el hallazgo.
         return
 
+    _dates_not_verified(match_result, buffer)
+
     for pm in match_result.matched:
 
         # Un 1x1 site-served no tiene decision set ni rotacion que
@@ -100,5 +102,52 @@ def evaluate(match_result, buffer):
                 "Connect Innovid in the sidebar and run again: the "
                 "weight is stored in the decision set, and no export "
                 "carries it."
+            ),
+        )
+
+
+DATE_FIELDS = {"start_date", "end_date"}
+#: Un creativo nuevo trae sus fechas pintadas tambien: eso no es un
+#: cambio de fechas, es un creativo que entra.
+IDENTITY_FIELDS = {"creative_name", "creative_id", "universal_ad_id"}
+
+
+def _dates_not_verified(match_result, buffer):
+    """
+    Un cambio de fechas de creativo pedido, sin Innovid conectado.
+
+    Las fechas del creativo dentro del decision set solo las trae la API
+    de Innovid (INV-001). Sin ella, CRE-001 encontraba el creativo y el
+    placement cerraba en verde sobre una solicitud que solo cambiaba
+    fechas: lo unico que se pidio no se habia mirado.
+    """
+    for pm in match_result.matched:
+        changed = [
+            cl.expected for cl in pm.creative_links
+            if cl.expected.intent == GREEN
+            and DATE_FIELDS & set(cl.expected.intent_fields or ())
+            and not IDENTITY_FIELDS & set(cl.expected.intent_fields or ())
+        ]
+        if not changed:
+            continue
+        names = ", ".join(dict.fromkeys(c.name for c in changed))
+        buffer.aggregate(
+            rule_id="INV-001",
+            domain=Domain.ROTATION,
+            status=Status.NOT_VERIFIED,
+            message=(
+                f"The Traffic Sheet changes the dates of {names} here, and "
+                "they were not compared: Innovid was not connected in this run."
+            ),
+            count=len(changed),
+            reason=buffer.capabilities.reason(Capability.ROTATION_WEIGHT),
+            entity_type=EntityType.ROTATION,
+            placement_id=pm.placement_id,
+            expected=" | ".join(dict.fromkeys(
+                f"{c.start or '?'} → {c.end or '?'}" for c in changed)),
+            requires=[Capability.ROTATION_WEIGHT],
+            recommended_action=(
+                "Connect Innovid in the sidebar and run again: the "
+                "creative's dates live in the decision set."
             ),
         )

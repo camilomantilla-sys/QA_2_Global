@@ -87,6 +87,9 @@ class ExpectedCreative:
     ts_row: int = 0
     ts_sheet: str = ""
     url: str = ""             # URL completa declarada en la TS
+    # La landing page aparece dos veces en blanco con URLs distintas:
+    # no se sabe cual es. Si Innovid tiene la otra, es Review, no FAIL.
+    url_alternatives: tuple[str, ...] = ()
     cgen: str = ""            # CGENS declarado en la TS
 
     # Vuelo declarado para ESTE creativo en Creative Rotations, que
@@ -162,6 +165,13 @@ class ExpectedPlacement:
     # 1x1 viejo de XBOX DIS GM seguia con gm-daves-single-display-banner
     # y el placement pasaba porque el otro creativo ya tenia la nueva).
     retired_urls: list[str] = field(default_factory=list)
+    # Cuando la TS retira la landing page del placement (roja) y la
+    # nueva no esta enganchada a el (ni por la rotacion ni por su celda),
+    # la nueva se deduce de las landing pages nuevas de la hoja (nombre
+    # en verde). `url_inferred_from` dice de cual salio; si no hay como
+    # escoger una, `url_candidates` las lista para que alguien decida.
+    url_inferred_from: str = ""
+    url_candidates: list[str] = field(default_factory=list)
     # Adobe escribe la URL entera en la columna "Landing Page" de
     # Placements, en vez de un nombre que se resuelva contra la
     # pestaña Landing Pages -- que en sus TS viene vacia. Se guarda
@@ -443,7 +453,9 @@ def _inject_group(ep: "ExpectedPlacement", creatives: list,
         # placement que hay que apagar se leia igual que una que
         # no hay que tocar. Criterio de AdOps: "su placement 10657690 esta en
         # rojo asi que toca desasignarlo".
-        if ep.request_type == REQ_CREATIVE_REMOVE and c.intent == WHITE:
+        # Lo mismo con un verde del grupo: entra para los otros
+        # placements del decision set, no para uno que se apaga.
+        if ep.request_type == REQ_CREATIVE_REMOVE and c.intent in (WHITE, GREEN):
             c = replace(c, intent=RED)
         ep.creatives.append(c)
         added.add(c.key_norm)
@@ -484,6 +496,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # Las que se van: la fila roja de un swap, bajo el mismo nombre o
     # con el nombre entero en rojo.
     red_landing_page_urls: dict[str, list[str]] = {}
+    # Landing pages nuevas: el NOMBRE en verde (principio 5).
+    new_landing_pages: dict[str, tuple[str, str]] = {}
 
     if getattr(ts, "landing_pages", None) is not None:
         for lp_row in ts.landing_pages.rows:
@@ -499,10 +513,31 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 # sirve como valor esperado: la roja es la que se va.
                 if lp_row.intent in (GREEN, "SWAP"):
                     green_landing_page_urls[lp_name] = lp_url
+                    if (lp_row.colors or {}).get("lp_name") == GREEN \
+                            and not _IS_DEFAULT.search(lp_name):
+                        new_landing_pages[lp_name] = (
+                            str(lp_row.values.get("lp_name") or "").strip(), lp_url)
                 elif lp_row.intent == WHITE:
                     white_landing_page_urls.setdefault(lp_name, lp_url)
                 elif lp_row.intent == RED:
                     red_landing_page_urls.setdefault(lp_name, []).append(lp_url)
+
+    # La URL de cada nombre: la verde si la hay, si no la blanca, y la
+    # roja solo si no hay otra. Antes ganaba la ultima fila, y una TS con
+    # la URL nueva ARRIBA de la vieja esperaba la roja.
+    white_lists = _white_lp_urls(ts)
+    landing_page_urls.update({n: u[-1] for n, u in red_landing_page_urls.items()})
+    landing_page_urls.update({n: u[-1] for n, u in white_lists.items()})
+    landing_page_urls.update(green_landing_page_urls)
+    white_alternatives = {
+        n: tuple(dict.fromkeys(u)) for n, u in white_lists.items()
+        if len(set(u)) > 1 and n not in green_landing_page_urls}
+
+    def _alternatives(row) -> tuple[str, ...]:
+        if ts.profile != "wpp_standard":
+            return ()
+        return white_alternatives.get(
+            norm_compare(str(row.values.get("lp_url") or "")), ())
 
     # --- creativos con intencion, indexados por grupo (Creative Rotations)
     by_group: dict[str, list[ExpectedCreative]] = {}
@@ -544,6 +579,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                     if ts.profile == "wpp_standard"
                     else str(row.values.get("lp_url") or "")
                 ),
+                url_alternatives=_alternatives(row),
                 cgen=str(row.values.get("cgen") or ""),
                 dims=norm_dims(row.values.get("dims_or_duration")),
                 start=_as_date(row.values.get("start_date")),
@@ -788,6 +824,7 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
         own: list[str] = []
         reused: list[str] = []
         default_only: list[str] = []
+        retired_names: list[str] = []
 
         for group in sorted(sc.groups):
             if group.startswith("__lp__"):
@@ -801,6 +838,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                     for old in red_landing_page_urls.get(name, ()):
                         if old not in ep.retired_urls:
                             ep.retired_urls.append(old)
+                    if name in red_landing_page_urls and name not in retired_names:
+                        retired_names.append(name)
                 url = green_landing_page_urls.get(name)
                 if not url:
                     # Una landing page en blanco no es un cambio, pero
@@ -831,8 +870,49 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
             ep.url = ep.inline_url
         elif default_only:
             ep.url_is_default_only = True
+        elif retired_names and new_landing_pages:
+            _infer_new_landing_page(ep, retired_names, new_landing_pages)
 
     return out
+
+
+def _white_lp_urls(ts) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for row in getattr(getattr(ts, "landing_pages", None), "rows", None) or ():
+        name = norm_compare(str(row.values.get("lp_name") or ""))
+        url = str(row.values.get("lp_url") or "").strip()
+        if name and url and row.intent == WHITE:
+            out.setdefault(name, []).append(url)
+    return out
+
+
+def _infer_new_landing_page(ep, retired_names, new_landing_pages) -> None:
+    """
+    La landing page del placement sale (roja) y la TS trae otra nueva
+    (nombre en verde) sin engancharla al placement. Regla de AdOps
+    (18-nov): una LP en rojo y una LP en verde son un swap de LP.
+
+    Con una sola LP nueva no hay duda. Con varias se escoge la que mas
+    palabras comparte con la que sale ("Core Display GM" -> "Holiday
+    Display GM", no "... HM"); si empatan, no se adivina.
+    """
+    new = {name: pair for name, pair in new_landing_pages.items()
+           if pair[1] not in ep.retired_urls}
+    if not new:
+        return
+    if len(new) == 1:
+        [(label, url)] = new.values()
+        ep.url, ep.url_inferred_from = url, label
+        return
+    words = set()
+    for name in retired_names:
+        words |= set(name.split())
+    scored = sorted(((len(words & set(name.split())), name) for name in new), reverse=True)
+    if scored[0][0] and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+        label, url = new[scored[0][1]]
+        ep.url, ep.url_inferred_from = url, label
+    else:
+        ep.url_candidates = [f"{label}: {url}" for label, url in new.values()]
 # ------------------------------------------------------------------ Actual
 
 def build_actual(export_pc, export_pl=None) -> dict[str, ActualPlacement]:

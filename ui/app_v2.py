@@ -2743,9 +2743,11 @@ if True:
         from parsers.ts_parser import recover_unreadable_rows
         recover_unreadable_rows(ts_result, pc_result, pl_result)
         for anomaly in getattr(ts_result, "anomalies", []):
-            if anomaly.code in ("TS-ROW-UNREADABLE", "TS-RED-FIELDS-ONLY"):
+            if anomaly.code in ("TS-ROW-UNREADABLE", "TS-RED-FIELDS-ONLY",
+                                "TS-FONT-COLOUR", "TS-LP-UNKNOWN", "TS-LP-DUPLICATE"):
                 st.warning(anomaly.message)
-            elif anomaly.code in ("TS-LP-NEW-ONLY", "TS-ROW-RECOVERED"):
+            elif anomaly.code in ("TS-LP-NEW-ONLY", "TS-ROW-RECOVERED",
+                                  "TS-HIDDEN-ROWS"):
                 st.info(anomaly.message)
 
         # ----------------------------------------------------

@@ -16,6 +16,7 @@ from core.colors import GREEN, RED
 from core import placement_state
 from core.dates import to_date as _to_date
 from core.findings import Domain
+from core.normalize import dims_match, norm_dims
 from parsers.ts_parser import REQ_CREATIVE_REMOVE
 
 
@@ -66,6 +67,7 @@ def evaluate(match_result, buffer):
         _evaluate_disassignment(pm, buffer)
         _evaluate_switched_off(pm, buffer)
         _evaluate_flight_dates(pm, buffer)
+        _evaluate_size(pm, buffer)
 
     # PLC-007 mira la TS, no Innovid: vale igual para un placement que
     # volvio y para uno que no.
@@ -73,6 +75,37 @@ def evaluate(match_result, buffer):
         match_result.only_expected
     ):
         _evaluate_rotation_dims(ep, buffer)
+
+
+def _evaluate_size(pm, buffer):
+    """
+    PLC-005 (REVIEW) -- el tamano del placement en la TS no es el de
+    Innovid. Caso de prueba (18-nov): un placement nuevo de 300x250 en
+    la TS que en Innovid es 300x600 pasaba sin que nadie lo dijera. El
+    tamano lo fija Prisma, no AdOps: puede ser la TS o el placement
+    equivocado, asi que lo mira una persona. Video (0x0, duraciones) no
+    se compara.
+    """
+    ts_dims = norm_dims(getattr(pm.expected, "dims", ""))
+    actual = getattr(pm, "actual", None)
+    inn_dims = norm_dims(getattr(actual, "dims", "")) if actual is not None else ""
+    if not ts_dims or not inn_dims or "0x0" in (ts_dims, inn_dims):
+        return
+    if dims_match(ts_dims, inn_dims):
+        return
+    buffer.review(
+        rule_id="PLC-005",
+        domain=Domain.SCOPE,
+        message="The placement's size in Innovid isn't the one in the Traffic Sheet",
+        placement_id=pm.placement_id,
+        placement_name=pm.expected.name,
+        expected=ts_dims,
+        actual=inn_dims,
+        recommended_action=(
+            "Check that this is the right placement, or ask for the Traffic "
+            "Sheet to be corrected."
+        ),
+    )
 
 
 def _evaluate_rotation_dims(ep, buffer):

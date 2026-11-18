@@ -35,6 +35,10 @@ class Cell:
     text: str = ""
     excel_type: str = "empty"      # n | s | d | b | f | e | empty
     fill_rgb: str | None = None    # 'AARRGGBB' | 'IDX:n' | 'THEME:n:tint'
+    # Color de la LETRA, solo cuando es un RGB explicito. QA2 lee los
+    # cambios del relleno; esto sirve para avisar cuando alguien marco
+    # la TS pintando el texto en vez de la celda.
+    font_rgb: str | None = None
     hyperlink: str | None = None
     inherited_from_row: int | None = None   # heredado por celda combinada
     is_error: bool = False

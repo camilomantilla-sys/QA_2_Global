@@ -117,6 +117,19 @@ def _fill_rgb(cell_obj: Any) -> str | None:
     except Exception:
         return None
 
+def _font_rgb(cell_obj: Any) -> str | None:
+    """El color de la letra si es un RGB explicito; None si es el de siempre."""
+    try:
+        color = cell_obj.font.color if cell_obj.font else None
+        rgb = getattr(color, "rgb", None) if color is not None else None
+        if isinstance(rgb, str) and len(rgb) == 8 and rgb.upper() not in ("FF000000", "00000000"):
+            if all(c in "0123456789abcdefABCDEF" for c in rgb):
+                return rgb.upper()
+    except Exception:
+        return None
+    return None
+
+
 def read_sheet(path: Path, sheet_name: str,
                capture_fill: bool = True,
                max_rows_cap: int = 200_000,
@@ -202,6 +215,8 @@ def read_sheet(path: Path, sheet_name: str,
                 fill_rgb=fill,
                 hyperlink=(c.hyperlink.target if c.hyperlink else None),
                 is_error=is_err,
+                font_rgb=(_font_rgb(c) if capture_fill and fill is None
+                          and c.value is not None else None),
             )
             grid.rows.setdefault(c.row, {})[c.column] = cell
         if row_has_content:
@@ -591,6 +606,15 @@ def classify_row(grid: SheetGrid, row: int, cmap: ColumnMap, spec: SheetSpec,
     if pk_col is not None:
         pk_cell = grid.cell(row, pk_col)
         if pk_cell is None or not pk_cell.has_value:
+            # La llave se hereda de la fila de arriba (fill_down): en
+            # Landing Pages la URL verde de un swap va debajo de la roja
+            # con el nombre en blanco, sin combinar la celda. Esa fila
+            # trae un solo valor y se tiraba como banner: el swap se
+            # quedaba sin URL nueva y QA2 no revisaba nada.
+            if primary_key in spec.fill_down and any(
+                    col != pk_col and col in mapped and c.has_value
+                    for col, c in cells.items()):
+                return ROW_DATA, f"{primary_key} heredado de la fila de arriba"
             if len(texts) <= 2:
                 return ROW_BANNER, f"sin {primary_key} y casi vacia"
             return ROW_DATA, f"sin {primary_key} (posible fila de cabecera)"
