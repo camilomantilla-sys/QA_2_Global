@@ -146,7 +146,7 @@ Consistencia del default ad. *(147 lineas)*
 
 ### `core/dv_omni_reconciliation.py`
 
-DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(325 lineas)*
+DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(326 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -156,7 +156,7 @@ DV Omni / DV Monitoring+Blocking tag-column reconciliation (DV-003). *(325 linea
 | funcion | `_column_content(inventory: TagInventory, placement_id: str, tag_type: str) -> str` | Raw content of the placement's doubleverify_vast/html cell, or "" |
 | funcion | `_file_has_column(inventory: TagInventory, placement_id: str, tag_type: str) -> bool` | True si algun archivo de tags que trae este placement tiene esa columna |
 | funcion | `_has_any_row(inventory: TagInventory, placement_id: str) -> bool` |  |
-| funcion | `reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) -> DVOmniReconciliation` |  |
+| funcion | `reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory, account: str='') -> DVOmniReconciliation` |  |
 
 ### `core/dv_reconciliation.py`
 
@@ -492,21 +492,25 @@ El QA completo, sin interfaz. *(365 lineas)*
 
 ### `core/pixel_reconciliation.py`
 
-Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(604 lineas)*
+Pixeles de vendor declarados en la TS vs. lo que Innovid tiene. *(685 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_pixel_skeleton(url: str) -> str` | Pixel URL con cada macro reemplazado por un token comun, para comparar |
 | funcion | `pixel_matches_official(found: str, official: str) -> bool` | True si el pixel encontrado coincide con el oficial una vez se ignoran los macros de ambos lados |
+| funcion | `pixel_matches_any(found: str, officials) -> bool` | Coincide con alguno de los oficiales; sin oficiales, no hay que comparar |
+| funcion | `pixel_account(account: str) -> str` | La cuenta de PIXEL_ACCOUNTS a la que pertenece lo elegido, o "" |
 | funcion | `_host_from_pixel(url: str) -> str` | El dominio de una URL de pixel, para derivar host_terms automaticamente |
 | clase | `Vendor` | name            nombre legible que se muestra en el hallazgo account         cuenta/campana a la que aplica esta fila ("" = todas) ts_terms        como aparece nombrado en "Vendors / Pixels" host_terms      como se reconoce su pixel dentro del tag |
 | funcion | `vendor_config_path(*, for_write: bool=False) -> Path` |  |
 | funcion | `_vendor_to_dict(vendor: Vendor) -> dict` |  |
+| funcion | `official_map(account: str, legacy: str, by_account: dict \| None) -> dict` | {cuenta: pixel} con las tres cuentas |
 | funcion | `_dict_to_vendor(data: dict) -> Vendor` |  |
 | funcion | `default_vendor_rows() -> list[dict]` | The shipped defaults, as plain dicts -- used to seed the config file |
 | funcion | `load_vendor_rows() -> list[dict]` | Raw rows from config/vendor_pixels.json, or the shipped defaults if the file doesn't exist yet or fails to parse |
 | funcion | `save_vendor_rows(rows: list[dict]) -> None` | Writes the vendor table back to config/vendor_pixels.json |
 | funcion | `load_vendors() -> tuple[Vendor, ...]` | Vendor table reconcile_pixels() actually uses: config file, else defaults |
+| funcion | `official_pixels_for(name: str, account: str='') -> tuple[str, ...]` | Los pixeles oficiales de un vendor por nombre, para la cuenta dada |
 | funcion | `official_pixel_for(name: str, account: str='') -> str` | The official_pixel value configured for a vendor row by name, e.g |
 | clase | `PixelCheck` |  |
 | clase | `PixelReconciliation` |  |
@@ -1023,7 +1027,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5627 lineas)*
+Interfaz de QA2 (Streamlit). *(5643 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1439,6 +1443,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_one_by_one_placements.py` | 13 | Un 1x1 va asignado directo al placement |
 | `test_paste_image.py` | 4 | Las capturas pegadas (FB-04) entran como cualquier archivo subido, y viajan en el session bundle |
 | `test_pipeline.py` | 5 | Una sola cadena de QA para las dos interfaces |
+| `test_pixels_per_account.py` | 7 | El pixel oficial, una columna por cuenta (AdOps, 18-nov-2026) |
 | `test_portable_tests.py` | 8 | Las pruebas tienen que correr en la maquina de quien las corre |
 | `test_qa1_trail.py` | 4 | El bundle lleva el rastro del QA1 y el QA2 lo ve (FB-18, FB-21) |
 | `test_qa_export.py` | 24 | La hoja QA del entregable: una fila por creativo, TS contra Innovid |
@@ -1471,4 +1476,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 802 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
+Total: 809 funciones de prueba en 81 archivos (algunas se parametrizan y corren varias veces).

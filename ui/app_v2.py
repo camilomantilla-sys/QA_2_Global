@@ -137,6 +137,8 @@ from core.pixel_reconciliation import (
     IMPRESSION,
     SURVEY,
     load_vendor_rows,
+    PIXEL_ACCOUNTS,
+    official_map,
     reconcile_pixels,
     save_vendor_rows,
 )
@@ -1386,16 +1388,17 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
         "filled in at all."
     )
     st.caption(
-        "**Official pixel** is the one field that matters: paste the "
-        "vendor's current reference (with its macros, e.g. "
+        "**Official pixel, one column per account**: paste each "
+        "account's current reference (with its macros, e.g. "
         "[%placementID%]) and QA flags REVIEW if what's implemented "
-        "in Innovid doesn't match it anymore. What QA searches for is "
-        "derived automatically -- the vendor name for the TS's "
-        "\"Vendors / Pixels\" column, and the official pixel's own "
-        "domain for Innovid. Leave Account blank for a vendor shared "
-        "across all three WPP accounts; set it (e.g. \"Wendy's\") for "
-        "one that only applies to that account -- pick the matching "
-        "Account in the sidebar when you run QA. Saved to "
+        "in Innovid doesn't match that account's pixel. An empty "
+        "column means QA only checks the vendor's pixel is there, "
+        "without comparing the URL. Pick the Account in the sidebar "
+        "before running: with no account, any account's pixel counts. "
+        "The rules (Column, formats, site exceptions) are one per "
+        "vendor for every account. Leave **Applies to** blank for a "
+        "vendor of all three accounts; set it (e.g. \"Wendy's\") for "
+        "one that only that account uses. Saved to "
         "config/vendor_pixels.json; applies on the next QA run for "
         "everyone who pulls this repo after the file is committed."
     )
@@ -1404,17 +1407,25 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
     _vendor_df = pd.DataFrame(
         [
             {
-                "Account": r.get("account", ""),
+                "Applies to": r.get("account", ""),
                 "Vendor": r.get("name", ""),
                 "Column": r.get("column", IMPRESSION),
                 "1x1": F_1X1 in (r.get("formats") or []),
                 "Display": F_DISPLAY in (r.get("formats") or []),
                 "Video": F_VIDEO in (r.get("formats") or []),
                 "Site exceptions": ", ".join(r.get("site_exceptions", [])),
-                "Official pixel": r.get("official_pixel", ""),
+                **{
+                    f"{_acc} official pixel": _pixels.get(_acc, "")
+                    for _acc in PIXEL_ACCOUNTS
+                },
                 "Note": r.get("note", ""),
             }
             for r in _vendor_rows
+            for _pixels in [official_map(
+                r.get("account", ""), r.get("official_pixel", ""),
+                r.get("official_pixels")
+                if isinstance(r.get("official_pixels"), dict) else None,
+            )]
         ]
     )
 
@@ -1454,7 +1465,7 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
             _name = str(_row.get("Vendor") or "").strip()
             if not _name:
                 continue
-            _account = str(_row.get("Account") or "").strip()
+            _account = str(_row.get("Applies to") or "").strip()
             _previous = _existing_terms.get(
                 (norm_compare(_account), norm_compare(_name)), {}
             )
@@ -1478,7 +1489,12 @@ with st.expander("⚙️ Pixels by account (editable) -- WPP"):
                         for t in str(_row.get("Site exceptions") or "").split(",")
                         if t.strip()
                     ],
-                    "official_pixel": str(_row.get("Official pixel") or "").strip(),
+                    "official_pixels": {
+                        _acc: str(
+                            _row.get(f"{_acc} official pixel") or ""
+                        ).strip()
+                        for _acc in PIXEL_ACCOUNTS
+                    },
                     "note": str(_row.get("Note") or ""),
                 }
             )

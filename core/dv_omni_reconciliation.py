@@ -42,7 +42,7 @@ from core.dv_subtype import (
     is_dv,
 )
 from core.normalize import clean_id, norm_compare, norm_dims
-from core.pixel_reconciliation import official_pixel_for, pixel_matches_official
+from core.pixel_reconciliation import official_pixels_for, pixel_matches_any
 from core.tag_inventory import TagInventory
 from parsers.ts_parser import REQ_CREATIVE_REMOVE, REQ_NEW_PLACEMENT
 
@@ -111,7 +111,8 @@ def _has_any_row(inventory: TagInventory, placement_id: str) -> bool:
     return bool(inventory.by_placement.get(placement_id))
 
 
-def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) -> DVOmniReconciliation:
+def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory,
+                      account: str = "") -> DVOmniReconciliation:
     out = DVOmniReconciliation()
 
     worked = {s.placement_id: s for s in ts_result.worked}
@@ -277,11 +278,11 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
 
         if _content:
             _official = (
-                "" if tag_type == _DV_HTML
-                else official_pixel_for("DV Omni" if subtype == OMNI else "DV Blocking")
+                () if tag_type == _DV_HTML
+                else official_pixels_for("DV Omni" if subtype == OMNI else "DV Blocking", account)
             )
 
-            if _official and not pixel_matches_official(_content, _official):
+            if _official and not pixel_matches_any(_content, _official):
                 out.checks.append(
                     DVOmniCheck(
                         result="REVIEW",
@@ -295,7 +296,7 @@ def reconcile_dv_omni(ts_result, placement_view, tag_inventory: TagInventory) ->
                             "its tag -- if so, update the official pixel in "
                             "the Pixels by account panel."
                         ),
-                        **{**common, "expected_column": _official},
+                        **{**common, "expected_column": " | ".join(_official)},
                     )
                 )
             else:

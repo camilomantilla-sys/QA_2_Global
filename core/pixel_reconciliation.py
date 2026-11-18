@@ -76,6 +76,25 @@ def pixel_matches_official(found: str, official: str) -> bool:
     return _pixel_skeleton(found) == _pixel_skeleton(official)
 
 
+def pixel_matches_any(found: str, officials) -> bool:
+    """Coincide con alguno de los oficiales; sin oficiales, no hay que comparar."""
+    officials = [o for o in (officials or ()) if o]
+    return not officials or any(pixel_matches_official(found, o) for o in officials)
+
+
+#: Las cuentas WPP con su propio pixel oficial (AdOps 18-nov: el DV
+#: Monitoring de BlackRock no es el de Unilever). Una columna por cuenta
+#: en la tabla editable.
+PIXEL_ACCOUNTS = ("Unilever", "BlackRock", "Wendy's")
+
+
+def pixel_account(account: str) -> str:
+    """La cuenta de PIXEL_ACCOUNTS a la que pertenece lo elegido, o ""."""
+    from core.team_roster import base_account
+    key = norm_compare(base_account(account))
+    return next((a for a in PIXEL_ACCOUNTS if norm_compare(a) == key), "")
+
+
 def _host_from_pixel(url: str) -> str:
     """El dominio de una URL de pixel, para derivar host_terms automaticamente."""
     try:
@@ -114,6 +133,24 @@ class Vendor:
     site_exceptions: frozenset[str] = frozenset()
     account: str = ""
     official_pixel: str = ""
+    # (cuenta, pixel oficial) por cuenta. Manda sobre official_pixel,
+    # que queda solo para filas guardadas antes del 18-nov.
+    official_pixels: tuple[tuple[str, str], ...] = ()
+
+    def officials_for(self, account: str = "") -> tuple[str, ...]:
+        """
+        Contra que se compara el pixel encontrado:
+          - cuenta conocida: su columna (vacia = solo se revisa que
+            el pixel este, sin comparar la URL);
+          - sin cuenta: contra cualquiera de las cuentas.
+        """
+        by_account = {a: p for a, p in self.official_pixels if p}
+        if not self.official_pixels:
+            return (self.official_pixel,) if self.official_pixel else ()
+        acc = pixel_account(account)
+        if acc:
+            return (by_account[acc],) if acc in by_account else ()
+        return tuple(dict.fromkeys(by_account.values()))
 
 
 _DEFAULT_VENDORS: tuple[Vendor, ...] = (
@@ -273,14 +310,33 @@ def _vendor_to_dict(vendor: Vendor) -> dict:
         "host_terms": list(vendor.host_terms),
         "column": vendor.column,
         "formats": sorted(vendor.formats),
-        "official_pixel": vendor.official_pixel,
+        "official_pixels": official_map(vendor.account, vendor.official_pixel,
+                                         dict(vendor.official_pixels)),
         "note": vendor.note,
         "site_exceptions": sorted(vendor.site_exceptions),
     }
 
 
+def official_map(account: str, legacy: str, by_account: dict | None) -> dict:
+    """
+    {cuenta: pixel} con las tres cuentas. Una fila de antes (un solo
+    official_pixel) se reparte a las cuentas a las que aplica, asi que
+    nada cambia hasta que alguien pegue un pixel distinto.
+    """
+    if by_account:
+        return {a: str(by_account.get(a) or "").strip() for a in PIXEL_ACCOUNTS}
+    legacy = str(legacy or "").strip()
+    scope = pixel_account(account)
+    return {a: (legacy if legacy and (not account or a == scope) else "")
+            for a in PIXEL_ACCOUNTS}
+
+
 def _dict_to_vendor(data: dict) -> Vendor:
-    official_pixel = str(data.get("official_pixel") or "").strip()
+    official_pixels = official_map(
+        str(data.get("account") or ""), str(data.get("official_pixel") or ""),
+        data.get("official_pixels") if isinstance(data.get("official_pixels"), dict) else None,
+    )
+    official_pixel = next((p for p in official_pixels.values() if p), "")
     name = str(data.get("name") or "").strip()
     host_terms = tuple(
         str(t).strip() for t in (data.get("host_terms") or []) if str(t).strip()
@@ -313,6 +369,7 @@ def _dict_to_vendor(data: dict) -> Vendor:
             f for f in (data.get("formats") or []) if f in (F_1X1, F_DISPLAY, F_VIDEO)
         ),
         official_pixel=official_pixel,
+        official_pixels=tuple(official_pixels.items()),
         note=str(data.get("note") or ""),
         site_exceptions=frozenset(
             norm_compare(s) for s in (data.get("site_exceptions") or []) if str(s).strip()
@@ -361,6 +418,16 @@ def load_vendors() -> tuple[Vendor, ...]:
     vendors = [_dict_to_vendor(row) for row in rows]
     vendors = [v for v in vendors if v.name]
     return tuple(vendors) if vendors else _DEFAULT_VENDORS
+
+
+def official_pixels_for(name: str, account: str = "") -> tuple[str, ...]:
+    """Los pixeles oficiales de un vendor por nombre, para la cuenta dada."""
+    candidates = [v for v in load_vendors() if v.name == name]
+    scoped = [v for v in candidates
+              if v.account and pixel_account(v.account) == pixel_account(account)]
+    for vendor in scoped or [v for v in candidates if not v.account] or candidates[:1]:
+        return vendor.officials_for(account)
+    return ()
 
 
 def official_pixel_for(name: str, account: str = "") -> str:
@@ -493,7 +560,16 @@ def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelRecon
                 continue
             if site_name in vendor.site_exceptions:
                 continue
-            if vendor.account and norm_compare(vendor.account) != norm_compare(account):
+            if vendor.account and pixel_account(vendor.account) != pixel_account(account) \
+                    and norm_compare(vendor.account) != norm_compare(account):
+                continue
+            # Una fila general y otra de la cuenta con el mismo vendor
+            # (tablas de antes): manda la de la cuenta, o se revisaria
+            # dos veces y la general fallaria.
+            if not vendor.account and pixel_account(account) and any(
+                    v.name == vendor.name and v.account
+                    and pixel_account(v.account) == pixel_account(account)
+                    for v in load_vendors()):
                 continue
 
             if vendor.name == "DV Monitoring":
@@ -569,13 +645,18 @@ def reconcile_pixels(ts_result, placement_view, account: str = "") -> PixelRecon
                     None,
                 )
 
-                if match and not pixel_matches_official(match, vendor.official_pixel):
+                officials = vendor.officials_for(account)
+                if match and not pixel_matches_any(match, officials):
                     check.result = "REVIEW"
                     check.found = match
-                    check.official = vendor.official_pixel
+                    check.official = " | ".join(officials)
+                    _whose = pixel_account(account)
                     check.message = (
                         f"{vendor.name} pixel is loaded, but doesn't match "
-                        "the official pixel on record for this vendor."
+                        + (f"{_whose}'s official pixel on record for this vendor."
+                           if _whose else
+                           "the official pixel on record for this vendor "
+                           "(no account was picked, so any account's counts).")
                     )
                 elif match:
                     check.result = "PASS"

@@ -14,8 +14,12 @@
       "display"
     ],
     "site_exceptions": [],
-    "official_pixel": "https://cdn.doubleverify.com/dvtp_src.js#ctx=715607&cmp=[%campaignID%]&sid=[%siteID%]&plc=[%placementID%]&num=&adid=&advid=&adsrv=29&btreg=[%placementID%]&btadsrv=flashtalking&crt=[%creativeID%]&gdpr=[%FT_GDPR%]&gdpr_consent=[%FT_GDPR_CONSENT%]&auevent=[ftqs:[ft_dv]]&dvtagver=6.1.src",
-    "note": "Placement-level pixel, Display only. On 1x1, Monitoring is delivered as a wrapped tag from DV Pinnacle (DV-001) instead -- no pixel to compare here."
+    "note": "Placement-level pixel, Display only. On 1x1, Monitoring is delivered as a wrapped tag from DV Pinnacle (DV-001) instead -- no pixel to compare here.",
+    "official_pixels": {
+      "Unilever": "https://cdn.doubleverify.com/dvtp_src.js#ctx=715607&cmp=[%campaignID%]&sid=[%siteID%]&plc=[%placementID%]&num=&adid=&advid=&adsrv=29&btreg=[%placementID%]&btadsrv=flashtalking&crt=[%creativeID%]&gdpr=[%FT_GDPR%]&gdpr_consent=[%FT_GDPR_CONSENT%]&auevent=[ftqs:[ft_dv]]&dvtagver=6.1.src",
+      "BlackRock": "https://cdn.doubleverify.com/dvtp_src.js#ctx=715607&cmp=[%campaignID%]&sid=[%siteID%]&plc=[%placementID%]&num=&adid=&advid=&adsrv=29&btreg=[%placementID%]&btadsrv=flashtalking&crt=[%creativeID%]&gdpr=[%FT_GDPR%]&gdpr_consent=[%FT_GDPR_CONSENT%]&auevent=[ftqs:[ft_dv]]&dvtagver=6.1.src",
+      "Wendy's": "https://cdn.doubleverify.com/dvtp_src.js#ctx=715607&cmp=[%campaignID%]&sid=[%siteID%]&plc=[%placementID%]&num=&adid=&advid=&adsrv=29&btreg=[%placementID%]&btadsrv=flashtalking&crt=[%creativeID%]&gdpr=[%FT_GDPR%]&gdpr_consent=[%FT_GDPR_CONSENT%]&auevent=[ftqs:[ft_dv]]&dvtagver=6.1.src"
+    }
   },
   {
     "account": "",
@@ -25,8 +29,12 @@
     "column": "third_party_impression",
     "formats": [],
     "site_exceptions": [],
-    "official_pixel": "",
-    "note": "Column in the tag file (doubleverify_html for Display), not a placement pixel -- checked by DV-003, not here. Paste the reference tag/wrapper content, not just a URL."
+    "note": "Column in the tag file (doubleverify_html for Display), not a placement pixel -- checked by DV-003, not here. Paste the reference tag/wrapper content, not just a URL.",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "",
@@ -36,8 +44,12 @@
     "column": "third_party_impression",
     "formats": [],
     "site_exceptions": [],
-    "official_pixel": "",
-    "note": "No Pinnacle wrapping, no placement pixel, no tag-file column -- just needs the regular tags delivered (TAG-013 checks that). Nothing to validate here."
+    "note": "No Pinnacle wrapping, no placement pixel, no tag-file column -- just needs the regular tags delivered (TAG-013 checks that). Nothing to validate here.",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "",
@@ -47,8 +59,12 @@
     "column": "third_party_impression",
     "formats": [],
     "site_exceptions": [],
-    "official_pixel": "",
-    "note": "Column in the tag file (doubleverify_vast), not a placement pixel -- checked by DV-003, not here."
+    "note": "Column in the tag file (doubleverify_vast), not a placement pixel -- checked by DV-003, not here.",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "",
@@ -67,8 +83,12 @@
       "video"
     ],
     "site_exceptions": [],
-    "official_pixel": "",
-    "note": ""
+    "note": "",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "",
@@ -88,8 +108,12 @@
       "video"
     ],
     "site_exceptions": [],
-    "official_pixel": "",
-    "note": ""
+    "note": "",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "Wendy's",
@@ -108,8 +132,12 @@
     "site_exceptions": [
       "vevo"
     ],
-    "official_pixel": "",
-    "note": ""
+    "note": "",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   },
   {
     "account": "Wendy's",
@@ -128,7 +156,11 @@
     "site_exceptions": [
       "netflix"
     ],
-    "official_pixel": "",
-    "note": ""
+    "note": "",
+    "official_pixels": {
+      "Unilever": "",
+      "BlackRock": "",
+      "Wendy's": ""
+    }
   }
 ]

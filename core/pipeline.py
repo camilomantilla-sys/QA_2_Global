@@ -284,7 +284,7 @@ def run_checks(
     dv_rules.evaluate(out.dv_reconciliation, findings)
 
     # DV-003: DV Omni y Monitoring/Blocking por columna del archivo de tags.
-    out.dv_omni_reconciliation = reconcile_dv_omni(ts_result, pl_result, inventory)
+    out.dv_omni_reconciliation = reconcile_dv_omni(ts_result, pl_result, inventory, account)
     dv_omni_rules.evaluate(out.dv_omni_reconciliation, findings)
 
     # Pixeles de vendor de "Vendors / Pixels" contra el placement.
