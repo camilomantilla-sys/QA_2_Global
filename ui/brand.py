@@ -213,9 +213,9 @@ div[data-testid="stExpander"] summary p {{ font-weight: 600; color: var(--navy);
     color: var(--navy) !important; min-height: 44px;
 }}
 [data-testid="stDownloadButton"] > button::before {{
-    /* An arrow drawn as SVG: the WPP font has no down-arrow glyph. */
-    content: ""; width: 22px; height: 22px; margin-right: 10px; border-radius: 6px; flex-shrink: 0;
-    background: var(--navy) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 5v12M6 12l6 6 6-6' fill='none' stroke='%23B0F467' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 15px no-repeat;
+    content: "\\2193"; display: inline-grid; place-items: center; width: 22px; height: 22px;
+    margin-right: 10px; border-radius: 6px; background: var(--navy); color: var(--lime);
+    font-size: 13px; font-weight: 900; flex-shrink: 0;
 }}
 [data-testid="stDownloadButton"] > button:hover {{ border-color: var(--accent) !important; color: var(--accent) !important; }}
 
