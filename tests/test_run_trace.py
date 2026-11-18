@@ -134,7 +134,7 @@ def test_rules_executed_is_not_a_section_of_its_own():
 
 def test_every_section_says_when_it_starts():
     # Para que el log diga cual es la cara, y no haya que adivinarlo.
-    assert APP_SOURCE.count('trace("section ') == 5
+    assert APP_SOURCE.count('trace("section ') == 6  # Decision Sets se agrego el 18-nov
 
 
 def test_signing_lives_in_the_body():

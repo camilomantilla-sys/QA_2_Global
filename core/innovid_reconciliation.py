@@ -47,6 +47,8 @@ AMBIGUOUS = "AMBIGUOUS"
 #: sin nodo no se pueden leer sus fechas ni su rotacion dentro del
 #: decision set. Es exactamente lo que no se pudo comprobar.
 ONLY_IN_EXPORT = "ONLY_IN_EXPORT"
+# El default ad leido de Innovid. Solo se muestra, no genera hallazgos.
+DEFAULT_AD = "DEFAULT_AD"
 
 
 @dataclass
@@ -169,6 +171,12 @@ class InnovidReconciliation:
     # Partner" escondia lo que de verdad pasa (FB-25).
     inactive: list[tuple[str, str]] = field(default_factory=list)
 
+    # El default ad de cada placement, como esta en Innovid. No entra a
+    # la comparacion (corre con su propio 100%), pero AdOps lo quiere
+    # ver en el Excel aunque repita un creativo de la rotacion: en
+    # Unilever y BlackRock el default es un creativo independiente.
+    default_ads: list[CreativeFlightCheck] = field(default_factory=list)
+
     # FB-03: Media Filters por site, tal como lo leyo innovid_api.
     site_media_filters: dict[str, dict] = field(default_factory=dict)
 
@@ -250,10 +258,9 @@ def reconcile(match_result, innovid_result) -> InnovidReconciliation:
             site_served_1x1=_is_site_served_1x1(pm),
         ))
 
-        nodes = [
-            n for n in innovid_result.nodes_for_placement(pid)
-            if not n.is_default
-        ]
+        all_nodes = innovid_result.nodes_for_placement(pid)
+        _collect_default_ads(pid, pm, all_nodes, out)
+        nodes = [n for n in all_nodes if not n.is_default]
         if not nodes:
             # Un 1x1 site-served no tiene decision set, y no le falta:
             # el sitio sirve el creativo, que va asignado directo al
@@ -403,6 +410,36 @@ def _expected_creatives(pm) -> list:
     if expected is None:
         return []
     return [c for c in expected.creatives if c.name]
+
+
+def _collect_default_ads(pid, pm, nodes, out) -> None:
+    """El default de Innovid, con el que pide la TS si declara uno."""
+    ts_defaults = [c for c in _expected_creatives(pm) if getattr(c, "is_default", False)]
+    for node in nodes:
+        if not node.is_default:
+            continue
+        name = node.creative_name or node.creative_id
+        ts = next((c for c in ts_defaults
+                   if norm_creative(c.name) == norm_creative(name)
+                   or (str(c.creative_id or "").strip()
+                       and str(c.creative_id).strip() == str(node.creative_id))), None)
+        if ts is None and ts_defaults:
+            ts = ts_defaults[0]
+        out.default_ads.append(CreativeFlightCheck(
+            placement_id=pid,
+            creative_name=ts.name if ts is not None else "",
+            status=DEFAULT_AD,
+            is_default=True,
+            expected_start=ts.start if ts is not None else None,
+            expected_end=ts.end if ts is not None else None,
+            actual_start=_node_date(node.start_timestamp),
+            actual_end=_node_date(node.end_timestamp),
+            actual_start_time=_node_time(node.start_timestamp),
+            actual_end_time=_node_time(node.end_timestamp),
+            dset_id=node.dtree_id,
+            dset_name=node.dtree_name,
+            actual_name=name,
+        ))
 
 
 def _compare_creatives(pid, expected, nodes, out, export_ids=None) -> None:

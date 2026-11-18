@@ -14,6 +14,7 @@ import pandas as pd  # type: ignore
 
 from core.innovid_reconciliation import (
     AMBIGUOUS,
+    DEFAULT_AD,
     EXTRA_IN_INNOVID,
     MATCHED,
     MISSING_IN_INNOVID,
@@ -27,6 +28,7 @@ RESULT_LABELS = {
     ONLY_IN_EXPORT: "Assigned, named differently in DS",
     EXTRA_IN_INNOVID: "Not in the Traffic Sheet",
     AMBIGUOUS: "Duplicated in DS",
+    DEFAULT_AD: "Default ad",
 }
 
 
@@ -34,11 +36,45 @@ def _date(value) -> str:
     return value.isoformat() if value else ""
 
 
+def _default_label(check) -> str:
+    """Que es el default frente a lo que pide la TS, si la TS pide uno."""
+    from core.matching import norm_creative
+    if not check.creative_name:
+        return "Default ad"
+    if norm_creative(check.creative_name) == norm_creative(check.actual_name):
+        return "Default ad (as in the Traffic Sheet)"
+    return f"Default ad: the Traffic Sheet asks for {check.creative_name}"
+
+
+def _with_defaults(reconciliation) -> list:
+    """
+    Los creativos de cada placement con su default al final (AdOps:
+    que salga el default aunque sea un creativo repetido).
+    """
+    defaults: dict[str, list] = {}
+    for check in getattr(reconciliation, "default_ads", None) or []:
+        defaults.setdefault(str(check.placement_id), []).append(check)
+    out, last = [], None
+    for check in getattr(reconciliation, "flights", None) or []:
+        pid = str(check.placement_id)
+        if last is not None and pid != last:
+            out.extend(defaults.pop(last, []))
+        out.append(check)
+        last = pid
+    if last is not None:
+        out.extend(defaults.pop(last, []))
+    for rest in defaults.values():
+        out.extend(rest)
+    return out
+
+
 def decision_set_table(reconciliation) -> pd.DataFrame:
     """Una fila por creativo leido de cada decision set, mas lo no leido."""
     rows = []
-    for check in getattr(reconciliation, "flights", None) or []:
+    for check in _with_defaults(reconciliation):
         label = RESULT_LABELS.get(check.status, check.status)
+        if check.status == DEFAULT_AD:
+            label = _default_label(check)
         if check.status == AMBIGUOUS and check.candidates > 1:
             label = f"Duplicated in DS (x{check.candidates})"
         rows.append({

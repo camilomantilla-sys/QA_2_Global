@@ -673,9 +673,12 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
     dtree_name = _text(payload.get("name"))
     serving_method = _text(payload.get("servingMethod"))
     default_creative = ""
+    default_name = ""
     default_serving = payload.get("defaultServing")
     if isinstance(default_serving, dict):
         default_creative = _text(default_serving.get("id"))
+        # El nodo default no trae "serving": su nombre esta aqui.
+        default_name = _text(default_serving.get("name"))
 
     nodes = payload.get("nodes")
     if not isinstance(nodes, list):
@@ -696,7 +699,9 @@ def parse_dset_response(payload: dict) -> list[InnovidCreativeNode]:
                 creative_id=_serving_id(node.get("serving")) or _text(
                     default_creative if node.get("isDefault") else ""
                 ),
-                creative_name=_serving_name(node.get("serving")),
+                creative_name=_serving_name(node.get("serving")) or (
+                    default_name if node.get("isDefault") else ""
+                ),
                 start_timestamp=_text(node.get("startTimestamp")),
                 end_timestamp=_text(node.get("endTimestamp")),
                 weight=_text(node.get("weight")),

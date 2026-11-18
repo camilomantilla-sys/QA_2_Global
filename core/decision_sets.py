@@ -140,6 +140,22 @@ def decision_set_view(match_result, findings: list[dict[str, Any]],
                 if node.dset_name:
                     g["innovid_names"].add(node.dset_name)
 
+    # El default de Innovid de cada placement, en el bloque donde esta
+    # ese placement: AdOps lo quiere ver aunque repita un creativo.
+    for check in getattr(innovid_reconciliation, "default_ads", None) or []:
+        pid = str(check.placement_id)
+        for g in groups.values():
+            if pid not in g["placements"]:
+                continue
+            start = " ".join(x for x in (_date(check.actual_start), check.actual_start_time) if x)
+            end = " ".join(x for x in (_date(check.actual_end), check.actual_end_time) if x)
+            d = g.setdefault("defaults", {}).setdefault((check.actual_name, start, end), {
+                "creative": check.actual_name, "ts_creative": check.creative_name,
+                "innovid_start": start, "innovid_end": end or "ongoing",
+                "dset_name": check.dset_name, "placements": [],
+            })
+            d["placements"].append(pid)
+
     out = []
     for g in groups.values():
         rows = []
@@ -165,6 +181,8 @@ def decision_set_view(match_result, findings: list[dict[str, Any]],
             "innovid_names": sorted(g["innovid_names"]),
             "status": worst, "counts": counts,
             "placements": placements, "rows": rows,
+            "defaults": [dict(d, placements=sorted(set(d["placements"])))
+                         for d in (g.get("defaults") or {}).values()],
         })
     out.sort(key=lambda g: (g["direct"], STATUS_ORDER.get(g["status"], 9), g["name"].lower()))
     return out

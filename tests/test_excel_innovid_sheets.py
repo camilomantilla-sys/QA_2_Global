@@ -104,5 +104,70 @@ def test_sheet_order_and_hidden_audit_tabs():
     assert {"Findings", "Files & Extraction", "Rules Executed"} <= set(hidden)
 
 
+def test_the_innovid_default_shows_even_when_it_repeats_a_creative():
+    """
+    AdOps: "que igual salga el default, asi sea un creativo repetido".
+    El default va despues de los creativos de su placement.
+    """
+    from core.innovid_api import parse_dset_response
+    from core.innovid_export_tables import decision_set_table
+    from core.innovid_reconciliation import DEFAULT_AD
+
+    nodes = parse_dset_response({
+        "id": 38808, "name": "Frosty 320x50", "servingMethod": "Rotation",
+        "defaultServing": {"id": 6312751, "name": "320x50.jpg"},
+        "nodes": [
+            {"id": 1, "serving": {"id": 6312751, "name": "320x50.jpg"},
+             "startTimestamp": "2026-07-24 00:00:00", "endTimestamp": None, "weight": 1},
+            {"id": 6312751, "startTimestamp": "2026-07-21 10:02:11",
+             "endTimestamp": None, "isDefault": True},
+        ],
+    })
+    default = [n for n in nodes if n.is_default][0]
+    assert default.creative_name == "320x50.jpg"
+
+    rec = InnovidReconciliation(
+        flights=[CreativeFlightCheck(placement_id="1", creative_name="320x50.jpg",
+                                     status=MATCHED, dset_id="38808", dset_name="Frosty 320x50")],
+        default_ads=[CreativeFlightCheck(placement_id="1", status=DEFAULT_AD, is_default=True,
+                                         dset_id="38808", dset_name="Frosty 320x50",
+                                         actual_name="320x50.jpg",
+                                         actual_start=date(2026, 7, 21))],
+    )
+    rows = decision_set_table(rec).to_dict("records")
+    assert [r["Result"] for r in rows] == ["In decision set", "Default ad"]
+    assert rows[1]["Default Ad"] == "Yes"
+    assert rows[1]["Creative Name in DS"] == "320x50.jpg"
+
+
+def test_reconcile_keeps_the_default_aside():
+    from types import SimpleNamespace
+    from core.innovid_api import InnovidFetchResult, parse_dset_response, parse_summary_response
+    from core.innovid_reconciliation import reconcile
+    from core.matching import ExpectedCreative, ExpectedPlacement
+
+    pid = "900201"
+    placements = parse_summary_response({"items": [
+        {"placementId": pid, "level": "PLACEMENT", "status": "Active",
+         "startDate": "2026-09-14", "endDate": "2026-10-31"},
+        {"placementId": pid, "level": "PLACEMENT-CREATIVE",
+         "decisionSetId": 7, "decisionSetName": "DS 300x250"},
+    ]})
+    nodes = parse_dset_response({
+        "id": 7, "name": "DS 300x250", "defaultServing": {"id": 99, "name": "Default_300x250.jpg"},
+        "nodes": [
+            {"id": 1, "serving": {"id": 5, "name": "A.jpg"},
+             "startTimestamp": "2026-09-14 00:00:00", "endTimestamp": None, "weight": 1},
+            {"id": 99, "startTimestamp": "2026-09-14 00:00:00", "isDefault": True},
+        ]})
+    got = InnovidFetchResult(campaign_id="1", placements=placements, creative_nodes=nodes)
+    ep = ExpectedPlacement(placement_id=pid, name="P", dims="300x250",
+                           creatives=[ExpectedCreative(name="A.jpg")])
+    pm = SimpleNamespace(placement_id=pid, expected=ep, actual=None, creative_links=[])
+    rec = reconcile(SimpleNamespace(matched=[pm], only_expected=[]), got)
+    assert [c.actual_name for c in rec.default_ads] == ["Default_300x250.jpg"]
+    assert all(not c.is_default for c in rec.flights)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

@@ -136,6 +136,19 @@ def test_innovid_dates_and_hours_come_from_the_live_check():
     assert ds["innovid_names"] == ["Display 300x600"]
 
 
+def test_the_innovid_default_shows_in_its_decision_set():
+    from core.innovid_reconciliation import DEFAULT_AD, CreativeFlightCheck, InnovidReconciliation
+    match = SimpleNamespace(matched=[_pm("1", [_creative("A.jpg", "DS")]),
+                                     _pm("2", [_creative("A.jpg", "DS")])])
+    rec = InnovidReconciliation(default_ads=[
+        CreativeFlightCheck(placement_id=pid, status=DEFAULT_AD, is_default=True,
+                            actual_name="A.jpg", actual_start=date(2026, 11, 16))
+        for pid in ("1", "2")])
+    [d] = decision_set_view(match, [], rec)[0]["defaults"]
+    assert d["creative"] == "A.jpg" and d["placements"] == ["1", "2"]
+    assert d["innovid_end"] == "ongoing"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -3780,6 +3780,10 @@ if True:
         # Pedido de AdOps: "ocultar rules executed en la interfaz".
         SECTIONS = [
             "Worked Placements",
+            # Varios placements comparten un decision set: si el DS
+            # esta bien (creativos, fechas, rotacion, URLs), lo estan
+            # todos. Revisarlo una vez es mas rapido (AdOps).
+            "Decision Sets",
             "Findings",
             "Files & Extraction",
             "Tags",
@@ -4931,6 +4935,135 @@ if True:
         # ====================================================
         # TAB: Findings
         # ====================================================
+
+        # ====================================================
+        # TAB: Decision Sets
+        # ====================================================
+
+        if _section == "Decision Sets":
+            trace("section Decision Sets")
+            from core.decision_sets import decision_set_view
+
+            st.subheader("Decision Sets in the Request")
+            st.markdown(
+                """
+                <div class="section-note">
+                    One block per decision set (the Creative Rotation of
+                    the Traffic Sheet), with every placement that shares
+                    it. If the decision set is right, it's right for all
+                    of them. The status is the worst finding of its
+                    placements.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            def _one(cell) -> str:
+                if not isinstance(cell, dict):
+                    return str(cell or "")
+                if cell.get("varies"):
+                    return "Varies: " + " / ".join(cell.get("values") or [])
+                return str(cell.get("value") or "")
+
+            _ds_view = decision_set_view(
+                match_result,
+                [
+                    {
+                        "placement_id": str(f.placement_id or ""),
+                        "status": f.status.value,
+                        "creative": str(f.creative_name or f.creative_id or ""),
+                    }
+                    for f in findings_buffer.findings
+                ],
+                innovid_reconciliation,
+            )
+            if not _ds_view:
+                st.info("No decision sets in this request.")
+            _ds_names = [
+                f"{STATUS_ICON.get(ds['status'], '◻️')} {ds['name']} | "
+                f"{len(ds['placements'])} placement(s) | "
+                f"{len(ds['rows'])} creative row(s)"
+                for ds in _ds_view
+            ]
+            # Uno a la vez, como en Worked Placements: abrir cuarenta
+            # tablas juntas es lo que dejaba la pagina cargando.
+            _ds_pick = st.selectbox(
+                "Decision set", options=list(range(len(_ds_view))),
+                format_func=lambda i: _ds_names[i],
+                key="qa2_ds_pick",
+            ) if _ds_view else None
+
+            if _ds_pick is not None:
+                _ds = _ds_view[_ds_pick]
+                if _ds["innovid_names"]:
+                    st.caption(
+                        "In Innovid: " + ", ".join(_ds["innovid_names"])
+                    )
+                st.markdown("#### Creatives")
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Creative": r["creative"],
+                            "Change": r["intent"],
+                            "TS Start": r["ts_start"],
+                            "Innovid Start": _one(r["innovid_start"]),
+                            "TS End": r["ts_end"],
+                            "Innovid End": _one(r["innovid_end"]),
+                            "TS Rotation": r["weight"],
+                            "Innovid Rotation": _one(r["innovid_weight"]),
+                            "TS Landing Page": r["ts_url"],
+                            "Innovid Landing Page": _one(r["innovid_url"]),
+                            "Placements": len(r["placements"]),
+                            "Status": r["status"] or "PASS",
+                        }
+                        for r in _ds["rows"]
+                    ]) if _ds["rows"] else pd.DataFrame(),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                if _ds.get("defaults"):
+                    st.markdown("#### Default ad in Innovid")
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "Default creative": d["creative"],
+                                "Traffic Sheet default": d["ts_creative"],
+                                "Innovid Start": d["innovid_start"],
+                                "Innovid End": d["innovid_end"],
+                                "Placements": len(d["placements"]),
+                            }
+                            for d in _ds["defaults"]
+                        ]),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                elif innovid_reconciliation is None:
+                    st.caption(
+                        "Innovid dates, rotation and the default ad show "
+                        "up when Innovid is connected."
+                    )
+                st.markdown("#### Placements that use it")
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Status": (
+                                f"{STATUS_ICON.get(p['status'], '')} "
+                                f"{p['status'] or 'PASS'}"
+                            ),
+                            "Placement ID": p["placement_id"],
+                            "Placement Name": p["placement_name"],
+                            "Dimensions": p["dims"],
+                            "In the export": "No" if p["missing"] else "Yes",
+                        }
+                        for p in _ds["placements"]
+                    ]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.caption(
+                    "To see a placement in detail, search its ID in "
+                    "Worked Placements."
+                )
 
         if _section == "Findings":
             trace("section Findings")

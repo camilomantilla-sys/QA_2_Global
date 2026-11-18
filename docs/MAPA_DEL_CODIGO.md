@@ -122,7 +122,7 @@ Motor de fechas. Ataca los bugs B3 y B23. *(206 lineas)*
 
 ### `core/decision_sets.py`
 
-La solicitud vista por decision set (FB-08). *(170 lineas)*
+La solicitud vista por decision set (FB-08). *(188 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -257,7 +257,7 @@ core/findings.py — Esquema canónico de hallazgos del motor QA2. *(570 lineas)
 
 ### `core/innovid_api.py`
 
-Innovid Campaign Manager API client (the UI-only fields). *(2295 lineas)*
+Innovid Campaign Manager API client (the UI-only fields). *(2300 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -314,11 +314,13 @@ Innovid Campaign Manager API client (the UI-only fields). *(2295 lineas)*
 
 ### `core/innovid_export_tables.py`
 
-Lo que QA2 leyo de Innovid, en tablas para el Excel (FB-17). *(104 lineas)*
+Lo que QA2 leyo de Innovid, en tablas para el Excel (FB-17). *(140 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_date(value) -> str` |  |
+| funcion | `_default_label(check) -> str` | Que es el default frente a lo que pide la TS, si la TS pide uno |
+| funcion | `_with_defaults(reconciliation) -> list` | Los creativos de cada placement con su default al final (AdOps: que salga el default aunque sea un creativo repetido) |
 | funcion | `decision_set_table(reconciliation) -> pd.DataFrame` | Una fila por creativo leido de cada decision set, mas lo no leido |
 | funcion | `partner_table(reconciliation) -> pd.DataFrame` | El Verification Partner de cada placement, como lo devolvio Innovid |
 
@@ -336,7 +338,7 @@ Arrancar el inicio de sesion de Innovid, y saber si arranco. *(184 lineas)*
 
 ### `core/innovid_reconciliation.py`
 
-Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(657 lineas)*
+Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(694 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -350,6 +352,7 @@ Lo que la Traffic Sheet pide contra lo que Innovid realmente tiene. *(657 lineas
 | funcion | `_partner_expected_for(pm) -> str` | Por que este placement debe llevar Verification Partner, o "" |
 | funcion | `_is_site_served_1x1(pm) -> bool` | Un 1x1 de tracking servido por el sitio |
 | funcion | `_expected_creatives(pm) -> list` | Los creativos que la TS declara para el placement |
+| funcion | `_collect_default_ads(pid, pm, nodes, out) -> None` | El default de Innovid, con el que pide la TS si declara uno |
 | funcion | `_compare_creatives(pid, expected, nodes, out, export_ids=None) -> None` |  |
 | funcion | `_pair_by_dates(creative, candidates, used: set[int])` | El nodo de este tramo: el que tiene sus mismas fechas, si no el libre que arranca mas cerca |
 | funcion | `_node_time(value: str) -> str` | '2026-09-14 06:30:00' -> '06:30' |
@@ -1020,7 +1023,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5494 lineas)*
+Interfaz de QA2 (Streamlit). *(5627 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1402,13 +1405,13 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_creative_name_two_sources.py` | 11 | La app hacia firmar una discrepancia que el Excel desmentia |
 | `test_creative_removal.py` | 6 | Un creativo en rojo tiene que dejar de correr |
 | `test_date_change_rows.py` | 7 | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
-| `test_decision_set_view.py` | 7 | FB-08: revisar una solicitud por decision set |
+| `test_decision_set_view.py` | 8 | FB-08: revisar una solicitud por decision set |
 | `test_default_ads_and_dims.py` | 8 | El default ad de BlackRock, y la rotacion que no es del tamano del placement |
 | `test_disqo_by_placement_type.py` | 10 | Donde se espera el pixel de DISQO depende de como se trafica |
 | `test_dset_last_resort.py` | 9 | placementDecisionSetId es el ultimo recurso, no una fuente mas |
 | `test_dv_multiple_partners.py` | 12 | Una campana puede tener mas de un partner, y DV entrega un archivo por cada uno |
 | `test_dv_routing.py` | 9 | Donde se revisa DoubleVerify, segun lo que pide la TS y el formato |
-| `test_excel_innovid_sheets.py` | 3 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
+| `test_excel_innovid_sheets.py` | 5 | El Excel lleva todo lo que QA2 leyo de Innovid, no solo la hoja QA (FB-17) |
 | `test_excel_signed_off.py` | 16 | Los tres colores del Excel, y la celda de firma que sobraba |
 | `test_extraction_hidden_rows.py` | 6 | Una fila oculta no se lee |
 | `test_group_colour_does_not_decide.py` | 12 | El color de la celda del grupo no decide el de un creativo |
@@ -1468,4 +1471,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 799 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
+Total: 802 funciones de prueba en 80 archivos (algunas se parametrizan y corren varias veces).
