@@ -942,13 +942,6 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
                 for lp in (groups[g].lp_names if g in groups else ())
             )
             prop_lp = direct or via_rotation
-            # Un 1x1 site-served no tiene landing page en Innovid: el
-            # sitio sirve el creativo de tracking y el clic no pasa por
-            # el. Si su fila va en blanco, un cambio en Landing Pages no
-            # lo vuelve trabajado (AdOps, Wendy's 18-nov: "los 1x1 no
-            # los debia leer, porque estan en blanco").
-            if prop_lp and not own and sc.impl_type == IMPL_SITE_SERVED_1X1:
-                prop_lp = False
 
         propagated = bool(prop_green or prop_red or prop_lp)
 
