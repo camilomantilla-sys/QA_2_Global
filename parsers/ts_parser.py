@@ -12,6 +12,7 @@ Principios de negocio:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -121,6 +122,11 @@ class TSSheetResult:
     impl_counts: dict[str, int] = field(default_factory=dict)
     anomalies: list[Anomaly] = field(default_factory=list)
     merged_applied: int = 0
+    #: Filas de Placements que no se pudieron leer (formula rota en el
+    #: Placement ID) pero traen el Placement Name. Se leen igual y
+    #: esperan a que el export diga cual es su Placement ID: ver
+    #: recover_unreadable_rows.
+    pending: list[TSRow] = field(default_factory=list)
 
 @dataclass
 class TSResult:
@@ -154,6 +160,17 @@ class TSResult:
     theme_colors: dict[int, str] = field(default_factory=dict)
     region_palette: dict = field(default_factory=dict)
     anomalies: list[Anomaly] = field(default_factory=list)
+    #: Si el perfil propaga desde rotaciones y landing pages. Se guarda
+    #: para poder rehacer el scope cuando se recuperan filas.
+    propagate: bool = True
+    #: Filas #N/A recuperadas por el codigo del Placement Name:
+    #: (fila, codigo, placement_id).
+    recovered_rows: list[tuple[int, str, str]] = field(default_factory=list)
+    #: Las que no aparecen en el export: alguien tiene que mirarlas.
+    unrecovered_rows: list[TSRow] = field(default_factory=list)
+    recovery_done: bool = False
+    _recovery_key: tuple = ()
+    _before_recovery: tuple = ()
 
     @property
     def fatal(self) -> bool:
@@ -519,6 +536,7 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
     first, last = hres.row + 1, grid.max_row
 
     keep: list[int] = []
+    salvage: set[int] = set()
     for r in range(first, last + 1):
         cls, _ = classify_row(grid, r, cmap, spec, primary_key=primary_key)
         res.row_class_counts[cls] = res.row_class_counts.get(cls, 0) + 1
@@ -527,6 +545,9 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
         elif cls == ROW_CORRUPT:
             res.anomalies.append(_unreadable_row(grid, sheet_name, r,
                                                  hres.row, cmap))
+            if _salvageable(grid, r, cmap, primary_key):
+                keep.append(r)
+                salvage.add(r)
 
     res.fill_rates = column_fill_rates(grid, cmap, spec, keep)
 
@@ -562,7 +583,8 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
             cell = grid.cell(r, col)
 
             if cell is None or not cell.has_value:
-                if f.name in spec.fill_down and f.name in last_seen:
+                if f.name in spec.fill_down and f.name in last_seen \
+                        and not (cell is not None and cell.is_error):
                     vals[f.name] = last_seen[f.name]
                     inherited.add(f.name)
                 else:
@@ -638,11 +660,55 @@ def _parse_sheet(path: Path, sheet_name: str, spec: SheetSpec,
         res.intent_counts[intent] = res.intent_counts.get(intent, 0) + 1
         res.impl_counts[impl] = res.impl_counts.get(impl, 0) + 1
 
-        res.rows.append(TSRow(row=r, values=vals, colors=colors, intent=intent,
-                              intent_fields=actionable, inherited=inherited,
-                              impl_type=impl, fmt=fmt))
+        ts_row = TSRow(row=r, values=vals, colors=colors, intent=intent,
+                       intent_fields=actionable, inherited=inherited,
+                       impl_type=impl, fmt=fmt)
+        if r in salvage:
+            # No cuenta todavia: no tiene Placement ID. Ver
+            # recover_unreadable_rows.
+            res.intent_counts[intent] -= 1
+            res.impl_counts[impl] -= 1
+            res.pending.append(ts_row)
+            continue
+        res.rows.append(ts_row)
 
     return res, region
+
+
+def _salvageable(grid, r: int, cmap: ColumnMap, primary_key: str) -> bool:
+    """
+    Una fila de Placements con el Placement ID roto pero el Placement
+    Name legible. Caso real (Wendy's, 18-nov): cinco filas con #N/A en
+    Site, Placement ID y fechas porque la formula no encuentra el
+    placement en Prisma Output, pero con su nombre entero
+    (P3KK98N|W3Z|HAM|006|...). El codigo del principio del nombre esta
+    tambien en el nombre del placement en Innovid.
+    """
+    if primary_key != "placement_id":
+        return False
+    name_col = cmap.col("placement_name")
+    if name_col is None:
+        return False
+    cell = grid.cell(r, name_col)
+    return bool(cell is not None and cell.has_value
+                and placement_code(cell.text))
+
+
+_PLACEMENT_CODE = re.compile(r"[A-Z0-9]{5,12}")
+
+
+def placement_code(name: str) -> str:
+    """
+    El codigo con que empieza el nombre de un placement ("P3KK98N" en
+    "P3KK98N|W3Z|HAM|006|..."). Vacio si el nombre no empieza asi.
+    """
+    head = str(name or "").split("|")[0].strip().upper()
+    if "|" not in str(name or ""):
+        return ""
+    if _PLACEMENT_CODE.fullmatch(head) and any(ch.isdigit() for ch in head) \
+            and any(ch.isalpha() for ch in head):
+        return head
+    return ""
 
 # ------------------------------------------------------------------ campos que cambian
 
@@ -989,6 +1055,175 @@ def _build_scope(sr: TSSheetResult, groups: dict[str, GroupScope],
 
     return out
 
+def _finish_scope(res: TSResult) -> None:
+    """El scope de la solicitud y sus conteos. Se rehace si se recuperan filas."""
+    res.scope = {}
+    res.request_counts, res.format_counts = {}, {}
+    res.format_by_request, res.source_counts = {}, {}
+    res.anomalies = [a for a in res.anomalies if a.code != LP_CLAIMED_BY_NEW]
+    lp_new_only = _lp_claimed_by_new(res.placements, res.landing_pages,
+                                     res.lp_worked)
+
+    if res.placements:
+        res.scope = _build_scope(res.placements, res.groups,
+                                 res.lp_worked - lp_new_only,
+                                 propagate=res.propagate)
+        if lp_new_only:
+            # Principio 8: el verde de la landing page no desaparece
+            # en silencio. Se dice a quien se le atribuyo.
+            sharing = sorted(
+                pid for pid, sc in res.scope.items()
+                if sc.request_type == REQ_NOT_WORKED
+                and any(g[6:] in lp_new_only for g in sc.groups
+                        if g.startswith("__lp__"))
+            )
+            if sharing:
+                names = ", ".join(sorted(
+                    str(r.values.get("lp_name"))
+                    for r in res.landing_pages.rows
+                    if norm_compare(str(r.values.get("lp_name") or "")) in lp_new_only))
+                res.anomalies.append(Anomaly(
+                    LP_CLAIMED_BY_NEW, "INFO",
+                    f"The landing page {names} is new in green and the new "
+                    f"placements use it. {len(sharing)} white placement(s) "
+                    "that share it were read as already trafficked, not as "
+                    "a URL swap.",
+                    detail={"placements": sharing},
+                ))
+        for sc in res.scope.values():
+            res.request_counts[sc.request_type] = \
+                res.request_counts.get(sc.request_type, 0) + 1
+            if sc.request_type != REQ_NOT_WORKED:
+                res.format_counts[sc.fmt] = res.format_counts.get(sc.fmt, 0) + 1
+                k = (sc.request_type, sc.fmt)
+                res.format_by_request[k] = res.format_by_request.get(k, 0) + 1
+                if sc.source:
+                    res.source_counts[sc.source] = \
+                        res.source_counts.get(sc.source, 0) + 1
+
+
+
+#: Fila #N/A recuperada por el codigo del Placement Name.
+ROW_RECOVERED = "TS-ROW-RECOVERED"
+
+
+def recover_unreadable_rows(ts: TSResult, *exports) -> None:
+    """
+    Le pone Placement ID a las filas de Placements que llegaron con #N/A
+    buscando el codigo de su Placement Name en los exports de Innovid.
+
+    Regla de AdOps (18-nov): si se pueden recuperar, se recuperan; lo
+    que no haga match despues de buscarlo va a revision. La fila
+    recuperada entra al QA como cualquier otra: su color, su rotacion y
+    su landing page siguen siendo los de la TS. Solo el ID sale del
+    export, y lo que la formula rota no dejo leer (fechas, tamano) se
+    queda sin valor esperado.
+
+    Se puede llamar mas de una vez. Con los mismos exports no hace nada;
+    con otros (la interfaz web guarda la TS leida y deja cambiar el
+    export) deshace lo anterior y vuelve a buscar.
+    """
+    sr = ts.placements
+    if sr is None or not sr.pending:
+        return
+    key = tuple(id(e) for e in exports if e is not None)
+    if ts.recovery_done:
+        if ts._recovery_key == key:
+            return
+        _undo_recovery(ts)
+    ts.recovery_done, ts._recovery_key = True, key
+    ts._before_recovery = (list(sr.rows), list(sr.anomalies), list(ts.anomalies),
+                           dict(sr.intent_counts), dict(sr.impl_counts))
+
+    by_code: dict[str, dict[str, dict]] = {}
+    for export in exports:
+        for row in getattr(export, "rows", None) or ():
+            pid = str(row.values.get("placement_id") or "").strip()
+            code = placement_code(str(row.values.get("placement_name") or ""))
+            if pid and code:
+                by_code.setdefault(code, {}).setdefault(pid, row.values)
+
+    known = {str(r.values.get("placement_id") or "") for r in sr.rows}
+    messages: dict[int, Anomaly] = {}
+    added = False
+    for row in sr.pending:
+        name = str(row.values.get("placement_name") or "")
+        code = placement_code(name)
+        found = by_code.get(code, {})
+        if len(found) != 1:
+            ts.unrecovered_rows.append(row)
+            why = ("matches more than one placement in Innovid"
+                   if found else "isn't in the Innovid export either")
+            messages[row.row] = Anomaly(
+                ROW_UNREADABLE, "WARNING",
+                f"{sr.sheet} row {row.row} was not read: the Placement ID is a "
+                f"formula error, and its Placement Name code {code} {why}. "
+                "Review this row by hand.",
+                detail={"sheet": sr.sheet, "row": row.row, "code": code},
+            )
+            continue
+        [(pid, values)] = found.items()
+        row.values["placement_id"] = pid
+        dims = norm_dims(values.get("dimensions"))
+        if dims:
+            row.impl_type = _impl_type({"dimensions": dims})
+            row.fmt = format_from_dims(dims)
+        ts.recovered_rows.append((row.row, code, pid))
+        messages[row.row] = Anomaly(
+            ROW_RECOVERED, "INFO",
+            f"{sr.sheet} row {row.row} had a formula error in the Placement ID. "
+            f"QA2 found it in Innovid by the code {code} in its Placement Name: "
+            f"placement {pid}. Dates and size on that row can't be read, so "
+            "they aren't checked.",
+            detail={"sheet": sr.sheet, "row": row.row, "code": code,
+                    "placement_id": pid},
+        )
+        if pid not in known:
+            sr.rows.append(row)
+            sr.intent_counts[row.intent] = sr.intent_counts.get(row.intent, 0) + 1
+            sr.impl_counts[row.impl_type] = sr.impl_counts.get(row.impl_type, 0) + 1
+            known.add(pid)
+            added = True
+
+    # Los avisos de la hoja: el de cada fila recuperada pasa a INFO, el
+    # de las que no se encontraron dice que se busco.
+    sr.anomalies = [messages.get(a.detail.get("row"), a)
+                    if a.code == ROW_UNREADABLE else a for a in sr.anomalies]
+    ts.anomalies = [a for a in ts.anomalies
+                    if not (a.code == ROW_UNREADABLE
+                            and a.detail.get("sheet") == sr.sheet)]
+    ts.anomalies += [a for a in _surfaced(sr) if a.severity != "FATAL"]
+    recovered = [a for a in sr.anomalies if a.code == ROW_RECOVERED]
+    if len(recovered) > 1:
+        pairs = ", ".join(f"row {a.detail['row']} → {a.detail['placement_id']}"
+                          for a in recovered)
+        recovered = [Anomaly(
+            ROW_RECOVERED, "INFO",
+            f"{len(recovered)} {sr.sheet} rows had a formula error in the "
+            "Placement ID. QA2 found them in Innovid by the code in their "
+            f"Placement Name: {pairs}. Dates and size on those rows can't be "
+            "read, so they aren't checked.",
+            detail={"sheet": sr.sheet, "rows": [a.detail["row"] for a in recovered]},
+        )]
+    ts.anomalies += recovered
+
+    if added:
+        sr.rows.sort(key=lambda r: r.row)
+        _finish_scope(ts)
+
+
+def _undo_recovery(ts: TSResult) -> None:
+    sr = ts.placements
+    rows, sheet_anomalies, anomalies, intents, impls = ts._before_recovery
+    sr.rows, sr.anomalies, ts.anomalies = list(rows), list(sheet_anomalies), list(anomalies)
+    sr.intent_counts, sr.impl_counts = dict(intents), dict(impls)
+    for row in sr.pending:
+        row.values["placement_id"] = None
+    ts.recovered_rows, ts.unrecovered_rows = [], []
+    ts.recovery_done = False
+    _finish_scope(ts)
+
+
 # ------------------------------------------------------------------ parser
 
 #: Cuantas filas sin leer se nombran una por una antes de resumir.
@@ -1131,45 +1366,8 @@ def parse_ts(path: Path, profile_name: str | None = None) -> TSResult:
     res.rotations_all = rotations_all_rows
     _merge_hidden_lp_refs(res.groups, rotations_all_rows)
     res.lp_worked = _build_lp_worked(res.landing_pages)
-    lp_new_only = _lp_claimed_by_new(res.placements, res.landing_pages,
-                                     res.lp_worked)
-
-    if res.placements:
-        res.scope = _build_scope(res.placements, res.groups,
-                                 res.lp_worked - lp_new_only,
-                                 propagate=profile.propagate_from_rotations)
-        if lp_new_only:
-            # Principio 8: el verde de la landing page no desaparece
-            # en silencio. Se dice a quien se le atribuyo.
-            sharing = sorted(
-                pid for pid, sc in res.scope.items()
-                if sc.request_type == REQ_NOT_WORKED
-                and any(g[6:] in lp_new_only for g in sc.groups
-                        if g.startswith("__lp__"))
-            )
-            if sharing:
-                names = ", ".join(sorted(
-                    str(r.values.get("lp_name"))
-                    for r in res.landing_pages.rows
-                    if norm_compare(str(r.values.get("lp_name") or "")) in lp_new_only))
-                res.anomalies.append(Anomaly(
-                    LP_CLAIMED_BY_NEW, "INFO",
-                    f"The landing page {names} is new in green and the new "
-                    f"placements use it. {len(sharing)} white placement(s) "
-                    "that share it were read as already trafficked, not as "
-                    "a URL swap.",
-                    detail={"placements": sharing},
-                ))
-        for sc in res.scope.values():
-            res.request_counts[sc.request_type] = \
-                res.request_counts.get(sc.request_type, 0) + 1
-            if sc.request_type != REQ_NOT_WORKED:
-                res.format_counts[sc.fmt] = res.format_counts.get(sc.fmt, 0) + 1
-                k = (sc.request_type, sc.fmt)
-                res.format_by_request[k] = res.format_by_request.get(k, 0) + 1
-                if sc.source:
-                    res.source_counts[sc.source] = \
-                        res.source_counts.get(sc.source, 0) + 1
+    res.propagate = profile.propagate_from_rotations
+    _finish_scope(res)
 
     res.region_palette = inventory_region(all_region, resolver)
     return res

@@ -156,6 +156,12 @@ class ExpectedPlacement:
     # del default ad, que es un creativo aparte: no se puede validar
     # contra el clicktag del placement.
     url_is_default_only: bool = False
+    # Las URLs en rojo de las landing pages que usa el placement: las
+    # que el swap retira. Un creativo del decision set que sigue con una
+    # de estas no recibio la landing page nueva (Wendy's, 18-nov: el
+    # 1x1 viejo de XBOX DIS GM seguia con gm-daves-single-display-banner
+    # y el placement pasaba porque el otro creativo ya tenia la nueva).
+    retired_urls: list[str] = field(default_factory=list)
     # Adobe escribe la URL entera en la columna "Landing Page" de
     # Placements, en vez de un nombre que se resuelva contra la
     # pestaña Landing Pages -- que en sus TS viene vacia. Se guarda
@@ -358,6 +364,9 @@ class MatchResult:
     triangle_counts: dict[str, int] = field(default_factory=dict)
     extra_running_total: int = 0
     extra_stopped_total: int = 0
+    #: Filas de la TS con #N/A en el Placement ID cuyo codigo de
+    #: Placement Name no esta en el export: van a revision.
+    unrecovered_ts_rows: list = field(default_factory=list)
 
     @property
     def blocked(self) -> bool:
@@ -472,6 +481,9 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
     # page que ya estaba traficada: va en blanco porque no cambia, y
     # sigue siendo la suya (FB-14).
     white_landing_page_urls: dict[str, str] = {}
+    # Las que se van: la fila roja de un swap, bajo el mismo nombre o
+    # con el nombre entero en rojo.
+    red_landing_page_urls: dict[str, list[str]] = {}
 
     if getattr(ts, "landing_pages", None) is not None:
         for lp_row in ts.landing_pages.rows:
@@ -489,6 +501,8 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                     green_landing_page_urls[lp_name] = lp_url
                 elif lp_row.intent == WHITE:
                     white_landing_page_urls.setdefault(lp_name, lp_url)
+                elif lp_row.intent == RED:
+                    red_landing_page_urls.setdefault(lp_name, []).append(lp_url)
 
     # --- creativos con intencion, indexados por grupo (Creative Rotations)
     by_group: dict[str, list[ExpectedCreative]] = {}
@@ -783,6 +797,10 @@ def build_expected(ts) -> dict[str, ExpectedPlacement]:
                 names = sorted(gs.lp_names) if gs else []
 
             for name in names:
+                if not _IS_DEFAULT.search(name):
+                    for old in red_landing_page_urls.get(name, ()):
+                        if old not in ep.retired_urls:
+                            ep.retired_urls.append(old)
                 url = green_landing_page_urls.get(name)
                 if not url:
                     # Una landing page en blanco no es un cambio, pero
@@ -1248,6 +1266,14 @@ def compare_placement(pm: PlacementMatch, res: "MatchResult") -> None:
 
 def match(ts, export_pc, export_pl=None) -> MatchResult:
     res = MatchResult()
+
+    # Las filas #N/A de Placements que traen Placement Name: el export
+    # dice cual es su Placement ID. Tiene que ir antes que todo lo que
+    # lee el scope de la TS.
+    if hasattr(ts, "placements"):
+        from parsers.ts_parser import recover_unreadable_rows
+        recover_unreadable_rows(ts, export_pc, export_pl)
+        res.unrecovered_ts_rows = list(getattr(ts, "unrecovered_rows", []))
 
     # ---- L0 Scope Guard
     ts_cid = str(ts.campaign_info.get("campaignid") or "")

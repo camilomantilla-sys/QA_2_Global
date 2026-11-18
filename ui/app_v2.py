@@ -2738,10 +2738,14 @@ if True:
         # Una fila de la TS que no se pudo leer es un placement que
         # nadie revisa. Se dice arriba, no solo en la tabla de
         # anomalias (FB-28).
+        # Antes, las filas #N/A que se pueden recuperar por el codigo
+        # del Placement Name: el aviso dice lo que paso con cada una.
+        from parsers.ts_parser import recover_unreadable_rows
+        recover_unreadable_rows(ts_result, pc_result, pl_result)
         for anomaly in getattr(ts_result, "anomalies", []):
             if anomaly.code in ("TS-ROW-UNREADABLE", "TS-RED-FIELDS-ONLY"):
                 st.warning(anomaly.message)
-            elif anomaly.code == "TS-LP-NEW-ONLY":
+            elif anomaly.code in ("TS-LP-NEW-ONLY", "TS-ROW-RECOVERED"):
                 st.info(anomaly.message)
 
         # ----------------------------------------------------

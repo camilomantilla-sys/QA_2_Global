@@ -381,7 +381,7 @@ Que se pidio cambiar de un creativo, campo por campo. *(60 lineas)*
 
 ### `core/matching.py`
 
-Matching Engine. *(1324 lineas)*
+Matching Engine. *(1350 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -822,7 +822,7 @@ Parser de archivos de tags exportados desde Innovid. *(586 lineas)*
 
 ### `parsers/ts_parser.py`
 
-Parser de Traffic Sheets. *(1175 lineas)*
+Parser de Traffic Sheets. *(1373 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -838,12 +838,17 @@ Parser de Traffic Sheets. *(1175 lineas)*
 | funcion | `_unreadable_row(grid, sheet_name: str, row: int, header_row: int, cmap: ColumnMap) -> Anomaly` |  |
 | funcion | `_repair_wpp_combined_rotation_header(grid, header_row: int, cmap: ColumnMap, spec: SheetSpec, anomalies: list[Anomaly]) -> None` | Repara una variante defectuosa de WPP donde los encabezados 'Creative Rotation' y 'Creative Name' fueron combinados |
 | funcion | `_parse_sheet(path, sheet_name, spec, intent_fields, resolver, primary_key, skip_hidden) -> tuple[TSSheetResult, list[tuple[str, str, Cell]]]` |  |
+| funcion | `_salvageable(grid, r: int, cmap: ColumnMap, primary_key: str) -> bool` | Una fila de Placements con el Placement ID roto pero el Placement Name legible |
+| funcion | `placement_code(name: str) -> str` | El codigo con que empieza el nombre de un placement ("P3KK98N" en "P3KK98N\|W3Z\|HAM\|006\|...") |
 | funcion | `_resolve_field_changes(sr: TSSheetResult) -> list[Anomaly]` | Principio 5: el color en el nombre o el ID dice si un creativo entra o sale; el color en otro campo dice que ese campo cambio |
 | funcion | `_build_groups(sr: TSSheetResult \| None) -> dict[str, GroupScope]` | Agrupa creativos por rotacion y detecta que rotaciones se trabajaron |
 | funcion | `_merge_hidden_lp_refs(groups: dict[str, GroupScope], sr: TSSheetResult \| None) -> None` | Anade al mapa grupo -> landing page las filas ocultas de rotaciones |
 | funcion | `_build_lp_worked(sr: TSSheetResult \| None) -> set[str]` | Landing pages con color -> se trabajo su URL |
 | funcion | `_lp_claimed_by_new(placements: TSSheetResult \| None, landing_pages: TSSheetResult \| None, lp_worked: set[str]) -> set[str]` | Landing pages verdes que son de los placements nuevos, no un swap |
 | funcion | `_build_scope(sr, groups, lp_worked, propagate) -> dict[str, PlacementScope]` | El scope de QA2 = placements con color propio U placements que apuntan a grupos con color U placements que apuntan a landing pages con color |
+| funcion | `_finish_scope(res: TSResult) -> None` | El scope de la solicitud y sus conteos |
+| funcion | `recover_unreadable_rows(ts: TSResult, *exports) -> None` | Le pone Placement ID a las filas de Placements que llegaron con #N/A buscando el codigo de su Placement Name en los exports de Innovid |
+| funcion | `_undo_recovery(ts: TSResult) -> None` |  |
 | funcion | `_surfaced(sr: TSSheetResult) -> list[Anomaly]` | Lo de una hoja que sube al resultado: lo fatal y las filas sin leer |
 | funcion | `parse_ts(path: Path, profile_name: str \| None=None) -> TSResult` |  |
 
@@ -966,7 +971,7 @@ PIX-002 -- el pixel de cada vendor esta en su columna. *(71 lineas)*
 
 ### `rules/placements.py`
 
-PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(264 lineas)*
+PLC-001 / PLC-002 / PLC-007 -- existencia y estado de los placements. *(284 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1009,11 +1014,13 @@ QA2 rules for tag files. *(545 lineas)*
 
 ### `rules/urls.py`
 
-URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(395 lineas)*
+URL-001 / URL-002 / URL-003 -- landing pages y clicktags. *(452 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
 | funcion | `_actual_urls(ap) -> list[str]` | Clicktags que Innovid tiene realmente para el placement |
+| funcion | `_still_on_old_page(pm, expected_url: str) -> list[str]` | Creativos que siguen con la landing page que el swap retira |
+| funcion | `_creative_urls(ap, names) -> list[str]` |  |
 | funcion | `evaluate_placement_urls(match_result, buffer)` | URL-002 - swap de solo URL |
 | funcion | `_is_retired(pm) -> bool` | El placement ya no sirve: la TS lo desasigna, o Innovid lo apago |
 | funcion | `evaluate_direct_placement_urls(match_result, buffer)` | URL-003 -- la landing page de un placement sin creativos propios |
@@ -1038,7 +1045,7 @@ Interfaz de QA2 (Streamlit). Todo lo visible vive en app_v2.py. *(1 lineas)*
 
 ### `ui/app_v2.py`
 
-Interfaz de QA2 (Streamlit). *(5675 lineas)*
+Interfaz de QA2 (Streamlit). *(5679 lineas)*
 
 | Tipo | Nombre | Que hace |
 | --- | --- | --- |
@@ -1476,6 +1483,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_tag_landing_page.py` | 12 | La landing page viaja dentro del click tag de un 1x1 |
 | `test_ts_reading.py` | 3 | Que lee QA de cada Traffic Sheet, formato por formato |
 | `test_ts_rotation_filters.py` | 5 | Que filas de Creative Rotations se descartan |
+| `test_ts_row_recovery.py` | 10 | Filas #N/A de Placements, recuperadas por el codigo del Placement Name |
 | `test_two_installations.py` | 10 | Dos carpetas de QA2 en la misma maquina, y la que se veia no era la que se habia abierto |
 | `test_ui_stale_modules.py` | 0 | La app debe darse cuenta de que corre codigo viejo |
 | `test_unreadable_sheet.py` | 12 | Una hoja que no se pudo leer nunca puede acabar en PASSED |
@@ -1488,4 +1496,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 814 funciones de prueba en 82 archivos (algunas se parametrizan y corren varias veces).
+Total: 824 funciones de prueba en 83 archivos (algunas se parametrizan y corren varias veces).

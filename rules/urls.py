@@ -52,6 +52,37 @@ def _actual_urls(ap) -> list[str]:
     return out
 
 
+def _still_on_old_page(pm, expected_url: str) -> list[str]:
+    """
+    Creativos que siguen con la landing page que el swap retira.
+
+    Un swap de landing page alcanza a todos los creativos de los
+    decision sets que la usan (AdOps, 18-nov). Que uno ya tenga la
+    nueva no basta: en Wendy's el 1x1 nuevo de XBOX DIS GM tenia la
+    nueva y el viejo seguia con la roja, y el placement pasaba.
+    """
+    retired = [u for u in getattr(pm.expected, "retired_urls", ())
+               if compare_urls(expected_url, u).result != URL_MATCH]
+    if not retired or pm.actual is None or pm.actual.clicktags:
+        return []
+    out: list[str] = []
+    for creative in pm.actual.creatives:
+        if not creative.running:
+            continue
+        tags = [t for t in creative.clicktags if t]
+        if any(compare_urls(expected_url, t).result == URL_MATCH for t in tags):
+            continue
+        if any(compare_urls(old, t).result == URL_MATCH
+               for t in tags for old in retired):
+            out.append(creative.name or creative.creative_id)
+    return out
+
+
+def _creative_urls(ap, names) -> list[str]:
+    return [t for c in ap.creatives if (c.name or c.creative_id) in names
+            for t in c.clicktags if t]
+
+
 def evaluate_placement_urls(match_result, buffer):
     """
     URL-002 - swap de solo URL.
@@ -113,7 +144,33 @@ def evaluate_placement_urls(match_result, buffer):
             comparisons[0],
         )
 
-        if best.result == URL_MATCH:
+        stale = _still_on_old_page(pm, expected_url)
+
+        if best.result == URL_MATCH and stale:
+            names = ", ".join(stale[:5]) + (
+                f" and {len(stale) - 5} more" if len(stale) > 5 else "")
+            buffer.fail(
+                message=(
+                    f"The new landing page is live, but {len(stale)} "
+                    + ("creative in the decision set still points"
+                       if len(stale) == 1 else
+                       "creatives in the decision set still point")
+                    + f" to the old one: {names}."
+                ),
+                actual=" | ".join(
+                    dict.fromkeys(_creative_urls(pm.actual, stale))),
+                reason=(
+                    "The Traffic Sheet retires that landing page (red) "
+                    "and the swap applies to every creative of the "
+                    "decision sets that use it."
+                ),
+                recommended_action=(
+                    "Update the Clicktag of those creatives to the new "
+                    "landing page."
+                ),
+                **common,
+            )
+        elif best.result == URL_MATCH:
             buffer.pass_(
                 message="The new landing page is live in Innovid.",
                 actual=best.actual.raw,

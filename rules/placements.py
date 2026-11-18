@@ -32,6 +32,26 @@ def evaluate(match_result, buffer):
             placement_name=ep.name,
         )
 
+    # Filas de la TS con #N/A en el Placement ID que tampoco se
+    # encontraron en el export por el codigo del Placement Name.
+    for row in getattr(match_result, "unrecovered_ts_rows", []):
+        name = str(row.values.get("placement_name") or "")
+        buffer.review(
+            rule_id="PLC-001",
+            domain=Domain.SCOPE,
+            message=(
+                f"Traffic Sheet row {row.row} has a formula error in the "
+                "Placement ID, and the code in its Placement Name isn't in "
+                "the Innovid export. QA2 can't tell which placement it is."
+            ),
+            placement_id="",
+            placement_name=name,
+            recommended_action=(
+                "Find the placement in Innovid by its name and check it by "
+                "hand, or fix the formula in the Traffic Sheet and run again."
+            ),
+        )
+
     # Placement found
     for pm in match_result.matched:
 
