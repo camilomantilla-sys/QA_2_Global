@@ -85,3 +85,8 @@ tests/fixtures/ts/*.xlsx
 tests/fixtures/ts/*.xlsm
 tests/fixtures/ts/*.xls
 dist/
+
+# Innovid Extractor: its own Python, sign-in and output stay local
+innovid_extractor/.venv/
+innovid_extractor/session/
+innovid_extractor/output/

@@ -48,6 +48,9 @@ SKIP_DIRS = {
     # El Python y el navegador que trae un paquete ya armado, por si
     # alguien empaqueta desde una carpeta que ya los tiene.
     "browsers",
+    # El extractor de Innovid es aparte: vive en el repo pero no viaja
+    # en el paquete de QA2.
+    "innovid_extractor",
 }
 
 # Individual files never packaged, matched on the file name.

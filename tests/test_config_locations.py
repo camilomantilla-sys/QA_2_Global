@@ -178,7 +178,7 @@ def test_the_only_outbound_hosts_are_the_ad_servers():
         "schemas.openxmlformats.org",  # the Excel XML namespace, not a call
     }
     found: set[str] = set()
-    for folder in ("core", "rules", "parsers", "ui", "cli"):
+    for folder in ("core", "rules", "parsers", "ui", "cli", "innovid_extractor"):
         for py in (ROOT / folder).rglob("*.py"):
             text = py.read_text(encoding="utf-8", errors="replace")
             # Skip the examples inside docstrings and comments: what
