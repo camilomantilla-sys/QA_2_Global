@@ -20,10 +20,12 @@ Run it with the launcher next to it ("Innovid Extractor.bat") or:
 
     python extractor.py 330328 305807
     python extractor.py --login        # sign in again
+    python extractor.py --logout       # forget the saved session
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -38,7 +40,14 @@ HERE = Path(__file__).resolve().parent
 
 # The saved sign-in. Holds session cookies, which are as good as the
 # password until they expire: never share this file, never commit it.
+# On Windows it is encrypted for the Windows account that signed in
+# (DPAPI): copied to another computer or another user, it can't be
+# opened. It is also forgotten after SESSION_MAX_HOURS, whatever
+# Innovid says.
 SESSION_PATH = HERE / "session" / "innovid_session.json"
+SESSION_MAX_HOURS = 12
+_SESSION_MAGIC = b"QA2-SESSION-1:"
+_DPAPI_ENTROPY = b"Innovid Extractor session"
 OUTPUT_DIR = HERE / "output"
 
 APP_ORIGIN = "https://campaign-manager.flashtalking.net"
@@ -47,6 +56,23 @@ CM_BASE = f"https://{API_HOST}/cm/v1/ui"
 DT_BASE = f"https://{API_HOST}/dt/v1/ui"
 TAG_BASE = f"https://{API_HOST}/tag/v1/ui"
 CM_V1 = f"https://{API_HOST}/cm/v1"
+
+# The only requests the extractor may make, the same four as the Chrome
+# extension: the summary (a POST that only reads) and three reads.
+# Anything else is refused before it leaves this computer.
+_API = re.escape(f"https://{API_HOST}")
+_ALLOWED_CALLS = (
+    ("POST", re.compile(_API + r"/cm/v1/ui/campaigns/\d+/summary\?fields=[\w,]+")),
+    ("GET", re.compile(_API + r"/dt/v1/ui/dset/\d+")),
+    ("GET", re.compile(_API + r"/cm/v1/campaigns/\d+/campaign-sites\?rpp=543")),
+    ("GET", re.compile(_API + r"/tag/v1/ui/campaign-sites/\d+")),
+)
+
+CLASSIFICATION = "Internal · Confidential. WPP Media campaign data: do not share outside the company."
+
+
+def is_allowed_call(method: str, url: str) -> bool:
+    return any(m == method and rx.fullmatch(url) for m, rx in _ALLOWED_CALLS)
 
 SUMMARY_FIELDS = (
     "status", "siteName", "placementId", "placementName", "placementType",
@@ -380,7 +406,8 @@ def write_workbook(ex: Extraction, path: Path, extra_timings=()) -> Path:
 
     # Summary
     total = sum(s for _, s in list(extra_timings) + ex.timings)
-    summary = [("Campaign ID", ex.campaign_id),
+    summary = [("Classification", CLASSIFICATION),
+               ("Campaign ID", ex.campaign_id),
                ("Extracted", datetime.now().strftime("%Y-%m-%d %H:%M")),
                ("Placements", len({r.placement_id for r in ex.rows})),
                ("Creative rows", len(ex.creatives)),
@@ -464,16 +491,103 @@ def write_workbook(ex: Extraction, path: Path, extra_timings=()) -> Path:
 
 # ------------------------------------------------------------------ browser
 
+# ------------------------------------------------------------------ session
+
+def _dpapi(data: bytes, protect: bool) -> bytes:
+    """Windows' own encryption, tied to the signed-in Windows account."""
+    import ctypes
+    from ctypes import wintypes
+
+    class Blob(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+    def blob(raw: bytes):
+        buf = ctypes.create_string_buffer(raw, len(raw))
+        return Blob(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char))), buf
+
+    crypt32, kernel32 = ctypes.windll.crypt32, ctypes.windll.kernel32
+    fn = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
+    fn.argtypes = [ctypes.POINTER(Blob), ctypes.c_void_p, ctypes.POINTER(Blob), ctypes.c_void_p,
+                   ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(Blob)]
+    fn.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    (data_in, _keep1), (entropy, _keep2) = blob(data), blob(_DPAPI_ENTROPY)
+    data_out = Blob()
+    if not fn(ctypes.byref(data_in), None, ctypes.byref(entropy), None, None, 0x1, ctypes.byref(data_out)):
+        raise OSError("Windows couldn't " + ("encrypt" if protect else "open") + " the saved session")
+    try:
+        return ctypes.string_at(data_out.pbData, data_out.cbData)
+    finally:
+        kernel32.LocalFree(ctypes.cast(data_out.pbData, ctypes.c_void_p))
+
+
+def _seal(data: bytes) -> bytes:
+    if os.name == "nt":
+        return _SESSION_MAGIC + b"dpapi:" + base64.b64encode(_dpapi(data, True))
+    return _SESSION_MAGIC + b"plain:" + base64.b64encode(data)
+
+
+def _unseal(raw: bytes) -> bytes:
+    if not raw.startswith(_SESSION_MAGIC):
+        raise ValueError("not a session saved by this version")
+    kind, _, body = raw[len(_SESSION_MAGIC):].partition(b":")
+    data = base64.b64decode(body)
+    if kind == b"dpapi":
+        if os.name != "nt":
+            raise ValueError("encrypted for a Windows account")
+        return _dpapi(data, False)
+    if kind == b"plain" and os.name != "nt":
+        return data
+    raise ValueError("unknown session format")
+
+
+def forget_session() -> None:
+    try:
+        SESSION_PATH.unlink()
+    except OSError:
+        pass
+
+
+def save_session(state: dict) -> None:
+    SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SESSION_PATH.write_bytes(_seal(json.dumps(state).encode("utf-8")))
+    try:
+        os.chmod(SESSION_PATH, 0o600)
+    except OSError:
+        pass
+
+
+def load_session() -> dict | None:
+    """
+    The saved session, or None. A session that can't be used is deleted
+    on the spot: too old, from an older version (saved unencrypted), or
+    copied from another computer or Windows account (it won't decrypt).
+    """
+    try:
+        raw = SESSION_PATH.read_bytes()
+    except OSError:
+        return None
+    age_h = (time.time() - SESSION_PATH.stat().st_mtime) / 3600
+    try:
+        if age_h > SESSION_MAX_HOURS:
+            raise ValueError("older than the limit")
+        return json.loads(_unseal(raw).decode("utf-8"))
+    except (OSError, ValueError):
+        forget_session()
+        return None
+
+
 def session_state() -> str:
     """'missing', 'expired' or 'ok' -- read from the file, no network."""
-    try:
-        data = json.loads(SESSION_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return "missing"
+    existed = SESSION_PATH.exists()
+    data = load_session()
+    if data is None:
+        return "expired" if existed else "missing"
     stamps = [float(c["expires"]) for c in data.get("cookies", [])
               if "flashtalking" in str(c.get("domain", ""))
               and isinstance(c.get("expires"), (int, float)) and c["expires"] > 0]
     if stamps and datetime.fromtimestamp(min(stamps), tz=timezone.utc) <= datetime.now(timezone.utc):
+        forget_session()
         return "expired"
     return "ok"
 
@@ -524,12 +638,12 @@ def sign_in(timeout_s: int = 300) -> None:
             if not api_ok["seen"]:
                 raise SessionProblem("The sign-in didn't finish (or Innovid's API never answered). "
                                      "Nothing was saved: try again and let a campaign load.")
-            SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
-            context.storage_state(path=str(SESSION_PATH))
+            save_session(context.storage_state())
         finally:
             context.close()
             browser.close()
-    print("Signed in. The session is saved on this computer only.\n")
+    print(f"Signed in. The session is saved on this computer only, encrypted for your Windows "
+          f"account, and forgotten after {SESSION_MAX_HOURS} hours.\n")
 
 
 _FETCH_JS = """
@@ -555,7 +669,10 @@ class Browser:
         from playwright.sync_api import sync_playwright
         self._pw = sync_playwright().start()
         self._browser = _launch(self._pw, headless=True)
-        self._context = self._browser.new_context(storage_state=str(SESSION_PATH))
+        state = load_session()
+        if state is None:
+            raise SessionProblem("The saved Innovid session can't be used here.")
+        self._context = self._browser.new_context(storage_state=state)
         self.page = self._context.new_page()
         self.csrf = {"value": ""}
         self.page.on("request", self._capture)
@@ -581,6 +698,8 @@ class Browser:
         self.csrf["value"] = self.csrf["value"] or self._page_csrf()
 
     def call(self, url: str, method: str = "GET", body=None, _retried: bool = False):
+        if not is_allowed_call(method, url):
+            raise RuntimeError(f"Refused: the extractor only reads ({method} {url.split('?')[0]})")
         token = self._page_csrf() or self.csrf["value"]
         out = self.page.evaluate(_FETCH_JS, [url, method, body, token])
         status = out.get("status")
@@ -676,6 +795,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Reads Innovid campaigns into Excel.")
     parser.add_argument("ids", nargs="*", help="Campaign ID(s)")
     parser.add_argument("--login", action="store_true", help="sign in to Innovid again")
+    parser.add_argument("--logout", action="store_true", help="forget the saved Innovid session")
     args = parser.parse_args(argv)
 
     print("=" * 60 + "\n  Innovid Extractor\n" + "=" * 60)
@@ -687,6 +807,10 @@ def main(argv=None) -> int:
               f"  {sys.executable} -m pip install -r {HERE / 'requirements.txt'}")
         return 1
 
+    if args.logout:
+        forget_session()
+        print("The saved Innovid session was deleted from this computer.")
+        return 0
     if args.login:
         sign_in()
     ids = campaign_ids(" ".join(args.ids))

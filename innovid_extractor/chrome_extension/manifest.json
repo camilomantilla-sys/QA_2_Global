@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Innovid Extractor",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Reads the Innovid campaign open in this tab into Excel: placements, decision sets and Media Filters.",
   "action": {
     "default_popup": "popup.html",

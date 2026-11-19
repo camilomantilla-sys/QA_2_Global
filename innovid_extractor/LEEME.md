@@ -38,11 +38,16 @@ ninguno crea el suyo la primera vez (Playwright + openpyxl + Chromium).
 
 ## Seguridad
 
-- `session/innovid_session.json` vale lo mismo que la contraseña
-  mientras no venza. Se queda en este equipo: no se comparte ni se sube
-  al repositorio (está en `.gitignore`).
+Detalle completo en [SEGURIDAD.md](SEGURIDAD.md). En corto:
+
+- La sesión guardada (`session/innovid_session.json`) va cifrada con tu
+  cuenta de Windows: copiada a otro equipo u otro usuario no sirve y se
+  borra. Se olvida sola a las 12 horas. `python extractor.py --logout`
+  la borra al momento.
+- Solo lee: cualquier llamada que no sea una de las cuatro de lectura se
+  rechaza antes de salir del equipo.
 - Solo habla con Innovid (`campaign-manager.flashtalking.net` y
-  `api.flashtalking.net`), igual que QA2.
+  `api.flashtalking.net`).
 - Sigue siendo un programa que corre en el equipo de quien lo usa.
 
 ---

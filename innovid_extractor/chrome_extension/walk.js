@@ -373,6 +373,17 @@ var Walk = (function () {
    * Returns the rows plus, per column, which Innovid field it came from
    * ("" when no row carried any field by that name).
    */
+  /*
+   * Costs and rates: commercial data the QA never uses. The columns stay,
+   * so the sheet keeps the export's layout, but their values are not
+   * written, and Innovid fields shows no example of them.
+   */
+  var WITHHELD = ["Booked_Cost", "Media_Cost_Type", "Media_Cost_Rate", "Cost_Cap_Period",
+    "Flashtalking_Cost_Type", "Flashtalking_Cost"];
+  var WITHHELD_FIELD = /cost/i;
+
+  var CLASSIFICATION = "Internal · Confidential. WPP Media campaign data: do not share outside the company.";
+
   function exportColumns(rows, columns) {
     var source = {};
     columns.forEach(function (c) { source[c] = ""; });
@@ -385,6 +396,7 @@ var Walk = (function () {
           var key = index[cands[i]];
           if (key !== undefined) {
             if (!source[c]) source[c] = key;
+            if (WITHHELD.indexOf(c) >= 0) return "";
             var v = cell(r.raw[key]);
             return v !== "" && FORMATS[c] ? FORMATS[c](v) : v;
           }
@@ -406,7 +418,9 @@ var Walk = (function () {
         var v = cell(r.raw[k]);
         if (v !== "") {
           f.filled += 1;
-          if (!f.example) f.example = v.length > 120 ? v.slice(0, 117) + "…" : v;
+          if (!f.example) {
+            f.example = WITHHELD_FIELD.test(k) ? "(not extracted)" : v.length > 120 ? v.slice(0, 117) + "…" : v;
+          }
         }
       });
     });
@@ -441,6 +455,7 @@ var Walk = (function () {
     ex.nodes.forEach(function (n) { (byDset[n.dsetId] = byDset[n.dsetId] || []).push(n); });
 
     var summary = [["Item", "Value"],
+      ["Classification", CLASSIFICATION],
       ["Campaign ID", ex.campaignId],
       ["Extracted", new Date().toISOString().slice(0, 16).replace("T", " ")],
       ["Read with", "Chrome extension"],
@@ -549,6 +564,9 @@ var Walk = (function () {
       });
       summary.push(["Export columns · " + s[0], found + " of " + (found + missing.length) + " found in Innovid's data"]);
       if (missing.length) summary.push(["Not in Innovid's data · " + s[0], missing.join(", ")]);
+      if (s[0] === "Placement") {
+        summary.push(["Left empty on purpose", WITHHELD.join(", ") + ": costs and rates aren't needed for the QA"]);
+      }
     });
     var fields = fieldsSheet(rows, usedBy);
     var ds = [["Decision set ID", "Decision set", "Serving method", "Creative ID", "Creative",
@@ -594,7 +612,7 @@ var Walk = (function () {
   return {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
-    PL_COLUMNS: PL_COLUMNS, PC_COLUMNS: PC_COLUMNS,
+    PL_COLUMNS: PL_COLUMNS, PC_COLUMNS: PC_COLUMNS, WITHHELD: WITHHELD,
     campaignIds: campaignIds, tokens: tokens, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();

@@ -238,3 +238,91 @@ def test_the_file_is_named_after_the_campaign_and_the_day(ext, tmp_path, monkeyp
     first.write_bytes(b"x")
     assert ext.output_path("337552", datetime(2026, 11, 19)).name == (
         "Innovid_337552_Summary_DecisionSets_Extraction_2026-11-19 (1).xlsx")
+
+
+# ------------------------------------------------------------------ security
+
+@pytest.fixture()
+def session_file(ext, tmp_path, monkeypatch):
+    path = tmp_path / "session" / "innovid_session.json"
+    monkeypatch.setattr(ext, "SESSION_PATH", path)
+    return path
+
+
+STATE = {"cookies": [{"name": "s", "value": "x", "domain": ".flashtalking.net", "expires": 4102444800}],
+         "origins": []}
+
+
+def test_the_saved_session_is_never_plain_json(ext, session_file):
+    ext.save_session(STATE)
+    raw = session_file.read_bytes()
+    assert raw.startswith(b"QA2-SESSION-1:")
+    assert b'"cookies"' not in raw and b"flashtalking" not in raw
+    assert ext.load_session() == STATE
+    assert ext.session_state() == "ok"
+
+
+def test_a_session_from_an_older_version_is_deleted(ext, session_file):
+    session_file.parent.mkdir(parents=True)
+    session_file.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
+    assert ext.session_state() == "expired"
+    assert not session_file.exists()
+
+
+def test_a_session_copied_from_another_windows_account_is_deleted(ext, session_file):
+    # Encrypted with DPAPI elsewhere: it can't be opened here, so it goes.
+    session_file.parent.mkdir(parents=True)
+    session_file.write_bytes(b"QA2-SESSION-1:dpapi:AAAAAAAA")
+    if sys.platform == "win32":
+        pytest.skip("on Windows this would ask DPAPI for real")
+    assert ext.load_session() is None
+    assert not session_file.exists()
+
+
+def test_an_old_session_is_forgotten_after_the_limit(ext, session_file):
+    import os
+    import time
+    ext.save_session(STATE)
+    old = time.time() - (ext.SESSION_MAX_HOURS + 1) * 3600
+    os.utime(session_file, (old, old))
+    assert ext.session_state() == "expired"
+    assert not session_file.exists()
+
+
+def test_logout_forgets_the_session(ext, session_file):
+    ext.save_session(STATE)
+    assert ext.main(["--logout"]) == 0
+    assert not session_file.exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="DPAPI exists only on Windows")
+def test_dpapi_round_trip(ext):
+    sealed = ext._dpapi(b"secret", True)
+    assert sealed != b"secret" and ext._dpapi(sealed, False) == b"secret"
+
+
+def test_the_extractor_only_reads(ext):
+    api = "https://api.flashtalking.net"
+    assert ext.is_allowed_call("POST", api + "/cm/v1/ui/campaigns/337552/summary?fields=status,placementId")
+    assert ext.is_allowed_call("GET", api + "/dt/v1/ui/dset/43580")
+    assert ext.is_allowed_call("GET", api + "/cm/v1/campaigns/337552/campaign-sites?rpp=543")
+    assert ext.is_allowed_call("GET", api + "/tag/v1/ui/campaign-sites/1")
+    for method, url in [("PUT", api + "/dt/v1/ui/dset/43580"), ("POST", api + "/dt/v1/ui/dset/43580"),
+                        ("DELETE", api + "/tag/v1/ui/campaign-sites/1"),
+                        ("POST", api + "/cm/v1/ui/campaigns/337552/placements"),
+                        ("GET", api + "/dt/v1/ui/dset/43580\n"),
+                        ("GET", "https://example.org/dt/v1/ui/dset/1")]:
+        assert not ext.is_allowed_call(method, url), (method, url)
+
+
+def test_a_refused_call_never_reaches_the_browser(ext):
+    browser = ext.Browser.__new__(ext.Browser)   # no real browser: nothing may be asked of it
+    with pytest.raises(RuntimeError, match="only reads"):
+        browser.call("https://api.flashtalking.net/dt/v1/ui/dset/1", "DELETE")
+
+
+def test_the_workbook_says_it_is_confidential(ext, tmp_path):
+    ex = ext.extract("1", lambda url, method="GET", body=None: {"items": []}, say=lambda *_: None)
+    wb = load_workbook(ext.write_workbook(ex, tmp_path / "x.xlsx"))
+    first = next(wb["Summary"].iter_rows(min_row=2, max_row=2, values_only=True))
+    assert first[0] == "Classification" and "Confidential" in first[1]

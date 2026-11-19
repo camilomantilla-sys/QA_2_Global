@@ -93,6 +93,8 @@ const out = {};
   const sReal = Object.fromEntries(Walk.sheets(exReal, []));
   out.realPl = sReal.Placement;
   out.realPc = sReal["Placement-Creative"];
+  out.realFields = sReal["Innovid fields"];
+  out.realSummary = sReal.Summary;
 
   // Three identical failures and it stops asking.
   let asked = 0;
@@ -275,8 +277,9 @@ def test_placement_values_are_written_as_the_export_writes_them(walk):
     # Expected values copied from the real 330328 placement export.
     p = _rows(walk["realPl"])[0]
     assert (p["Site"], p["Stopped"], p["Hidden"]) == ("DV360 (18330)", "Yes", "No")
-    assert (p["Booked_Cost"], p["Media_Cost_Type"], p["Media_Cost_Rate"]) == ("0.00", "CPM", "0.0000")
-    assert (p["Flashtalking_Cost_Type"], p["Flashtalking_Cost"]) == ("CPM", "0.0000")
+    # Costs and rates keep their columns but are never written.
+    assert (p["Booked_Cost"], p["Media_Cost_Type"], p["Media_Cost_Rate"]) == ("", "", "")
+    assert (p["Flashtalking_Cost_Type"], p["Flashtalking_Cost"]) == ("", "")
     assert (p["Delivered_Impressions"], p["Percent_Delivered"]) == ("5", "0.00")
     assert _rows(walk["realPl"])[1]["Stopped"] == "No"
 
@@ -293,3 +296,18 @@ def test_creative_values_are_written_as_the_export_writes_them(walk):
         "Decision Tree", "Decision Tree", "No")
     # 1995.291 KB: the export rounds up.
     assert in_ds["Base_File_Size (KB)"] == "1995.30"
+
+
+def test_costs_never_leave_innovid(walk):
+    fields = {r[0]: r for r in walk["realFields"][1:]}
+    for k in ("bookedCost", "costTypeMedia", "costRateMedia", "costTypeFt", "costRateFt"):
+        assert fields[k][3] in ("", "(not extracted)"), k
+    s = dict((r[0], r[1]) for r in walk["realSummary"])
+    assert s["Left empty on purpose"].startswith("Booked_Cost, Media_Cost_Type")
+    # Withheld, not missing: they still count as columns Innovid sends.
+    assert "Booked_Cost" not in s.get("Not in Innovid's data · Placement", "")
+
+
+def test_the_file_says_it_is_confidential(walk):
+    assert walk["realSummary"][1][0] == "Classification"
+    assert "Confidential" in walk["realSummary"][1][1]
