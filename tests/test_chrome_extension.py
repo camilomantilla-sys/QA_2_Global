@@ -87,7 +87,7 @@ const out = {};
     {level: "PLACEMENT-CREATIVE", placementId: 11320679, placementName: "P4|Y", siteName: "DV360",
      fileName: "Google SSP 6s", decisionSetId: 42422, decisionSetName: "Google SSP 6s", rotationWeight: "1.00"},
     {level: "PLACEMENT-CREATIVE", placementId: 11320679, placementName: "P4|Y", siteName: "DV360",
-     creativeId: 6553310, fileName: "v.png", rotationWeight: "1.00"}]};
+     creativeId: 6553310, fileName: "v.png", rotationWeight: "1.00", baseFileSize: 2043178}]};
   const exReal = await Walk.extract("330328", async (url) => url.includes("/summary") ? real
     : url.includes("/dset/") ? {id: "42422", name: "Google SSP 6s", nodes: []} : {items: []}, () => {});
   const sReal = Object.fromEntries(Walk.sheets(exReal, []));
@@ -291,3 +291,5 @@ def test_creative_values_are_written_as_the_export_writes_them(walk):
     assert ds_line["Filename"] == "Google SSP 6s (42422)"
     assert (ds_line["Rotation"], in_ds["Rotation"], in_ds["Stopped"]) == (
         "Decision Tree", "Decision Tree", "No")
+    # 1995.291 KB: the export rounds up.
+    assert in_ds["Base_File_Size (KB)"] == "1995.30"

@@ -338,12 +338,17 @@ var Walk = (function () {
   function decimals(d) {
     return function (v) { var n = Number(v); return v !== "" && isFinite(n) ? n.toFixed(d) : v; };
   }
+  function kilobytes(v) {
+    var n = Number(v);
+    return isFinite(n) ? (Math.ceil(n * 100 / 1024 - 1e-9) / 100).toFixed(2) : v;
+  }
   var FORMATS = {
     "Booked_Cost": decimals(2), "Media_Cost_Rate": decimals(4), "Flashtalking_Cost": decimals(4),
     "Percent_Delivered": decimals(2),
-    // Innovid sends bytes; the export writes KB with two decimals.
-    "Base_File_Size (KB)": function (v) { var n = Number(v); return isFinite(n) ? (n / 1024).toFixed(2) : v; },
-    "Total_File_Size (KB)": function (v) { var n = Number(v); return isFinite(n) ? (n / 1024).toFixed(2) : v; }
+    // Innovid sends bytes; the export writes KB with two decimals,
+    // rounded up (1995.291 KB is 1995.30 there).
+    "Base_File_Size (KB)": kilobytes,
+    "Total_File_Size (KB)": kilobytes
   };
 
   function squash(name) { return String(name).replace(/[^A-Za-z0-9]/g, "").toLowerCase(); }
