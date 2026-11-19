@@ -50,7 +50,7 @@ SKIP_DIRS = {
     "browsers",
     # El extractor de Innovid es aparte: vive en el repo pero no viaja
     # en el paquete de QA2.
-    "innovid_extractor",
+    "innovid_extractor", "apps_script",
 }
 
 # Individual files never packaged, matched on the file name.
