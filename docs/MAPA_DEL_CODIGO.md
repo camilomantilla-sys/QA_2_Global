@@ -1444,7 +1444,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
 | `test_callouts.py` | 19 | FB-09 y FB-03: fechas del placement, Remove VPAID por site y los callouts del reporte |
-| `test_chrome_extension.py` | 7 | The Chrome extension prototype (innovid_extractor/chrome_extension) |
+| `test_chrome_extension.py` | 10 | The Chrome extension prototype (innovid_extractor/chrome_extension) |
 | `test_compare_dates.py` | 4 | Fechas de la TS frente a Innovid, para mostrar (FB-24) |
 | `test_concept_name_noise.py` | 8 | Setenta revisiones que firmar, y un Excel que las desmentia |
 | `test_config_locations.py` | 25 | Where QA2 keeps things, pinned |
@@ -1523,4 +1523,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 862 funciones de prueba en 86 archivos (algunas se parametrizan y corren varias veces).
+Total: 865 funciones de prueba en 86 archivos (algunas se parametrizan y corren varias veces).

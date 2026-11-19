@@ -70,9 +70,19 @@ Innovid que ya tienes abierta y descarga el mismo Excel (con
 3. El Excel queda en Descargas. Con varios IDs, la pestaña de Innovid
    pasa de uno a otro.
 
+**Solo una parte del campaign (opcional):** en "Only part of the campaign"
+pegas la columna de Placement IDs (o los códigos P) de la TS, o los IDs o
+nombres de decision sets. Solo se leen esos decision sets y el Excel trae
+solo esos placements. Lo que no exista en el campaign sale en la hoja
+Summary. Vacío = todo el campaign.
+
+Los decision sets se piden de a 4 al tiempo. El reloj de la ventanita
+muestra cuánto va y cuánto tardó cada campaign.
+
 Se puede cerrar la ventanita mientras trabaja: el avance sigue y se ve al
-abrirla otra vez. Tras un `git pull`, en `chrome://extensions` dale al
-botón de recargar de la extensión.
+abrirla otra vez. **Actualizarla:** `git pull` y, en `chrome://extensions`, el botón de
+recargar (flecha circular) de la tarjeta de la extensión. No hay que
+quitarla ni volver a cargarla. La versión se ve en esa misma tarjeta.
 
 **Permisos:** al instalarla no pide ningún sitio. Entra a la pestaña de
 Innovid solo cuando das clic en el ícono estando ahí (permiso "activeTab").

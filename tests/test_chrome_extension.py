@@ -81,6 +81,42 @@ const out = {};
   out.fromUrl = [Walk.campaignFromUrl("https://campaign-manager.flashtalking.net/337552/summary/"),
                  Walk.campaignFromUrl("https://example.org/337552/")];
   out.ids = Walk.campaignIds("337552, 330328 337552");
+
+  // Filters, and never more than 4 decision sets in flight.
+  const big = {totalPages: 1, items: []};
+  for (let i = 0; i < 12; i++) {
+    big.items.push({level: "PLACEMENT", placementId: String(8000 + i),
+      placementName: `P3AB${String(i).padStart(3, "0")}_ULV_X`, placementModernDtreeId: String(700 + i),
+      modernDtreeName: `DS ${i}`});
+  }
+  let inFlight = 0, maxInFlight = 0;
+  const asked3 = [];
+  const bigCall = async (url) => {
+    if (url.includes("/summary")) return big;
+    if (url.includes("/dset/")) {
+      const id = url.split("/").pop();
+      asked3.push(id);
+      inFlight += 1; maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return {id, name: `DS ${Number(id) - 700}`, nodes: []};
+    }
+    return {items: []};
+  };
+  await Walk.extract("1", bigCall, () => {});
+  out.maxInFlight = maxInFlight;
+  out.allAsked = asked3.length;
+
+  asked3.length = 0;
+  const f1 = await Walk.extract("1", bigCall, () => {}, {placements: "8001\nP3AB005\nNOPE"});
+  out.byPlacement = asked3.slice().sort();
+  out.byPlacementScope = f1.scope.sort();
+  out.unmatched = f1.filters.unmatched;
+  out.byPlacementSheet = Object.fromEntries(Walk.sheets(f1, [])).Placements.length - 1;
+
+  asked3.length = 0;
+  await Walk.extract("1", bigCall, () => {}, {dsets: "ds 7, 711"});
+  out.byDset = asked3.slice().sort();
   const api = "https://api.flashtalking.net";
   out.allowed = [
     Walk.isAllowedCall("POST", api + "/cm/v1/ui/campaigns/337552/summary?fields=status,placementId"),
@@ -124,9 +160,11 @@ def test_the_default_timestamp_is_not_a_flight(walk):
         "2026-11-16 00:00:00", "2026-12-05 23:59:00", "1", "Yes")
 
 
-def test_stops_after_three_identical_failures(walk):
-    assert walk["asked"] == 3
-    assert any("Stopped asking for 3 more" in e for e in walk["errors"])
+def test_stops_once_a_batch_fails_identically(walk):
+    # Asked four at a time: the first batch fails the same way, the
+    # remaining two are never asked.
+    assert walk["asked"] == 4
+    assert any("Stopped asking for 2 more" in e for e in walk["errors"])
 
 
 def test_reads_the_campaign_from_the_innovid_tab_only(walk):
@@ -137,3 +175,19 @@ def test_reads_the_campaign_from_the_innovid_tab_only(walk):
 def test_only_reads_leave_the_browser(walk):
     assert walk["allowed"] == [True, True, True, True]
     assert walk["refused"] == [False, False, False, False, False]
+
+
+def test_decision_sets_go_four_at_a_time(walk):
+    assert walk["allAsked"] == 12
+    assert walk["maxInFlight"] == 4
+
+
+def test_only_these_placements_by_id_or_p_code(walk):
+    assert walk["byPlacement"] == ["701", "705"]
+    assert walk["byPlacementScope"] == ["8001", "8005"]
+    assert walk["unmatched"] == ["NOPE"]
+    assert walk["byPlacementSheet"] == 2
+
+
+def test_only_these_decision_sets_by_name_or_id(walk):
+    assert walk["byDset"] == ["707", "711"]

@@ -2,6 +2,12 @@
 const $ = (id) => document.getElementById(id);
 const ICON = {ok: "✓", warn: "!", run: "⟳", wait: "○", err: "✕"};
 let innovidTab = null;
+let lastRun = null;
+
+function clock(secs) {
+  secs = Math.max(0, Math.round(secs));
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
 
 // Only the tab the popup was opened from: with activeTab, Chrome lets the
 // extension into that tab alone, and only after this click.
@@ -27,6 +33,7 @@ function showTab() {
 
 function render(run) {
   run = run || {};
+  lastRun = run;
   const running = !!run.running;
   $("go").disabled = running || !innovidTab;
   $("goText").textContent = running ? "Extracting…" : "Extract";
@@ -41,8 +48,17 @@ function render(run) {
     li.children[0].textContent = ICON[l.icon] || "";
     li.children[1].textContent = l.id;
     li.children[2].textContent = l.text;
+    const secs = l.secs !== undefined ? l.secs : (l.icon === "run" && l.startedAt ? (Date.now() - l.startedAt) / 1000 : null);
+    if (secs !== null) {
+      const t = document.createElement("span");
+      t.className = "t";
+      t.textContent = "· " + clock(secs);
+      li.children[2].appendChild(t);
+    }
     $("lines").appendChild(li);
   }
+  const end = run.running ? Date.now() : run.endedAt;
+  $("clock").textContent = run.startedAt && end ? (run.running ? "⏱ " : "Total ") + clock((end - run.startedAt) / 1000) : "";
   $("problem").hidden = !run.problem;
   $("problem").textContent = run.problem || "";
   $("doneActions").hidden = !(run.finished && (run.downloads || []).length);
@@ -52,7 +68,8 @@ $("go").addEventListener("click", () => {
   const ids = Walk.campaignIds($("ids").value);
   if (!ids.length || !innovidTab) return;
   const here = Walk.campaignFromUrl(innovidTab.url);
-  const start = () => chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id});
+  const opts = {placements: $("onlyPlacements").value, dsets: $("onlyDsets").value};
+  const start = () => chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id, opts});
   if (ids.length === 1 && ids[0] === here) { start(); return; }
   // Moving the tab to other campaigns needs Innovid's site permission,
   // asked for here and only now (it must be asked in the click itself).
@@ -78,6 +95,9 @@ $("openFolder").addEventListener("click", async () => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "session" && changes.run) render(changes.run.newValue);
 });
+
+// The clock ticks while a run is going.
+setInterval(() => { if (lastRun && lastRun.running) render(lastRun); }, 1000);
 
 (async () => {
   innovidTab = await findInnovidTab();

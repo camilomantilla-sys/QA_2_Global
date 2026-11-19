@@ -27,6 +27,75 @@ var Walk = (function () {
   var MAX_SUMMARY_PAGES = 40;
   var GIVE_UP_AFTER_FAILED_LOOKUPS = 3;
   var MAX_SITES = 40;
+  var PARALLEL = 4;
+
+  function tokens(textIn) {
+    var out = [];
+    String(textIn || "").split(/[\n\r,;\t]+/).forEach(function (t) {
+      t = t.trim();
+      if (t && out.indexOf(t) < 0) out.push(t);
+    });
+    return out;
+  }
+
+  /*
+   * "Only these placements" (Placement ID or the P code the name starts
+   * with) and "Only these decision sets" (id or name). Both empty: null,
+   * everything. Both filled: their union. What matched nothing is noted.
+   */
+  function applyFilters(ex, opts) {
+    var pl = tokens(opts.placements), ds = tokens(opts.dsets);
+    if (!pl.length && !ds.length) return null;
+    var scope = {placements: {}, dsets: null};
+    var unmatched = [];
+    var placementRows = ex.rows.filter(function (r) { return !r.isCreative || r.isDecisionSet; });
+
+    pl.forEach(function (t) {
+      var up = t.toUpperCase(), hit = false;
+      placementRows.forEach(function (r) {
+        var name = r.placementName.toUpperCase();
+        if (r.placementId === t || name === up || name.indexOf(up + "_") === 0) {
+          scope.placements[r.placementId] = true;
+          hit = true;
+        }
+      });
+      if (!hit) unmatched.push(t);
+    });
+
+    if (ds.length) {
+      scope.dsets = {};
+      ds.forEach(function (t) {
+        var low = t.toLowerCase(), hit = false;
+        ex.rows.forEach(function (r) {
+          [[r.dtreeId, r.dtreeName], [r.dsetId, r.dsetName], [r.dsetLinkId, r.dsetName]].forEach(function (p) {
+            if (p[0] && (p[0] === t || (p[1] && p[1].toLowerCase() === low))) {
+              scope.dsets[p[0]] = true;
+              scope.placements[r.placementId] = true;
+              hit = true;
+            }
+          });
+        });
+        if (!hit) unmatched.push(t);
+      });
+      // Placements asked for by ID keep all their decision sets.
+      ex.rows.forEach(function (r) {
+        if (scope.placements[r.placementId] && pl.length && placementMatches(r, pl)) {
+          [r.dtreeId, r.dsetId, r.dsetLinkId].forEach(function (k) { if (k) scope.dsets[k] = true; });
+        }
+      });
+    }
+    ex.scope = Object.keys(scope.placements);
+    ex.filters = {placements: pl, dsets: ds, unmatched: unmatched};
+    return scope;
+  }
+
+  function placementMatches(r, pl) {
+    var name = r.placementName.toUpperCase();
+    return pl.some(function (t) {
+      var up = t.toUpperCase();
+      return r.placementId === t || name === up || name.indexOf(up + "_") === 0;
+    });
+  }
 
   function text(v) {
     if (v === null || v === undefined) return "";
@@ -105,7 +174,7 @@ var Walk = (function () {
    * Reads one campaign. `say(text)` reports progress. Never throws for a
    * partial failure; throws SessionProblem when only signing in fixes it.
    */
-  async function extract(campaignId, call, say) {
+  async function extract(campaignId, call, say, opts) {
     say = say || function () {};
     var ex = {
       campaignId: String(campaignId), rows: [], nodes: [], mediaFilters: [], errors: [],
@@ -130,15 +199,20 @@ var Walk = (function () {
     ex.timings.push(["Campaign summary (placements)", now() - t0]);
 
     t0 = now();
+    var scope = applyFilters(ex, opts || {});
     var groups = [["modern decision tree", {}], ["decisionSetId", {}], ["placementDecisionSetId", {}]];
     ex.rows.forEach(function (r) {
+      if (scope && !scope.placements[r.placementId]) return;
       if (r.dtreeId && !(r.dtreeId in groups[0][1])) groups[0][1][r.dtreeId] = r.dtreeName;
       if (r.dsetId) { if (!(r.dsetId in groups[1][1])) groups[1][1][r.dsetId] = r.dsetName; }
       else if (r.dsetLinkId && !r.dtreeId && !(r.dsetLinkId in groups[2][1])) groups[2][1][r.dsetLinkId] = r.dsetName;
     });
     var seen = {};
     groups.forEach(function (g) {
-      Object.keys(g[1]).forEach(function (k) { if (seen[k]) delete g[1][k]; seen[k] = true; });
+      Object.keys(g[1]).forEach(function (k) {
+        if (seen[k] || (scope && scope.dsets && !scope.dsets[k])) delete g[1][k];
+        seen[k] = true;
+      });
     });
     groups.forEach(function (g) { ex.dsetsAsked += Object.keys(g[1]).length; });
 
@@ -146,31 +220,35 @@ var Walk = (function () {
     for (var gi = 0; gi < groups.length; gi++) {
       var source = groups[gi][0], ids = groups[gi][1], keys = Object.keys(ids).sort();
       var failures = 0, shapes = {};
-      for (var ki = 0; ki < keys.length; ki++) {
-        var id = keys[ki];
+      // A few at a time: much faster than one by one, gentle enough for
+      // an API that slows down when it gets many requests at once.
+      for (var ki = 0; ki < keys.length; ki += PARALLEL) {
         if (failures >= GIVE_UP_AFTER_FAILED_LOOKUPS && Object.keys(shapes).length === 1) {
-          ex.errors.push("Stopped asking for " + (keys.length - failures) + " more " + source +
+          ex.errors.push("Stopped asking for " + (keys.length - ki) + " more " + source +
             " id(s): the first " + failures + " failed the same way.");
           break;
         }
-        done += 1;
+        var batch = keys.slice(ki, ki + PARALLEL);
+        var answers = await Promise.all(batch.map(function (id) {
+          return call(DT_BASE + "/dset/" + id, "GET", null).then(
+            function (dset) { return {id: id, dset: dset, problem: dsetMismatch(dset, id, ids[id])}; },
+            function (e) {
+              if (e instanceof SessionProblem) throw e;
+              return {id: id, dset: null, problem: String(e && e.message || e)};
+            });
+        }));
+        answers.forEach(function (a) {
+          if (a.problem) {
+            failures += 1;
+            shapes[a.problem.split(a.id).join("{id}")] = true;
+            ex.errors.push("Decision set " + a.id + " (" + source + "): " + a.problem);
+            return;
+          }
+          Array.prototype.push.apply(ex.nodes, parseDset(a.dset, a.id));
+          ex.dsetsRead += 1;
+        });
+        done += batch.length;
         say("Reading decision sets " + done + " / " + ex.dsetsAsked + "…");
-        var problem = "", dset = null;
-        try {
-          dset = await call(DT_BASE + "/dset/" + id, "GET", null);
-          problem = dsetMismatch(dset, id, ids[id]);
-        } catch (e) {
-          if (e instanceof SessionProblem) throw e;
-          problem = String(e && e.message || e);
-        }
-        if (problem) {
-          failures += 1;
-          shapes[problem.split(id).join("{id}")] = true;
-          ex.errors.push("Decision set " + id + " (" + source + "): " + problem);
-          continue;
-        }
-        Array.prototype.push.apply(ex.nodes, parseDset(dset, id));
-        ex.dsetsRead += 1;
       }
     }
     ex.timings.push(["Decision sets (creatives)", now() - t0]);
@@ -197,13 +275,16 @@ var Walk = (function () {
 
   /* The sheets of the workbook, as arrays of rows (first row = headers). */
   function sheets(ex, extraTimings) {
-    var placements = ex.rows.filter(function (r) { return !r.isCreative; });
-    var creatives = ex.rows.filter(function (r) { return r.isCreative && !r.isDecisionSet; });
-    var dsRows = ex.rows.filter(function (r) { return r.isDecisionSet; });
+    var inScope = {};
+    (ex.scope || []).forEach(function (id) { inScope[id] = true; });
+    var rows = ex.scope ? ex.rows.filter(function (r) { return inScope[r.placementId]; }) : ex.rows;
+    var placements = rows.filter(function (r) { return !r.isCreative; });
+    var creatives = rows.filter(function (r) { return r.isCreative && !r.isDecisionSet; });
+    var dsRows = rows.filter(function (r) { return r.isDecisionSet; });
     var timings = (extraTimings || []).concat(ex.timings);
     var totalSecs = timings.reduce(function (a, t) { return a + t[1]; }, 0);
     var placementIds = {};
-    ex.rows.forEach(function (r) { placementIds[r.placementId] = true; });
+    rows.forEach(function (r) { placementIds[r.placementId] = true; });
 
     var dsOf = {};
     placements.concat(dsRows).forEach(function (r) {
@@ -223,8 +304,17 @@ var Walk = (function () {
       ["Creative rows", creatives.length],
       ["Decision sets read", ex.dsetsRead + " of " + ex.dsetsAsked],
       ["Creatives inside decision sets", ex.nodes.length],
-      ["Sites (Media Filters)", ex.mediaFilters.length],
-      ["", ""]];
+      ["Sites (Media Filters)", ex.mediaFilters.length]];
+    if (ex.filters) {
+      summary.push(["Filter · only these placements", ex.filters.placements.join(", ") || "(all)"],
+        ["Filter · only these decision sets", ex.filters.dsets.join(", ") || "(all)"]);
+      if (ex.filters.unmatched.length) {
+        summary.push(["Filter · not found in this campaign", ex.filters.unmatched.join(", ")]);
+      }
+    } else {
+      summary.push(["Filter", "None: the whole campaign"]);
+    }
+    summary.push(["", ""]);
     timings.forEach(function (t) { summary.push(["Time · " + t[0], t[1].toFixed(1) + " s"]); });
     summary.push(["Time · total", totalSecs.toFixed(1) + " s"], ["", ""]);
     if (ex.errors.length) ex.errors.forEach(function (e) { summary.push(["Could not read", e]); });
@@ -307,7 +397,7 @@ var Walk = (function () {
   return {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
-    campaignIds: campaignIds, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
+    campaignIds: campaignIds, tokens: tokens, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();
 

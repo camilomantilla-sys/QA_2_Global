@@ -25,11 +25,21 @@
       <label for="ids" class="eyebrow">Campaign ID(s)</label>
       <input id="ids" autocomplete="off" spellcheck="false">
       <p class="hint">Several at once: separate them with spaces. The Innovid tab moves through them.</p>
+      <details id="filters">
+        <summary>Only part of the campaign <span class="opt">optional</span></summary>
+        <label for="onlyPlacements" class="sub">Only these placements</label>
+        <textarea id="onlyPlacements" rows="3" spellcheck="false"
+          placeholder="Placement IDs or P codes, one per line (paste the TS column)"></textarea>
+        <label for="onlyDsets" class="sub">Only these decision sets</label>
+        <textarea id="onlyDsets" rows="2" spellcheck="false"
+          placeholder="Decision set IDs or names, one per line"></textarea>
+        <p class="hint">Empty: the whole campaign. Both filled: both are read.</p>
+      </details>
       <button id="go" class="primary"><span id="goText" class="label">Extract</span><span class="chip" id="goChip">→</span></button>
     </div>
 
     <div class="card stripe-lime" id="progressCard" hidden>
-      <div class="eyebrow">Progress</div>
+      <div class="eyebrow">Progress <span class="clock" id="clock"></span></div>
       <ul id="lines"></ul>
       <p class="problem" id="problem" hidden></p>
       <div class="actions" id="doneActions" hidden>

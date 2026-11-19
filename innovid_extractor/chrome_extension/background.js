@@ -10,15 +10,23 @@ importScripts("lib/xlsx.mini.min.js", "walk.js");
 
 const RUN = "run";
 
-async function setRun(patch) {
-  const cur = (await chrome.storage.session.get(RUN))[RUN] || {};
-  await chrome.storage.session.set({[RUN]: Object.assign({}, cur, patch)});
+// Progress updates run one after another: they read and rewrite the
+// same record, and two at once would lose one of them.
+let queue = Promise.resolve();
+function update(fn) {
+  queue = queue.then(async () => {
+    const cur = (await chrome.storage.session.get(RUN))[RUN] || {};
+    await chrome.storage.session.set({[RUN]: fn(cur)});
+  }).catch(() => {});
+  return queue;
 }
 
-async function setLine(id, icon, text) {
-  const cur = (await chrome.storage.session.get(RUN))[RUN] || {};
-  const lines = (cur.lines || []).map((l) => (l.id === id ? {id, icon, text} : l));
-  await chrome.storage.session.set({[RUN]: Object.assign({}, cur, {lines})});
+const setRun = (patch) => update((cur) => Object.assign({}, cur, patch));
+
+function setLine(id, icon, text, extra) {
+  return update((cur) => Object.assign({}, cur, {
+    lines: (cur.lines || []).map((l) => (l.id === id ? Object.assign({}, l, {icon, text}, extra || {}) : l))
+  }));
 }
 
 // Injected into the Innovid tab. Must be self-contained.
@@ -116,29 +124,30 @@ function fileName(campaignId) {
   return `Innovid_${campaignId}_Summary_DecisionSets_Extraction_${day}.xlsx`;
 }
 
-async function run(ids, tabId) {
-  await setRun({running: true, finished: false, problem: "", downloads: [],
+async function run(ids, tabId, opts) {
+  await setRun({running: true, finished: false, problem: "", downloads: [], startedAt: Date.now(), endedAt: 0,
     lines: ids.map((id) => ({id, icon: "wait", text: "Waiting"}))});
   const call = makeCall(tabId);
   const downloads = [];
   try {
     for (const id of ids) {
-      await setLine(id, "run", "Opening the campaign…");
+      const started = Date.now();
+      await setLine(id, "run", "Opening the campaign…", {startedAt: started});
       const t0 = performance.now();
       await openCampaign(tabId, id);
       const opened = [["Open the campaign", (performance.now() - t0) / 1000]];
-      const ex = await Walk.extract(id, call, (msg) => setLine(id, "run", msg));
+      const ex = await Walk.extract(id, call, (msg) => setLine(id, "run", msg), opts || {});
       const b64 = workbookBase64(ex, opened);
       const downloadId = await chrome.downloads.download({
         url: "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + b64,
         filename: fileName(id), conflictAction: "uniquify", saveAs: false
       });
       downloads.push(downloadId);
-      const secs = opened.concat(ex.timings).reduce((a, t) => a + t[1], 0);
-      const placements = new Set(ex.rows.map((r) => r.placementId)).size;
-      const summary = `${placements} placements · ${ex.dsetsRead} decision sets · ${secs.toFixed(0)} s`;
+      const placements = ex.scope ? ex.scope.length : new Set(ex.rows.map((r) => r.placementId)).size;
+      const summary = `${placements} placements · ${ex.dsetsRead} decision sets`;
       await setLine(id, ex.errors.length ? "warn" : "ok",
-        ex.errors.length ? `${summary} · ${ex.errors.length} not read (see Summary)` : summary);
+        ex.errors.length ? `${summary} · ${ex.errors.length} not read (see Summary)` : summary,
+        {secs: (Date.now() - started) / 1000});
       await setRun({downloads});
     }
   } catch (e) {
@@ -146,13 +155,13 @@ async function run(ids, tabId) {
     const cur = (await chrome.storage.session.get(RUN))[RUN] || {};
     for (const l of cur.lines || []) if (l.icon === "run") await setLine(l.id, "err", "Stopped");
   } finally {
-    await setRun({running: false, finished: true});
+    await setRun({running: false, finished: true, endedAt: Date.now()});
   }
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg && msg.type === "start") {
-    run(msg.ids, msg.tabId);
+    run(msg.ids, msg.tabId, msg.opts);
     reply({ok: true});
   }
   return false;
