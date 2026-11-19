@@ -70,6 +70,20 @@ Innovid que ya tienes abierta y descarga el mismo Excel (con
 3. El Excel queda en Descargas. Con varios IDs, la pestaña de Innovid
    pasa de uno a otro.
 
+**Qué trae el Excel de la extensión** (desde la 0.4.0):
+
+| Hoja | Contenido |
+|---|---|
+| Summary | Conteos, tiempos, lo que no se pudo leer y **qué columnas de los exports no vinieron en los datos de Innovid** |
+| Placement | Las mismas columnas y nombres del export `placement_v2`, en el mismo orden, y al final Verification_Partner, Verification_Status, Prisma_Placement_ID y el decision set |
+| Placement-Creative | Las mismas columnas del export `placement-creative_v2` (la línea del decision set incluida), y al final el decision set, Rotation_Weight y, desde el decision set, DS_Start_Date, DS_End_Date, DS_Weight y DS_Default |
+| Decision sets | Cada creativo dentro de cada decision set |
+| Media Filters | Remove VPAID por site |
+| Innovid fields | Todo campo que mandó Innovid, cuántas filas lo traen, un ejemplo y a qué columna fue. Sirve para completar las columnas que falten |
+
+Una columna del export que Innovid no manda en estos datos queda vacía y
+se nombra en Summary; no se inventa.
+
 **Qué leer:** "All" (todo el campaign), "Placements" (pegas la
 columna de Placement IDs o códigos P de la TS) o "Decision sets"
 (IDs o nombres). Es una u otra, no las dos. Solo se leen esos decision sets y el Excel trae

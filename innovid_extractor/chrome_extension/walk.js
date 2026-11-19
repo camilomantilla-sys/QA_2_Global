@@ -124,7 +124,10 @@ var Walk = (function () {
         verificationPartner: g("verificationPartner"), verificationStatus: g("verificationStatus"),
         rotationWeight: g("rotationWeight"),
         dtreeId: g("placementModernDtreeId") || g("modernDtreeId"), dtreeName: g("modernDtreeName"),
-        dsetId: g("decisionSetId"), dsetName: g("decisionSetName"), dsetLinkId: g("placementDecisionSetId")
+        dsetId: g("decisionSetId"), dsetName: g("decisionSetName"), dsetLinkId: g("placementDecisionSetId"),
+        // Everything Innovid sent for this row: the export-style sheets
+        // read their columns from it.
+        raw: it
       };
       row.isCreative = row.level.toUpperCase() === "PLACEMENT-CREATIVE";
       // Innovid lists a placement's decision set as one more line under
@@ -273,6 +276,123 @@ var Walk = (function () {
     return ex;
   }
 
+  /*
+   * The columns of Innovid's own exports (placement_v2 and
+   * placement-creative_v2), in their order and with their names, so the
+   * extension's file reads like the exports it replaces.
+   */
+  var PL_COLUMNS = [
+    "Site_ID", "Placement_ID", "Site", "Placement", "Dimensions", "Start_Date", "End_Date",
+    "Placement_Type", "Status", "Hidden", "Stopped", "Booked_Units", "Booked_Cost", "Media_Cost_Type",
+    "Media_Cost_Rate", "Cost_Cap_Period", "Package_ID", "Package_Name", "Flashtalking_Cost_Type",
+    "Flashtalking_Cost", "Third_Party_ID", "Content_Category", "Strategy"
+  ].concat(numbered("Clicktag_", 20), numbered("Third_Party_Impression_", 10), [
+    "Third_Party_Survey", "Third_Party_Survey_2", "Third_Party_Survey_3", "Ad_Gap_ID",
+    "Placement_Target", "Delivered_Impressions", "Percent_Delivered", "Event_Tag_Count",
+    "Custom_Data_1", "Custom_Data_2", "Custom_Data_3"
+  ]);
+  var PC_COLUMNS = [
+    "Enabled", "Site_ID", "Placement_ID", "Creative_ID", "Site", "Placement", "Dimensions",
+    "Legacy_Decision_Tree", "Decision_Tree_Name", "Decision_Tree_ID", "Filename", "Placement_Type",
+    "Placement_Creative_ID", "Start_Date", "End_Date", "Third_Party_ID", "Creative_Name", "ClickTags", "Rotation"
+  ].concat(numbered("Clicktag_", 20), numbered("Third_Party_Impression_", 10), [
+    "Third_Party_Survey", "Third_Party_Survey_2", "Third_Party_Survey_3", "Creative_Group_1",
+    "Creative_Group_2", "Status", "Stopped", "Ad_Type", "Creative_Type", "Expand_Dimensions",
+    "Backup_Image_ID", "Backup_Image_Name", "Base_File_Size (KB)", "Total_File_Size (KB)", "Video",
+    "Rich", "Instant", "Linked", "Event_Tag_Count", "Custom_Data_1", "Custom_Data_2", "Custom_Data_3"
+  ]);
+
+  function numbered(prefix, n) {
+    var out = [];
+    for (var i = 1; i <= n; i++) out.push(prefix + i);
+    return out;
+  }
+
+  /*
+   * Where a column's name and Innovid's field name differ by more than
+   * case and underscores. Everything else is found by the column's own
+   * name (Clicktag_1 -> clickTag1, Site_ID -> siteId, Hidden -> isHidden).
+   */
+  var FIELD_ALIASES = {
+    "Site": ["siteName"],
+    "Placement": ["placementName"],
+    "Third_Party_Survey": ["thirdPartySurvey1", "thirdPartySurvey"],
+    "Creative_Name": ["creativeName", "creativeDescription"],
+    "ClickTags": ["clickTags", "clickTagCount", "clickTagsCount"],
+    "Rotation": ["rotation", "rotationType", "rotationMethod"],
+    "Legacy_Decision_Tree": ["legacyDecisionTree", "isLegacyDecisionTree", "isLegacyDtree", "legacyDtree"],
+    "Decision_Tree_Name": ["decisionTreeName", "legacyDtreeName", "dtreeName"],
+    "Decision_Tree_ID": ["decisionTreeId", "legacyDtreeId", "dtreeId"],
+    "Base_File_Size (KB)": ["baseFileSize", "baseFileSizeKb"],
+    "Total_File_Size (KB)": ["totalFileSize", "totalFileSizeKb"]
+  };
+
+  function squash(name) { return String(name).replace(/[^A-Za-z0-9]/g, "").toLowerCase(); }
+
+  function candidates(column) {
+    var base = squash(column.replace(/\s*\(.*?\)\s*/g, ""));
+    return (FIELD_ALIASES[column] || []).map(squash).concat([base, "is" + base]);
+  }
+
+  /* A value as the export writes it: Yes/No for flags, lists joined. */
+  function cell(v) {
+    if (v === null || v === undefined) return "";
+    if (v === true) return "Yes";
+    if (v === false) return "No";
+    if (Array.isArray(v)) return v.map(cell).filter(function (x) { return x !== ""; }).join(", ");
+    if (typeof v === "object") return cell(v.name !== undefined ? v.name : v.value !== undefined ? v.value : v.id);
+    return String(v).trim();
+  }
+
+  /*
+   * Fills the export columns of one sheet from the rows' raw fields.
+   * Returns the rows plus, per column, which Innovid field it came from
+   * ("" when no row carried any field by that name).
+   */
+  function exportColumns(rows, columns) {
+    var source = {};
+    columns.forEach(function (c) { source[c] = ""; });
+    var out = rows.map(function (r) {
+      var index = {};
+      Object.keys(r.raw || {}).forEach(function (k) { index[k.toLowerCase()] = k; });
+      return columns.map(function (c) {
+        var cands = candidates(c);
+        for (var i = 0; i < cands.length; i++) {
+          var key = index[cands[i]];
+          if (key !== undefined) {
+            if (!source[c]) source[c] = key;
+            return cell(r.raw[key]);
+          }
+        }
+        return "";
+      });
+    });
+    return {rows: out, source: source};
+  }
+
+  /* Every field Innovid sent, how often it had a value, and where it went. */
+  function fieldsSheet(rows, usedBy) {
+    var info = {};
+    rows.forEach(function (r) {
+      var lvl = r.isCreative ? "Placement-Creative" : "Placement";
+      Object.keys(r.raw || {}).forEach(function (k) {
+        var f = info[k] = info[k] || {levels: {}, filled: 0, example: ""};
+        f.levels[lvl] = true;
+        var v = cell(r.raw[k]);
+        if (v !== "") {
+          f.filled += 1;
+          if (!f.example) f.example = v.length > 120 ? v.slice(0, 117) + "…" : v;
+        }
+      });
+    });
+    var out = [["Innovid field", "Levels", "Rows with a value", "Example", "Used for column"]];
+    Object.keys(info).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; }).forEach(function (k) {
+      var f = info[k];
+      out.push([k, Object.keys(f.levels).join(", "), f.filled, f.example, (usedBy[k] || []).join(", ")]);
+    });
+    return out;
+  }
+
   /* The sheets of the workbook, as arrays of rows (first row = headers). */
   function sheets(ex, extraTimings) {
     var inScope = {};
@@ -320,18 +440,36 @@ var Walk = (function () {
     if (ex.errors.length) ex.errors.forEach(function (e) { summary.push(["Could not read", e]); });
     else summary.push(["Could not read", "Nothing: everything was read."]);
 
-    var pl = [["Placement ID", "Placement", "Site", "Size", "Status", "Start", "End",
-      "Verification Partner", "Verification Status", "Decision set", "Decision set ID"]];
-    placements.forEach(function (r) {
-      var d = dsOf[r.placementId];
-      pl.push([r.placementId, r.placementName, r.site, r.dimensions, r.status, r.start, r.end,
-        r.verificationPartner, r.verificationStatus,
-        d ? (d.dtreeName || d.dsetName || d.fileName) : "", d ? (d.dtreeId || d.dsetId || d.dsetLinkId) : ""]);
+    var dsCols = function (d) {
+      return d ? [d.dtreeId || d.dsetId || d.dsetLinkId, d.dtreeName || d.dsetName || d.fileName] : ["", ""];
+    };
+
+    // Placement level: Innovid's placement export, then what no export has.
+    var plx = exportColumns(placements, PL_COLUMNS);
+    var pl = [PL_COLUMNS.concat(["Verification_Partner", "Verification_Status", "Prisma_Placement_ID",
+      "Decision_Set_ID", "Decision_Set_Name"])];
+    placements.forEach(function (r, i) {
+      pl.push(plx.rows[i].concat([r.verificationPartner, r.verificationStatus,
+        cell((r.raw || {}).prismaPlacementId)], dsCols(dsOf[r.placementId])));
     });
 
-    var cr = [["Placement ID", "Placement", "Creative ID", "File name", "Status", "Click URL",
-      "Impression pixel 1", "Impression pixel 2", "Survey pixel", "DS start", "DS end", "DS weight", "Default"]];
-    creatives.forEach(function (r) {
+    // Placement-creative level: every line the export has, the decision
+    // set's own line included, then the creative's flight inside it.
+    var pcRows = rows.filter(function (r) { return r.isCreative; });
+    var pcx = exportColumns(pcRows, PC_COLUMNS);
+    var col = function (name) { return PC_COLUMNS.indexOf(name); };
+    var cr = [PC_COLUMNS.concat(["Decision_Set_ID", "Decision_Set_Name", "Rotation_Weight",
+      "DS_Start_Date", "DS_End_Date", "DS_Weight", "DS_Default"])];
+    pcRows.forEach(function (r, i) {
+      var line = pcx.rows[i], parent = parentOf[r.placementId];
+      if (parent) {
+        if (!line[col("Placement")]) line[col("Placement")] = parent.placementName;
+        if (!line[col("Site")]) line[col("Site")] = parent.site;
+      }
+      if (r.isDecisionSet) {
+        cr.push(line.concat(dsCols(r), [r.rotationWeight, "", "", "", ""]));
+        return;
+      }
       var holder = dsOf[r.placementId] || {};
       var keys = (r.dtreeId || r.dsetId) ? [r.dtreeId, r.dsetId, r.dsetLinkId]
         : [holder.dtreeId, holder.dsetId, holder.dsetLinkId];
@@ -348,13 +486,26 @@ var Walk = (function () {
       var join = function (attr) {
         return flights.map(function (n) { return n[attr] || (attr === "end" ? "Ongoing" : ""); }).join(" | ");
       };
-      var parent = parentOf[r.placementId];
-      cr.push([r.placementId, r.placementName || (parent ? parent.placementName : ""), r.creativeId, r.fileName,
-        r.status, r.clickUrl, r.impressionPixel1, r.impressionPixel2, r.surveyPixel,
+      cr.push(line.concat(dsCols(r.dtreeId || r.dsetId ? r : dsOf[r.placementId]), [r.rotationWeight,
         join("start"), join("end"), join("weight"),
-        nodes.some(function (n) { return n.isDefault; }) ? "Yes" : (nodes.length ? "" : "Not found in its decision set")]);
+        nodes.some(function (n) { return n.isDefault; }) ? "Yes" : (nodes.length ? "" : "Not found in its decision set")]));
     });
 
+    // Which export columns Innovid's data filled, and which it doesn't carry.
+    var usedBy = {};
+    summary.push(["", ""]);
+    [["Placement", plx.source], ["Placement-Creative", pcx.source]].forEach(function (s) {
+      var missing = [], found = 0;
+      Object.keys(s[1]).forEach(function (c) {
+        var k = s[1][c];
+        if (!k) { missing.push(c); return; }
+        found += 1;
+        (usedBy[k] = usedBy[k] || []).push(s[0] + " · " + c);
+      });
+      summary.push(["Export columns · " + s[0], found + " of " + (found + missing.length) + " found in Innovid's data"]);
+      if (missing.length) summary.push(["Not in Innovid's data · " + s[0], missing.join(", ")]);
+    });
+    var fields = fieldsSheet(rows, usedBy);
     var ds = [["Decision set ID", "Decision set", "Serving method", "Creative ID", "Creative",
       "Start", "End", "Weight", "Default"]];
     ex.nodes.forEach(function (n) {
@@ -363,7 +514,8 @@ var Walk = (function () {
     });
 
     var mf = [["Site ID", "Site", "Media Filters (Remove VPAID)"]].concat(ex.mediaFilters);
-    return [["Summary", summary], ["Placements", pl], ["Creatives", cr], ["Decision sets", ds], ["Media Filters", mf]];
+    return [["Summary", summary], ["Placement", pl], ["Placement-Creative", cr], ["Decision sets", ds],
+      ["Media Filters", mf], ["Innovid fields", fields]];
   }
 
   /*
@@ -397,6 +549,7 @@ var Walk = (function () {
   return {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
+    PL_COLUMNS: PL_COLUMNS, PC_COLUMNS: PC_COLUMNS,
     campaignIds: campaignIds, tokens: tokens, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();

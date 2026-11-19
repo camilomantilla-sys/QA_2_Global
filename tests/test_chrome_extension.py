@@ -50,10 +50,13 @@ const out = {};
   // A real campaign's shape: the decision set as a line under the
   // placement, and the default creative also rotating.
   const summary = {totalPages: 1, items: [
-    {level: "PLACEMENT", placementId: "9001", placementName: "P1", status: "Live"},
+    {level: "PLACEMENT", placementId: "9001", placementName: "P1", status: "Live", siteId: 77,
+     siteName: "Site A", isHidden: false, clickTag1: "https://lp.example/a", packageName: null,
+     verificationPartner: "DV"},
     {level: "PLACEMENT-CREATIVE", placementId: "9001", fileName: "Display 160x600",
      placementModernDtreeId: "43580", modernDtreeName: "Display 160x600"},
-    {level: "PLACEMENT-CREATIVE", placementId: "9001", creativeId: "1", fileName: "v1.jpg"}]};
+    {level: "PLACEMENT-CREATIVE", placementId: "9001", creativeId: "1", fileName: "v1.jpg",
+     clickTag1: "https://lp.example/v1", thirdPartyImpression2: "https://px.example/2"}]};
   const dset = {id: "43580", name: "Display 160x600", servingMethod: "Rotation",
     defaultServing: {id: "1", name: "v1.jpg"}, nodes: [
       {serving: {id: "1", name: "v1.jpg"}, startTimestamp: "2026-11-16 00:00:00",
@@ -63,8 +66,12 @@ const out = {};
     : url.includes("/dset/") ? dset : {items: []};
   const ex = await Walk.extract("337000", call, () => {});
   const sheets = Object.fromEntries(Walk.sheets(ex, []));
-  out.placements = sheets.Placements;
-  out.creatives = sheets.Creatives;
+  out.placements = sheets.Placement;
+  out.creatives = sheets["Placement-Creative"];
+  out.fields = sheets["Innovid fields"];
+  out.summary = sheets.Summary;
+  out.plColumns = Walk.PL_COLUMNS;
+  out.pcColumns = Walk.PC_COLUMNS;
 
   // Three identical failures and it stops asking.
   let asked = 0;
@@ -112,7 +119,7 @@ const out = {};
   out.byPlacement = asked3.slice().sort();
   out.byPlacementScope = f1.scope.sort();
   out.unmatched = f1.filters.unmatched;
-  out.byPlacementSheet = Object.fromEntries(Walk.sheets(f1, [])).Placements.length - 1;
+  out.byPlacementSheet = Object.fromEntries(Walk.sheets(f1, [])).Placement.length - 1;
 
   asked3.length = 0;
   await Walk.extract("1", bigCall, () => {}, {dsets: "ds 7, 711"});
@@ -150,14 +157,60 @@ def walk():
 def test_the_decision_set_line_fills_its_placement(walk):
     head, row = walk["placements"][0], walk["placements"][1]
     p = dict(zip(head, row))
-    assert (p["Decision set"], p["Decision set ID"]) == ("Display 160x600", "43580")
+    assert (p["Decision_Set_Name"], p["Decision_Set_ID"]) == ("Display 160x600", "43580")
+    assert p["Verification_Partner"] == "DV"
 
 
 def test_the_default_timestamp_is_not_a_flight(walk):
-    assert len(walk["creatives"]) == 2
-    c = dict(zip(walk["creatives"][0], walk["creatives"][1]))
-    assert (c["DS start"], c["DS end"], c["DS weight"], c["Default"]) == (
+    # The decision set's own line, then the creative, as in the export.
+    assert len(walk["creatives"]) == 3
+    c = dict(zip(walk["creatives"][0], walk["creatives"][2]))
+    assert (c["DS_Start_Date"], c["DS_End_Date"], c["DS_Weight"], c["DS_Default"]) == (
         "2026-11-16 00:00:00", "2026-12-05 23:59:00", "1", "Yes")
+
+
+# Innovid's own export headers, in order (placement_v2 and
+# placement-creative_v2): the extension's sheets start with exactly these.
+EXPORT_PL_START = ["Site_ID", "Placement_ID", "Site", "Placement", "Dimensions", "Start_Date",
+                   "End_Date", "Placement_Type", "Status", "Hidden", "Stopped", "Booked_Units"]
+EXPORT_PC_START = ["Enabled", "Site_ID", "Placement_ID", "Creative_ID", "Site", "Placement",
+                   "Dimensions", "Legacy_Decision_Tree", "Decision_Tree_Name", "Decision_Tree_ID",
+                   "Filename", "Placement_Type", "Placement_Creative_ID", "Start_Date", "End_Date"]
+
+
+def test_sheets_keep_the_export_column_names(walk):
+    assert len(walk["plColumns"]) == 64 and len(walk["pcColumns"]) == 71
+    assert walk["plColumns"][:12] == EXPORT_PL_START
+    assert walk["pcColumns"][:15] == EXPORT_PC_START
+    assert walk["placements"][0][:64] == walk["plColumns"]
+    assert walk["creatives"][0][:71] == walk["pcColumns"]
+
+
+def test_export_columns_come_from_innovid_fields(walk):
+    p = dict(zip(walk["placements"][0], walk["placements"][1]))
+    assert (p["Site_ID"], p["Site"], p["Hidden"], p["Clicktag_1"]) == (
+        "77", "Site A", "No", "https://lp.example/a")
+    c = dict(zip(walk["creatives"][0], walk["creatives"][2]))
+    assert (c["Creative_ID"], c["Filename"], c["Clicktag_1"], c["Third_Party_Impression_2"]) == (
+        "1", "v1.jpg", "https://lp.example/v1", "https://px.example/2")
+    # The creative row doesn't repeat its placement's name: taken from it.
+    assert (c["Placement"], c["Site"]) == ("P1", "Site A")
+
+
+def test_summary_says_which_export_columns_innovid_did_not_send(walk):
+    s = dict((r[0], r[1]) for r in walk["summary"])
+    assert s["Export columns · Placement"].endswith("of 64 found in Innovid's data")
+    assert "Booked_Cost" in s["Not in Innovid's data · Placement"]
+    assert "Site_ID" not in s["Not in Innovid's data · Placement"]
+    # Sent but empty still counts as found: the export would be empty too.
+    assert "Package_Name" not in s["Not in Innovid's data · Placement"]
+
+
+def test_every_innovid_field_is_listed(walk):
+    f = {r[0]: r for r in walk["fields"][1:]}
+    assert f["siteId"][4] == "Placement · Site_ID"
+    assert f["verificationPartner"][2] == 1
+    assert f["packageName"][2] == 0
 
 
 def test_stops_once_a_batch_fails_identically(walk):
