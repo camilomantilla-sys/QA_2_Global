@@ -608,6 +608,16 @@ class Browser:
 
 # ------------------------------------------------------------------ console
 
+def output_path(campaign_id: str, when: datetime | None = None) -> Path:
+    """Innovid_<campaign>_Summary_DecisionSets_Extraction_<YYYY-MM-DD>.xlsx, never overwriting."""
+    day = (when or datetime.now()).strftime("%Y-%m-%d")
+    base = f"Innovid_{campaign_id}_Summary_DecisionSets_Extraction_{day}"
+    path, n = OUTPUT_DIR / f"{base}.xlsx", 1
+    while path.exists():
+        path, n = OUTPUT_DIR / f"{base} ({n}).xlsx", n + 1
+    return path
+
+
 def campaign_ids(text: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r"\d{3,}", text or "")))
 
@@ -651,8 +661,7 @@ def run(ids: list[str]) -> list[Path]:
                     sign_in()
                     browser = Browser()
                     t0 = time.monotonic()
-            stamp = datetime.now().strftime("%Y%m%d_%H%M")
-            path = write_workbook(ex, OUTPUT_DIR / f"Innovid_{cid}_{stamp}.xlsx", extra + opened)
+            path = write_workbook(ex, output_path(cid), extra + opened)
             extra = []  # the one-off steps count once, on the first campaign
             total = sum(s for _, s in opened + ex.timings)
             print(f"   done in {total:.0f} s -> {path.name}"

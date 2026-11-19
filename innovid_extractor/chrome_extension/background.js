@@ -107,9 +107,11 @@ function workbookBase64(ex, extra) {
   return XLSX.write(wb, {type: "base64", bookType: "xlsx"});
 }
 
-function stamp() {
+// Innovid_<campaign>_Summary_DecisionSets_Extraction_<YYYY-MM-DD>.xlsx
+function fileName(campaignId) {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  const day = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `Innovid_${campaignId}_Summary_DecisionSets_Extraction_${day}.xlsx`;
 }
 
 async function run(ids, tabId) {
@@ -127,7 +129,7 @@ async function run(ids, tabId) {
       const b64 = workbookBase64(ex, opened);
       const downloadId = await chrome.downloads.download({
         url: "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + b64,
-        filename: `Innovid_${id}_${stamp()}.xlsx`, conflictAction: "uniquify", saveAs: false
+        filename: fileName(id), conflictAction: "uniquify", saveAs: false
       });
       downloads.push(downloadId);
       const secs = opened.concat(ex.timings).reduce((a, t) => a + t[1], 0);

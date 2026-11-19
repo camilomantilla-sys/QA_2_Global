@@ -227,3 +227,14 @@ def test_the_decision_set_line_under_a_placement_is_not_a_creative(ext, tmp_path
     v1 = dict(zip(cr[0], cr[1]))
     assert (v1["DS start"], v1["DS end"], v1["DS weight"], v1["Default"]) == (
         "2026-11-16 00:00:00", "2026-12-05 23:59:00", "1", "Yes")
+
+
+def test_the_file_is_named_after_the_campaign_and_the_day(ext, tmp_path, monkeypatch):
+    from datetime import datetime
+
+    monkeypatch.setattr(ext, "OUTPUT_DIR", tmp_path)
+    first = ext.output_path("337552", datetime(2026, 11, 19, 9, 31))
+    assert first.name == "Innovid_337552_Summary_DecisionSets_Extraction_2026-11-19.xlsx"
+    first.write_bytes(b"x")
+    assert ext.output_path("337552", datetime(2026, 11, 19)).name == (
+        "Innovid_337552_Summary_DecisionSets_Extraction_2026-11-19 (1).xlsx")
