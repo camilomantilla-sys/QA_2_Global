@@ -3,11 +3,11 @@ const $ = (id) => document.getElementById(id);
 const ICON = {ok: "✓", warn: "!", run: "⟳", wait: "○", err: "✕"};
 let innovidTab = null;
 
+// Only the tab the popup was opened from: with activeTab, Chrome lets the
+// extension into that tab alone, and only after this click.
 async function findInnovidTab() {
   const [active] = await chrome.tabs.query({active: true, currentWindow: true});
-  if (active && active.url && active.url.indexOf(Walk.APP_ORIGIN) === 0) return active;
-  const tabs = await chrome.tabs.query({url: Walk.APP_ORIGIN + "/*"});
-  return tabs.find((t) => Walk.campaignFromUrl(t.url)) || tabs[0] || null;
+  return active && active.url && active.url.indexOf(Walk.APP_ORIGIN) === 0 ? active : null;
 }
 
 function showTab() {
@@ -15,8 +15,8 @@ function showTab() {
   const campaign = innovidTab ? Walk.campaignFromUrl(innovidTab.url) : "";
   if (!innovidTab) {
     card.classList.add("warn");
-    $("tabTitle").textContent = "Open Innovid in a tab";
-    $("tabHint").textContent = "Sign in to the campaign manager as usual and open a campaign. Then come back here.";
+    $("tabTitle").textContent = "Open this from the Innovid tab";
+    $("tabHint").textContent = "Go to the campaign in Innovid (signed in as usual) and click this icon there.";
   } else {
     card.classList.remove("warn");
     $("tabTitle").textContent = campaign ? `Innovid open · campaign ${campaign}` : "Innovid open";
@@ -48,11 +48,25 @@ function render(run) {
   $("doneActions").hidden = !(run.finished && (run.downloads || []).length);
 }
 
-$("go").addEventListener("click", async () => {
+$("go").addEventListener("click", () => {
   const ids = Walk.campaignIds($("ids").value);
   if (!ids.length || !innovidTab) return;
-  await chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id});
+  const here = Walk.campaignFromUrl(innovidTab.url);
+  const start = () => chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id});
+  if (ids.length === 1 && ids[0] === here) { start(); return; }
+  // Moving the tab to other campaigns needs Innovid's site permission,
+  // asked for here and only now (it must be asked in the click itself).
+  chrome.permissions.request({origins: [Walk.APP_ORIGIN + "/*"]}).then((ok) => {
+    if (ok) start();
+    else showProblem("Without that permission, extract one campaign at a time from its own tab.");
+  });
 });
+
+function showProblem(text) {
+  $("progressCard").hidden = false;
+  $("problem").hidden = false;
+  $("problem").textContent = text;
+}
 
 $("openFolder").addEventListener("click", async () => {
   const run = (await chrome.storage.session.get("run")).run || {};

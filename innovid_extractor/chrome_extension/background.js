@@ -68,7 +68,7 @@ async function openCampaign(tabId, campaignId) {
     await waitForLoad(tabId, 60000);
   }
   const now = await chrome.tabs.get(tabId);
-  if (!now.url || now.url.indexOf(Walk.APP_ORIGIN) !== 0) {
+  if (now.url && now.url.indexOf(Walk.APP_ORIGIN) !== 0) {
     throw new Walk.SessionProblem("Innovid asked to sign in. Sign in in that tab, then press Extract again.");
   }
   // The page writes its security token as it loads.
@@ -77,6 +77,8 @@ async function openCampaign(tabId, campaignId) {
 
 function makeCall(tabId) {
   return async function call(url, method, body, retried) {
+    // Read-only by construction: nothing outside the list leaves the browser.
+    if (!Walk.isAllowedCall(method, url)) throw new Error(`Refused: ${method} ${url} is not a read this extension makes`);
     const out = await inTab(tabId, pageFetch, [url, method, body === undefined ? null : body]);
     const status = out && out.status;
     if (status === 401) throw new Walk.SessionProblem("Innovid didn't recognise the session. Sign in in that tab and try again.");

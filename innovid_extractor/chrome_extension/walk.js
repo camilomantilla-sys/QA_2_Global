@@ -276,6 +276,22 @@ var Walk = (function () {
     return [["Summary", summary], ["Placements", pl], ["Creatives", cr], ["Decision sets", ds], ["Media Filters", mf]];
   }
 
+  /*
+   * The only requests the extension may make: three reads and the
+   * summary, which Innovid serves as a POST but only reads. Anything
+   * else is refused before it leaves the browser.
+   */
+  var ALLOWED = [
+    ["POST", /^https:\/\/api\.flashtalking\.net\/cm\/v1\/ui\/campaigns\/\d+\/summary\?fields=[\w,]+$/],
+    ["GET", /^https:\/\/api\.flashtalking\.net\/dt\/v1\/ui\/dset\/\d+$/],
+    ["GET", /^https:\/\/api\.flashtalking\.net\/cm\/v1\/campaigns\/\d+\/campaign-sites\?rpp=543$/],
+    ["GET", /^https:\/\/api\.flashtalking\.net\/tag\/v1\/ui\/campaign-sites\/\d+$/]
+  ];
+
+  function isAllowedCall(method, url) {
+    return ALLOWED.some(function (a) { return a[0] === method && a[1].test(url); });
+  }
+
   function campaignIds(textIn) {
     var out = [];
     (String(textIn || "").match(/\d{3,}/g) || []).forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
@@ -291,7 +307,7 @@ var Walk = (function () {
   return {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
-    campaignIds: campaignIds, campaignFromUrl: campaignFromUrl, SessionProblem: SessionProblem
+    campaignIds: campaignIds, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();
 

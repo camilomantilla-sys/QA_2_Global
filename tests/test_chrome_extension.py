@@ -18,16 +18,20 @@ import pytest
 EXT = Path(__file__).resolve().parents[1] / "innovid_extractor" / "chrome_extension"
 
 
-def test_the_manifest_reaches_only_innovid():
+def test_the_manifest_asks_for_no_site_at_install():
+    """
+    Chrome words every site permission as "read and change your data".
+    So none is asked at install: activeTab lets the extension into the
+    Innovid tab only when the icon is clicked there, and Innovid's own
+    site is asked for only to move through several campaigns.
+    """
     manifest = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["manifest_version"] == 3
-    assert manifest["host_permissions"] == [
-        "https://campaign-manager.flashtalking.net/*",
-        "https://api.flashtalking.net/*",
-    ]
-    # No content scripts on every site, no remote code.
+    assert "host_permissions" not in manifest
+    assert manifest["optional_host_permissions"] == ["https://campaign-manager.flashtalking.net/*"]
     assert "content_scripts" not in manifest
-    assert set(manifest["permissions"]) <= {"scripting", "downloads", "storage", "tabs"}
+    # No "tabs" either: that one reads as "read your browsing history".
+    assert set(manifest["permissions"]) == {"activeTab", "scripting", "downloads", "storage"}
 
 
 def test_everything_the_extension_loads_is_inside_it():
@@ -77,6 +81,20 @@ const out = {};
   out.fromUrl = [Walk.campaignFromUrl("https://campaign-manager.flashtalking.net/337552/summary/"),
                  Walk.campaignFromUrl("https://example.org/337552/")];
   out.ids = Walk.campaignIds("337552, 330328 337552");
+  const api = "https://api.flashtalking.net";
+  out.allowed = [
+    Walk.isAllowedCall("POST", api + "/cm/v1/ui/campaigns/337552/summary?fields=status,placementId"),
+    Walk.isAllowedCall("GET", api + "/dt/v1/ui/dset/43580"),
+    Walk.isAllowedCall("GET", api + "/cm/v1/campaigns/337552/campaign-sites?rpp=543"),
+    Walk.isAllowedCall("GET", api + "/tag/v1/ui/campaign-sites/1"),
+  ];
+  out.refused = [
+    Walk.isAllowedCall("PUT", api + "/dt/v1/ui/dset/43580"),
+    Walk.isAllowedCall("POST", api + "/dt/v1/ui/dset/43580"),
+    Walk.isAllowedCall("DELETE", api + "/tag/v1/ui/campaign-sites/1"),
+    Walk.isAllowedCall("POST", api + "/cm/v1/ui/campaigns/337552/placements"),
+    Walk.isAllowedCall("GET", "https://example.org/dt/v1/ui/dset/1"),
+  ];
   console.log(JSON.stringify(out));
 })();
 """
@@ -114,3 +132,8 @@ def test_stops_after_three_identical_failures(walk):
 def test_reads_the_campaign_from_the_innovid_tab_only(walk):
     assert walk["fromUrl"] == ["337552", ""]
     assert walk["ids"] == ["337552", "330328"]
+
+
+def test_only_reads_leave_the_browser(walk):
+    assert walk["allowed"] == [True, True, True, True]
+    assert walk["refused"] == [False, False, False, False, False]

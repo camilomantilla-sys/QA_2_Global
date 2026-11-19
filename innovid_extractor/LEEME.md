@@ -74,6 +74,12 @@ Se puede cerrar la ventanita mientras trabaja: el avance sigue y se ve al
 abrirla otra vez. Tras un `git pull`, en `chrome://extensions` dale al
 botón de recargar de la extensión.
 
-Solo pide permiso para `campaign-manager.flashtalking.net` y
-`api.flashtalking.net`. La librería de Excel (SheetJS, licencia Apache 2.0)
+**Permisos:** al instalarla no pide ningún sitio. Entra a la pestaña de
+Innovid solo cuando das clic en el ícono estando ahí (permiso "activeTab").
+Si pones varios Campaign ID, Chrome pregunta una vez por
+`campaign-manager.flashtalking.net` para poder mover la pestaña de un
+campaign a otro. Chrome escribe cualquier permiso de sitio como "leer y
+cambiar", pero la extensión solo deja salir cuatro lecturas (el summary,
+los decision sets y los sites); cualquier otra petición se rechaza antes de
+salir del navegador. La librería de Excel (SheetJS, licencia Apache 2.0)
 va dentro de la carpeta: no se descarga nada de internet.
