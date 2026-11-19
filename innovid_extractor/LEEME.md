@@ -81,7 +81,10 @@ Innovid que ya tienes abierta y descarga el mismo Excel (con
 | Media Filters | Remove VPAID por site |
 | Innovid fields | Todo campo que mandó Innovid, cuántas filas lo traen, un ejemplo y a qué columna fue. Sirve para completar las columnas que falten |
 
-Una columna del export que Innovid no manda en estos datos queda vacía y
+Los valores van escritos como en el export: el site y el archivo con su ID
+entre paréntesis, costos con sus decimales, tamaños en KB, Stopped y
+Rotation como los calcula el export. Una columna del export que Innovid
+no manda en estos datos queda vacía y
 se nombra en Summary; no se inventa.
 
 **Qué leer:** "All" (todo el campaign), "Placements" (pegas la

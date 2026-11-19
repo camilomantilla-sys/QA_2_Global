@@ -318,13 +318,32 @@ var Walk = (function () {
     "Placement": ["placementName"],
     "Third_Party_Survey": ["thirdPartySurvey1", "thirdPartySurvey"],
     "Creative_Name": ["creativeName", "creativeDescription"],
-    "ClickTags": ["clickTags", "clickTagCount", "clickTagsCount"],
-    "Rotation": ["rotation", "rotationType", "rotationMethod"],
+    "ClickTags": ["numClickTags", "clickTags", "clickTagCount"],
+    "Media_Cost_Type": ["costTypeMedia"],
+    "Media_Cost_Rate": ["costRateMedia"],
+    "Flashtalking_Cost_Type": ["costTypeFt"],
+    "Flashtalking_Cost": ["costRateFt"],
+    "Delivered_Impressions": ["impressionsDelivered"],
     "Legacy_Decision_Tree": ["legacyDecisionTree", "isLegacyDecisionTree", "isLegacyDtree", "legacyDtree"],
     "Decision_Tree_Name": ["decisionTreeName", "legacyDtreeName", "dtreeName"],
     "Decision_Tree_ID": ["decisionTreeId", "legacyDtreeId", "dtreeId"],
     "Base_File_Size (KB)": ["baseFileSize", "baseFileSizeKb"],
     "Total_File_Size (KB)": ["totalFileSize", "totalFileSizeKb"]
+  };
+
+  /* Columns Innovid doesn't send but the export works out the same way. */
+  var DERIVED = {"Stopped": true, "Rotation": true};
+
+  /* How the export writes some numbers (checked against campaign 330328). */
+  function decimals(d) {
+    return function (v) { var n = Number(v); return v !== "" && isFinite(n) ? n.toFixed(d) : v; };
+  }
+  var FORMATS = {
+    "Booked_Cost": decimals(2), "Media_Cost_Rate": decimals(4), "Flashtalking_Cost": decimals(4),
+    "Percent_Delivered": decimals(2),
+    // Innovid sends bytes; the export writes KB with two decimals.
+    "Base_File_Size (KB)": function (v) { var n = Number(v); return isFinite(n) ? (n / 1024).toFixed(2) : v; },
+    "Total_File_Size (KB)": function (v) { var n = Number(v); return isFinite(n) ? (n / 1024).toFixed(2) : v; }
   };
 
   function squash(name) { return String(name).replace(/[^A-Za-z0-9]/g, "").toLowerCase(); }
@@ -361,7 +380,8 @@ var Walk = (function () {
           var key = index[cands[i]];
           if (key !== undefined) {
             if (!source[c]) source[c] = key;
-            return cell(r.raw[key]);
+            var v = cell(r.raw[key]);
+            return v !== "" && FORMATS[c] ? FORMATS[c](v) : v;
           }
         }
         return "";
@@ -448,8 +468,16 @@ var Walk = (function () {
     var plx = exportColumns(placements, PL_COLUMNS);
     var pl = [PL_COLUMNS.concat(["Verification_Partner", "Verification_Status", "Prisma_Placement_ID",
       "Decision_Set_ID", "Decision_Set_Name"])];
+    var plCol = function (name) { return PL_COLUMNS.indexOf(name); };
+    var stoppedOf = {};
     placements.forEach(function (r, i) {
-      pl.push(plx.rows[i].concat([r.verificationPartner, r.verificationStatus,
+      var line = plx.rows[i];
+      // The export's own conventions, checked against campaign 330328:
+      // the site carries its id, and Stopped is Yes when the status is.
+      if (r.site && line[plCol("Site_ID")]) line[plCol("Site")] = r.site + " (" + line[plCol("Site_ID")] + ")";
+      if (!plx.source.Stopped) line[plCol("Stopped")] = /^stopped$/i.test(r.status) ? "Yes" : "No";
+      stoppedOf[r.placementId] = line[plCol("Stopped")];
+      pl.push(line.concat([r.verificationPartner, r.verificationStatus,
         cell((r.raw || {}).prismaPlacementId)], dsCols(dsOf[r.placementId])));
     });
 
@@ -465,6 +493,17 @@ var Walk = (function () {
       if (parent) {
         if (!line[col("Placement")]) line[col("Placement")] = parent.placementName;
         if (!line[col("Site")]) line[col("Site")] = parent.site;
+      }
+      // As the export writes them: the placement and the file carry their
+      // id, a creative of a stopped placement is stopped, and a line in a
+      // decision set rotates by "Decision Tree" instead of a weight.
+      if (line[col("Placement")]) line[col("Placement")] += " (" + r.placementId + ")";
+      var ownId = r.isDecisionSet ? (r.dtreeId || r.dsetId || r.dsetLinkId) : r.creativeId;
+      if (line[col("Filename")] && ownId) line[col("Filename")] += " (" + ownId + ")";
+      if (!pcx.source.Stopped && stoppedOf[r.placementId]) line[col("Stopped")] = stoppedOf[r.placementId];
+      if (!pcx.source.Rotation) {
+        line[col("Rotation")] = (r.isDecisionSet || dsOf[r.placementId]) ? "Decision Tree"
+          : (r.rotationWeight ? Number(r.rotationWeight).toFixed(2) : "");
       }
       if (r.isDecisionSet) {
         cr.push(line.concat(dsCols(r), [r.rotationWeight, "", "", "", ""]));
@@ -498,6 +537,7 @@ var Walk = (function () {
       var missing = [], found = 0;
       Object.keys(s[1]).forEach(function (c) {
         var k = s[1][c];
+        if (!k && DERIVED[c]) { found += 1; return; }
         if (!k) { missing.push(c); return; }
         found += 1;
         (usedBy[k] = usedBy[k] || []).push(s[0] + " · " + c);

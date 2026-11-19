@@ -73,6 +73,27 @@ const out = {};
   out.plColumns = Walk.PL_COLUMNS;
   out.pcColumns = Walk.PC_COLUMNS;
 
+  // Shaped like campaign 330328's real fields, against what its real
+  // exports wrote for the same rows.
+  const real = {totalPages: 1, items: [
+    {level: "PLACEMENT", placementId: 11152306, placementName: "P3KK98M|X", siteName: "DV360", siteId: 18330,
+     status: "Stopped", bookedCost: 0, costTypeMedia: "CPM", costRateMedia: 0, costTypeFt: "CPM", costRateFt: 0,
+     impressionsDelivered: 5, percentDelivered: 0, isHidden: false},
+    {level: "PLACEMENT-CREATIVE", placementId: 11152306, placementName: "P3KK98M|X", siteName: "DV360",
+     creativeId: 6439175, fileName: "Tracking_Creative_Instream_15.png", numClickTags: 1, baseFileSize: 68,
+     rotationWeight: "1.00", status: "Active"},
+    {level: "PLACEMENT", placementId: 11320679, placementName: "P4|Y", siteName: "DV360", siteId: 18330,
+     status: "Live", decisionSetId: 42422, decisionSetName: "Google SSP 6s", placementDecisionSetId: 80953},
+    {level: "PLACEMENT-CREATIVE", placementId: 11320679, placementName: "P4|Y", siteName: "DV360",
+     fileName: "Google SSP 6s", decisionSetId: 42422, decisionSetName: "Google SSP 6s", rotationWeight: "1.00"},
+    {level: "PLACEMENT-CREATIVE", placementId: 11320679, placementName: "P4|Y", siteName: "DV360",
+     creativeId: 6553310, fileName: "v.png", rotationWeight: "1.00"}]};
+  const exReal = await Walk.extract("330328", async (url) => url.includes("/summary") ? real
+    : url.includes("/dset/") ? {id: "42422", name: "Google SSP 6s", nodes: []} : {items: []}, () => {});
+  const sReal = Object.fromEntries(Walk.sheets(exReal, []));
+  out.realPl = sReal.Placement;
+  out.realPc = sReal["Placement-Creative"];
+
   // Three identical failures and it stops asking.
   let asked = 0;
   const many = {totalPages: 1, items: [0, 1, 2, 3, 4, 5].map((i) => (
@@ -189,12 +210,12 @@ def test_sheets_keep_the_export_column_names(walk):
 def test_export_columns_come_from_innovid_fields(walk):
     p = dict(zip(walk["placements"][0], walk["placements"][1]))
     assert (p["Site_ID"], p["Site"], p["Hidden"], p["Clicktag_1"]) == (
-        "77", "Site A", "No", "https://lp.example/a")
+        "77", "Site A (77)", "No", "https://lp.example/a")
     c = dict(zip(walk["creatives"][0], walk["creatives"][2]))
     assert (c["Creative_ID"], c["Filename"], c["Clicktag_1"], c["Third_Party_Impression_2"]) == (
-        "1", "v1.jpg", "https://lp.example/v1", "https://px.example/2")
+        "1", "v1.jpg (1)", "https://lp.example/v1", "https://px.example/2")
     # The creative row doesn't repeat its placement's name: taken from it.
-    assert (c["Placement"], c["Site"]) == ("P1", "Site A")
+    assert (c["Placement"], c["Site"]) == ("P1 (9001)", "Site A")
 
 
 def test_summary_says_which_export_columns_innovid_did_not_send(walk):
@@ -244,3 +265,29 @@ def test_only_these_placements_by_id_or_p_code(walk):
 
 def test_only_these_decision_sets_by_name_or_id(walk):
     assert walk["byDset"] == ["707", "711"]
+
+
+def _rows(sheet):
+    return [dict(zip(sheet[0], r)) for r in sheet[1:]]
+
+
+def test_placement_values_are_written_as_the_export_writes_them(walk):
+    # Expected values copied from the real 330328 placement export.
+    p = _rows(walk["realPl"])[0]
+    assert (p["Site"], p["Stopped"], p["Hidden"]) == ("DV360 (18330)", "Yes", "No")
+    assert (p["Booked_Cost"], p["Media_Cost_Type"], p["Media_Cost_Rate"]) == ("0.00", "CPM", "0.0000")
+    assert (p["Flashtalking_Cost_Type"], p["Flashtalking_Cost"]) == ("CPM", "0.0000")
+    assert (p["Delivered_Impressions"], p["Percent_Delivered"]) == ("5", "0.00")
+    assert _rows(walk["realPl"])[1]["Stopped"] == "No"
+
+
+def test_creative_values_are_written_as_the_export_writes_them(walk):
+    # Expected values copied from the real 330328 placement-creative export.
+    direct, ds_line, in_ds = _rows(walk["realPc"])
+    assert direct["Placement"] == "P3KK98M|X (11152306)"
+    assert direct["Filename"] == "Tracking_Creative_Instream_15.png (6439175)"
+    assert (direct["ClickTags"], direct["Base_File_Size (KB)"]) == ("1", "0.07")
+    assert (direct["Rotation"], direct["Stopped"], direct["Site"]) == ("1.00", "Yes", "DV360")
+    assert ds_line["Filename"] == "Google SSP 6s (42422)"
+    assert (ds_line["Rotation"], in_ds["Rotation"], in_ds["Stopped"]) == (
+        "Decision Tree", "Decision Tree", "No")
