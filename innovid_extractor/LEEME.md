@@ -70,9 +70,9 @@ Innovid que ya tienes abierta y descarga el mismo Excel (con
 3. El Excel queda en Descargas. Con varios IDs, la pestaña de Innovid
    pasa de uno a otro.
 
-**Solo una parte del campaign (opcional):** en "Only part of the campaign"
-pegas la columna de Placement IDs (o los códigos P) de la TS, o los IDs o
-nombres de decision sets. Solo se leen esos decision sets y el Excel trae
+**Qué leer:** "All" (todo el campaign), "Placements" (pegas la
+columna de Placement IDs o códigos P de la TS) o "Decision sets"
+(IDs o nombres). Es una u otra, no las dos. Solo se leen esos decision sets y el Excel trae
 solo esos placements. Lo que no exista en el campaign sale en la hoja
 Summary. Vacío = todo el campaign.
 

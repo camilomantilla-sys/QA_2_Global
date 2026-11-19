@@ -68,7 +68,9 @@ $("go").addEventListener("click", () => {
   const ids = Walk.campaignIds($("ids").value);
   if (!ids.length || !innovidTab) return;
   const here = Walk.campaignFromUrl(innovidTab.url);
-  const opts = {placements: $("onlyPlacements").value, dsets: $("onlyDsets").value};
+  const kind = scopeKind();
+  const opts = {placements: kind === "placements" ? $("scopeList").value : "",
+                dsets: kind === "dsets" ? $("scopeList").value : ""};
   const start = () => chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id, opts});
   if (ids.length === 1 && ids[0] === here) { start(); return; }
   // Moving the tab to other campaigns needs Innovid's site permission,
@@ -95,6 +97,22 @@ $("openFolder").addEventListener("click", async () => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "session" && changes.run) render(changes.run.newValue);
 });
+
+// One choice: the whole campaign, only these placements, or only these
+// decision sets -- never a mix, which read as confusing.
+const PLACEHOLDER = {
+  placements: "Placement IDs or P codes, one per line (paste the TS column as is)",
+  dsets: "Decision set IDs or names, one per line"
+};
+function scopeKind() {
+  return document.querySelector('input[name="scope"]:checked').value;
+}
+document.querySelectorAll('input[name="scope"]').forEach((r) => r.addEventListener("change", () => {
+  const kind = scopeKind();
+  $("scopeList").hidden = kind === "all";
+  $("scopeList").placeholder = PLACEHOLDER[kind] || "";
+  if (kind !== "all") $("scopeList").focus();
+}));
 
 // The clock ticks while a run is going.
 setInterval(() => { if (lastRun && lastRun.running) render(lastRun); }, 1000);
