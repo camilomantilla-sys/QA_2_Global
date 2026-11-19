@@ -44,3 +44,36 @@ ninguno crea el suyo la primera vez (Playwright + openpyxl + Chromium).
 - Solo habla con Innovid (`campaign-manager.flashtalking.net` y
   `api.flashtalking.net`), igual que QA2.
 - Sigue siendo un programa que corre en el equipo de quien lo usa.
+
+---
+
+# Extensión de Chrome (prototipo)
+
+`chrome_extension/` hace el mismo recorrido desde Chrome: sin Python, sin
+terminal y sin sesión guardada aparte. Usa la sesión de la pestaña de
+Innovid que ya tienes abierta y descarga el mismo Excel (con
+"Read with: Chrome extension" en la hoja Summary).
+
+## Cargarla (una vez)
+
+1. Abre `chrome://extensions`.
+2. Activa **Modo de desarrollador** (arriba a la derecha). Si sale gris o
+   "administrado por tu organización", la empresa lo bloquea: se necesita IT.
+3. **Cargar descomprimida** → elige la carpeta
+   `innovid_extractor/chrome_extension`.
+4. Fija el ícono (la pieza de rompecabezas → el pin).
+
+## Usarla
+
+1. Entra a Innovid como siempre y abre un campaign.
+2. Clic en el ícono → el Campaign ID ya viene puesto → **Extract**.
+3. El Excel queda en Descargas. Con varios IDs, la pestaña de Innovid
+   pasa de uno a otro.
+
+Se puede cerrar la ventanita mientras trabaja: el avance sigue y se ve al
+abrirla otra vez. Tras un `git pull`, en `chrome://extensions` dale al
+botón de recargar de la extensión.
+
+Solo pide permiso para `campaign-manager.flashtalking.net` y
+`api.flashtalking.net`. La librería de Excel (SheetJS, licencia Apache 2.0)
+va dentro de la carpeta: no se descarga nada de internet.

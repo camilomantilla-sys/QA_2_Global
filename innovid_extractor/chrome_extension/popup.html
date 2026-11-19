@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Innovid Extractor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="top">
+    <img src="icons/wpp-media-logo.png" alt="WPP Media" class="logo">
+    <span class="tag">AdOps · GOC</span>
+  </header>
+  <section class="hero">
+    <h1>Innovid <span class="hl">Extractor</span></h1>
+    <p>Reads the campaign open in Innovid into Excel.</p>
+  </section>
+
+  <main>
+    <div class="card" id="tabCard">
+      <div class="row"><span class="dot" id="tabDot"></span><strong id="tabTitle">Looking for Innovid…</strong></div>
+      <p class="hint" id="tabHint"></p>
+    </div>
+
+    <div class="card stripe-corn">
+      <label for="ids" class="eyebrow">Campaign ID(s)</label>
+      <input id="ids" autocomplete="off" spellcheck="false">
+      <p class="hint">Several at once: separate them with spaces. The Innovid tab moves through them.</p>
+      <button id="go" class="primary"><span id="goText" class="label">Extract</span><span class="chip" id="goChip">→</span></button>
+    </div>
+
+    <div class="card stripe-lime" id="progressCard" hidden>
+      <div class="eyebrow">Progress</div>
+      <ul id="lines"></ul>
+      <p class="problem" id="problem" hidden></p>
+      <div class="actions" id="doneActions" hidden>
+        <button id="openFolder" class="primary"><span class="label">Show in folder</span><span class="chip">↗</span></button>
+      </div>
+    </div>
+  </main>
+  <footer>Uses your open Innovid session · nothing is stored · the Excel goes to Downloads</footer>
+  <script src="walk.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

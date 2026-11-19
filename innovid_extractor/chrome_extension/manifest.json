@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Innovid Extractor",
+  "version": "0.1.0",
+  "description": "Reads the Innovid campaign open in this tab into Excel: placements, decision sets and Media Filters.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Innovid Extractor",
+    "default_icon": {"16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png"}
+  },
+  "icons": {"16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png"},
+  "background": {"service_worker": "background.js"},
+  "permissions": ["scripting", "downloads", "storage", "tabs"],
+  "host_permissions": [
+    "https://campaign-manager.flashtalking.net/*",
+    "https://api.flashtalking.net/*"
+  ]
+}

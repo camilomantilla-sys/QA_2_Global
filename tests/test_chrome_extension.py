@@ -1,0 +1,116 @@
+"""
+The Chrome extension prototype (innovid_extractor/chrome_extension).
+
+Checked without a browser: the manifest asks for nothing beyond Innovid,
+and walk.js -- the JavaScript port of the walk-through -- reads the same
+real-campaign shapes the Python extractor does. Those run under Node
+when it is installed, and are skipped otherwise.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+EXT = Path(__file__).resolve().parents[1] / "innovid_extractor" / "chrome_extension"
+
+
+def test_the_manifest_reaches_only_innovid():
+    manifest = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["manifest_version"] == 3
+    assert manifest["host_permissions"] == [
+        "https://campaign-manager.flashtalking.net/*",
+        "https://api.flashtalking.net/*",
+    ]
+    # No content scripts on every site, no remote code.
+    assert "content_scripts" not in manifest
+    assert set(manifest["permissions"]) <= {"scripting", "downloads", "storage", "tabs"}
+
+
+def test_everything_the_extension_loads_is_inside_it():
+    for page in ("popup.html",):
+        html = (EXT / page).read_text(encoding="utf-8")
+        assert "http://" not in html and "https://" not in html
+    for ref in ("lib/xlsx.mini.min.js", "walk.js", "popup.js", "popup.css", "background.js",
+                "icons/wpp-media-logo.png", "fonts/WPP-Regular.woff2"):
+        assert (EXT / ref).exists(), ref
+
+
+NODE_CHECK = r"""
+const Walk = require(process.argv[1]);
+const out = {};
+(async () => {
+  // A real campaign's shape: the decision set as a line under the
+  // placement, and the default creative also rotating.
+  const summary = {totalPages: 1, items: [
+    {level: "PLACEMENT", placementId: "9001", placementName: "P1", status: "Live"},
+    {level: "PLACEMENT-CREATIVE", placementId: "9001", fileName: "Display 160x600",
+     placementModernDtreeId: "43580", modernDtreeName: "Display 160x600"},
+    {level: "PLACEMENT-CREATIVE", placementId: "9001", creativeId: "1", fileName: "v1.jpg"}]};
+  const dset = {id: "43580", name: "Display 160x600", servingMethod: "Rotation",
+    defaultServing: {id: "1", name: "v1.jpg"}, nodes: [
+      {serving: {id: "1", name: "v1.jpg"}, startTimestamp: "2026-11-16 00:00:00",
+       endTimestamp: "2026-12-05 23:59:00", weight: 1},
+      {isDefault: true, startTimestamp: "2026-11-05 10:01:53", endTimestamp: null}]};
+  const call = async (url) => url.includes("/summary") ? summary
+    : url.includes("/dset/") ? dset : {items: []};
+  const ex = await Walk.extract("337000", call, () => {});
+  const sheets = Object.fromEntries(Walk.sheets(ex, []));
+  out.placements = sheets.Placements;
+  out.creatives = sheets.Creatives;
+
+  // Three identical failures and it stops asking.
+  let asked = 0;
+  const many = {totalPages: 1, items: [0, 1, 2, 3, 4, 5].map((i) => (
+    {level: "PLACEMENT", placementId: String(9000 + i), placementModernDtreeId: String(500 + i)}))};
+  const failing = async (url) => {
+    if (url.includes("/summary")) return many;
+    if (url.includes("/dset/")) { asked += 1; throw new Error("HTTP 400"); }
+    return {items: []};
+  };
+  const ex2 = await Walk.extract("337001", failing, () => {});
+  out.asked = asked;
+  out.errors = ex2.errors;
+  out.fromUrl = [Walk.campaignFromUrl("https://campaign-manager.flashtalking.net/337552/summary/"),
+                 Walk.campaignFromUrl("https://example.org/337552/")];
+  out.ids = Walk.campaignIds("337552, 330328 337552");
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+@pytest.fixture(scope="module")
+def walk():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node isn't installed here")
+    done = subprocess.run([node, "-e", NODE_CHECK, str(EXT / "walk.js")],
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_the_decision_set_line_fills_its_placement(walk):
+    head, row = walk["placements"][0], walk["placements"][1]
+    p = dict(zip(head, row))
+    assert (p["Decision set"], p["Decision set ID"]) == ("Display 160x600", "43580")
+
+
+def test_the_default_timestamp_is_not_a_flight(walk):
+    assert len(walk["creatives"]) == 2
+    c = dict(zip(walk["creatives"][0], walk["creatives"][1]))
+    assert (c["DS start"], c["DS end"], c["DS weight"], c["Default"]) == (
+        "2026-11-16 00:00:00", "2026-12-05 23:59:00", "1", "Yes")
+
+
+def test_stops_after_three_identical_failures(walk):
+    assert walk["asked"] == 3
+    assert any("Stopped asking for 3 more" in e for e in walk["errors"])
+
+
+def test_reads_the_campaign_from_the_innovid_tab_only(walk):
+    assert walk["fromUrl"] == ["337552", ""]
+    assert walk["ids"] == ["337552", "330328"]
