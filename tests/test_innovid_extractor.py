@@ -189,3 +189,41 @@ def test_the_qa2_package_does_not_ship_the_extractor():
     from scripts import package_release
 
     assert "innovid_extractor" in package_release.SKIP_DIRS
+
+
+def test_the_decision_set_line_under_a_placement_is_not_a_creative(ext, tmp_path):
+    """
+    Shape seen on a real campaign: the placement row has no decision
+    set id; Innovid lists the decision set as a creative-level line with
+    no creative id. And the default node is also one of the rotation
+    creatives, with a timestamp that is not a flight.
+    """
+    def call(url, method, body):
+        if "/summary" in url:
+            return {"totalPages": 1, "items": [
+                {"level": "PLACEMENT", "placementId": "9001", "placementName": "P1", "status": "Live"},
+                {"level": "PLACEMENT-CREATIVE", "placementId": "9001", "fileName": "Display 160x600",
+                 "placementModernDtreeId": "43580", "modernDtreeName": "Display 160x600"},
+                {"level": "PLACEMENT-CREATIVE", "placementId": "9001", "creativeId": "1", "fileName": "v1.jpg"},
+            ]}
+        if "/dset/" in url:
+            return {"id": "43580", "name": "Display 160x600", "servingMethod": "Rotation",
+                    "defaultServing": {"id": "1", "name": "v1.jpg"}, "nodes": [
+                        {"serving": {"id": "1", "name": "v1.jpg"}, "startTimestamp": "2026-11-16 00:00:00",
+                         "endTimestamp": "2026-12-05 23:59:00", "weight": 1},
+                        {"isDefault": True, "startTimestamp": "2026-11-05 10:01:53", "endTimestamp": None}]}
+        return {"items": []}
+
+    ex = ext.extract("337000", call, say=lambda _m: None)
+    assert [c.file_name for c in ex.creatives] == ["v1.jpg"]
+    wb = load_workbook(ext.write_workbook(ex, tmp_path / "o.xlsx"))
+
+    pl = list(wb["Placements"].iter_rows(values_only=True))
+    p1 = dict(zip(pl[0], pl[1]))
+    assert (p1["Decision set"], p1["Decision set ID"]) == ("Display 160x600", "43580")
+
+    cr = list(wb["Creatives"].iter_rows(values_only=True))
+    assert len(cr) == 2
+    v1 = dict(zip(cr[0], cr[1]))
+    assert (v1["DS start"], v1["DS end"], v1["DS weight"], v1["Default"]) == (
+        "2026-11-16 00:00:00", "2026-12-05 23:59:00", "1", "Yes")

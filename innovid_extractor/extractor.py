@@ -101,6 +101,15 @@ class Row:
     def is_creative(self) -> bool:
         return self.level.strip().upper() == "PLACEMENT-CREATIVE"
 
+    @property
+    def is_decision_set(self) -> bool:
+        """
+        Innovid lists a placement's decision set as one more line under
+        it, at creative level but with no creative id. Seen on a real
+        campaign: the line named "Display 160x600" is the decision set.
+        """
+        return not self.creative_id and bool(self.dtree_id or self.dset_id or self.dset_link_id)
+
 
 @dataclass
 class Node:
@@ -134,7 +143,11 @@ class Extraction:
 
     @property
     def creatives(self) -> list[Row]:
-        return [r for r in self.rows if r.is_creative]
+        return [r for r in self.rows if r.is_creative and not r.is_decision_set]
+
+    @property
+    def decision_set_rows(self) -> list[Row]:
+        return [r for r in self.rows if r.is_creative and r.is_decision_set]
 
 
 def _text(value) -> str:
@@ -371,6 +384,9 @@ def write_workbook(ex: Extraction, path: Path, extra_timings=()) -> Path:
                ("Extracted", datetime.now().strftime("%Y-%m-%d %H:%M")),
                ("Placements", len({r.placement_id for r in ex.rows})),
                ("Creative rows", len(ex.creatives)),
+               ("Placements with a decision set", len({r.placement_id for r in ex.decision_set_rows}
+                                                       | {r.placement_id for r in ex.placements
+                                                          if r.dtree_id or r.dset_id or r.dset_link_id})),
                ("Decision sets read", f"{ex.dsets_read} of {ex.dsets_asked}"),
                ("Creatives inside decision sets", len(ex.nodes)),
                ("Sites (Media Filters)", len(ex.media_filters)),
@@ -383,12 +399,27 @@ def write_workbook(ex: Extraction, path: Path, extra_timings=()) -> Path:
     for row in ws.iter_rows(min_row=2):
         row[1].alignment = Alignment(wrap_text=True, vertical="top")
 
+    # The decision set of a placement: on its own row, or on the line
+    # Innovid adds under it for the decision set.
+    ds_of: dict[str, Row] = {}
+    for r in ex.placements + ex.decision_set_rows:
+        if (r.dtree_id or r.dset_id or r.dset_link_id) and r.placement_id not in ds_of:
+            ds_of[r.placement_id] = r
+
+    def ds_name(pid):
+        d = ds_of.get(pid)
+        return (d.dtree_name or d.dset_name or d.file_name) if d else ""
+
+    def ds_id(pid):
+        d = ds_of.get(pid)
+        return (d.dtree_id or d.dset_id or d.dset_link_id) if d else ""
+
     sheet("Placements",
           ["Placement ID", "Placement", "Site", "Size", "Status", "Start", "End",
            "Verification Partner", "Verification Status", "Decision set", "Decision set ID"],
           [(r.placement_id, r.placement_name, r.site, r.dimensions, r.status, r.start, r.end,
-            r.verification_partner, r.verification_status, r.dtree_name or r.dset_name,
-            r.dtree_id or r.dset_id or r.dset_link_id) for r in ex.placements])
+            r.verification_partner, r.verification_status, ds_name(r.placement_id), ds_id(r.placement_id))
+           for r in ex.placements])
 
     by_dset: dict[str, list[Node]] = {}
     for n in ex.nodes:
@@ -398,12 +429,17 @@ def write_workbook(ex: Extraction, path: Path, extra_timings=()) -> Path:
     for r in ex.creatives:
         parent = dset_of.get(r.placement_id)
         probe = Row(**{**r.__dict__})
-        if parent and not (probe.dtree_id or probe.dset_id):
-            probe.dtree_id, probe.dset_id, probe.dset_link_id = parent.dtree_id, parent.dset_id, parent.dset_link_id
+        holder = ds_of.get(r.placement_id)
+        if holder and not (probe.dtree_id or probe.dset_id):
+            probe.dtree_id, probe.dset_id, probe.dset_link_id = holder.dtree_id, holder.dset_id, holder.dset_link_id
         nodes = _nodes_for(probe, by_dset)
-        join = lambda attr: " | ".join(getattr(n, attr) or ("Ongoing" if attr == "end" else "") for n in nodes)  # noqa: E731
+        # The default node's timestamp is when it was set as default,
+        # not a flight: it would read as a third date range.
+        flights = [n for n in nodes if not n.is_default]
+        join = lambda attr: " | ".join(getattr(n, attr) or ("Ongoing" if attr == "end" else "") for n in flights)  # noqa: E731
         creative_rows.append((
-            r.placement_id, r.placement_name or (parent.placement_name if parent else ""), r.creative_id, r.file_name, r.status, r.click_url,
+            r.placement_id, r.placement_name or (parent.placement_name if parent else ""),
+            r.creative_id, r.file_name, r.status, r.click_url,
             r.impression_pixel_1, r.impression_pixel_2, r.survey_pixel,
             join("start"), join("end"), join("weight"),
             "Yes" if any(n.is_default for n in nodes) else ("" if nodes else "Not found in its decision set")))

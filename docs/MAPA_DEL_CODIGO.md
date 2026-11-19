@@ -1473,7 +1473,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_innovid_csrf_rotation.py` | 0 | Un token que rota: el capturado al inicio queda viejo enseguida |
 | `test_innovid_csrf_source.py` | 0 | La situacion real en pruebas: la sesion trae DOS tokens csrf |
 | `test_innovid_diagnose.py` | 0 | El diagnostico debe informar sin exponer nada |
-| `test_innovid_extractor.py` | 10 | The Innovid Extractor walks Innovid on its own and writes an Excel |
+| `test_innovid_extractor.py` | 11 | The Innovid Extractor walks Innovid on its own and writes an Excel |
 | `test_innovid_field_shapes.py` | 61 | Field shapes in Innovid's /summary response |
 | `test_innovid_login_start.py` | 17 | El boton de iniciar sesion tiene que decir cuando no arranco |
 | `test_innovid_reconciliation.py` | 49 | La Traffic Sheet contra lo que Innovid realmente tiene |
@@ -1522,4 +1522,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 853 funciones de prueba en 85 archivos (algunas se parametrizan y corren varias veces).
+Total: 854 funciones de prueba en 85 archivos (algunas se parametrizan y corren varias veces).
