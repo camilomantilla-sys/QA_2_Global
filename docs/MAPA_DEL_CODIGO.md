@@ -1463,7 +1463,7 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_adobe_direct.py` | 11 | Adobe Direct / Site-Served: lo que se revisa cuando no hay creativos |
 | `test_adobe_official_pixels.py` | 9 | Los pixeles oficiales de Adobe: uno universal y uno por linea de negocio |
 | `test_anonimizar_ts.py` | 4 | La copia anónima de una TS sirve para reproducir un caso: QA2 la lee igual que la original, y no queda ningún nombre ni ID de la original |
-| `test_apps_script_poc.py` | 4 | Phase 1 of the Apps Script move (apps_script/poc) |
+| `test_apps_script_poc.py` | 5 | Phase 1 of the Apps Script move (apps_script/poc) |
 | `test_attribution_account.py` | 12 | Quien elige la cuenta manda sobre si hay atribucion que revisar |
 | `test_blackrock_greys.py` | 6 | En BlackRock un placement ocupa varias filas, y no todas valen igual |
 | `test_bundle.py` | 47 | El paquete que se entrega trae su propio Python |
@@ -1547,4 +1547,4 @@ Cada archivo prueba un comportamiento. Se corren todas con `python -m pytest tes
 | `test_weight_normalization.py` | 21 | Un peso de rotacion es relativo, y cada fuente lo guarda a su manera |
 | `test_write_bundle.py` | 2 | Guardar un session bundle y volver a abrirlo da los mismos archivos |
 
-Total: 886 funciones de prueba en 87 archivos (algunas se parametrizan y corren varias veces).
+Total: 887 funciones de prueba en 87 archivos (algunas se parametrizan y corren varias veces).

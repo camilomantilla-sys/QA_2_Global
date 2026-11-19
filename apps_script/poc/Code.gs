@@ -60,12 +60,17 @@ function snapshotDriveFile(id) {
     id, {supportsAllDrives: true});
   lap('Convert to Google Sheets', t);
 
+  t = Date.now();
+  var xlsxHidden = Snapshot.hiddenRowsFromXlsx(xlsxParts(source));
+  lap('Hidden rows from the .xlsx itself', t);
+
   var out = {file: source.getName(), reader: 'apps-script', sheets: [], timings: timings};
   try {
     t = Date.now();
     var meta = Sheets.Spreadsheets.get(copy.id, {
       includeGridData: true,
-      fields: 'properties.timeZone,sheets(properties(title,hidden),merges,data(startRow,rowMetadata(hiddenByUser)))'
+      fields: 'properties.timeZone,sheets(properties(title,hidden),merges,basicFilter,' +
+        'data(startRow,rowMetadata(hiddenByUser,hiddenByFilter)))'
     });
     lap('Hidden rows and merged cells', t);
     var tz = meta.properties.timeZone;
@@ -81,7 +86,9 @@ function snapshotDriveFile(id) {
         backgrounds: range.getBackgrounds(),
         fontColors: range.getFontColors(),
         links: range.getRichTextValues().map(function (row) { return row.map(linkOf); }),
-        hiddenRows: hiddenRowsOf(s),
+        // What the .xlsx marks hidden, as Python reads it; Google's own
+        // idea of hidden rows is kept below, for the record.
+        hiddenRows: xlsxHidden[name] || hiddenRowsOf(s, 'hiddenByUser').concat(hiddenRowsOf(s, 'hiddenByFilter')),
         merges: (s.merges || []).map(function (m) {
           return {r1: (m.startRowIndex || 0) + 1, r2: m.endRowIndex,
                   c1: (m.startColumnIndex || 0) + 1, c2: m.endColumnIndex};
@@ -90,6 +97,12 @@ function snapshotDriveFile(id) {
       var sheet = Snapshot.buildSheet(raw, formatDate);
       sheet.name = name;
       sheet.hidden = !!s.properties.hidden;
+      // Excel's filters hide rows too (BlackRock's TS filters Placements by
+      // cell colour): QA2 doesn't read them, so Google must hide them as well.
+      sheet.hiddenInXlsx = (xlsxHidden[name] || []).length;
+      sheet.hiddenByUser = hiddenRowsOf(s, 'hiddenByUser').length;
+      sheet.hiddenByFilter = hiddenRowsOf(s, 'hiddenByFilter').length;
+      sheet.filter = s.basicFilter ? JSON.stringify(s.basicFilter.filterSpecs || s.basicFilter.criteria || {}) : '';
       out.sheets.push(sheet);
       lap('Read "' + name + '"', t);
     });
@@ -98,6 +111,22 @@ function snapshotDriveFile(id) {
   }
   out.totalSecs = (Date.now() - started) / 1000;
   return out;
+}
+
+/* The XML parts of an .xlsx / .xlsm (it is a zip), as text. */
+function xlsxParts(file) {
+  var parts = {};
+  try {
+    Utilities.unzip(file.getBlob().setContentType('application/zip')).forEach(function (b) {
+      var name = b.getName();
+      if (/^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/[^/]+\.xml)$/.test(name)) {
+        parts[name] = b.getDataAsString();
+      }
+    });
+  } catch (e) {
+    // Not a zip (a Google Sheet already): Google's own hidden rows are used.
+  }
+  return parts;
 }
 
 /* The link of a cell: the whole cell's, or else the first one inside it. */
@@ -112,12 +141,12 @@ function linkOf(rt) {
   return '';
 }
 
-function hiddenRowsOf(s) {
+function hiddenRowsOf(s, how) {
   var out = [];
   (s.data || []).forEach(function (d) {
     var start = d.startRow || 0;
     (d.rowMetadata || []).forEach(function (m, i) {
-      if (m && m.hiddenByUser) out.push(start + i + 1);
+      if (m && m[how]) out.push(start + i + 1);
     });
   });
   return out;
@@ -141,9 +170,11 @@ function writeSummaryTab(book, snap, json) {
     ['Step', 'Seconds', '', '', '', '']];
   snap.timings.forEach(function (t) { rows.push([t[0], t[1], '', '', '', '']); });
   rows.push(['', '', '', '', '', '']);
-  rows.push(['Sheet', 'Hidden sheet', 'Last row', 'Hidden rows', 'Merged ranges', 'Cells read']);
+  rows.push(['Sheet', 'Last row', 'Hidden rows in the .xlsx', 'Hidden in Google (by hand / by filter)',
+    'Merged ranges', 'Cells read']);
   snap.sheets.forEach(function (s) {
-    rows.push([s.name, s.hidden ? 'Yes' : '', s.maxRow, s.hiddenRows.length, s.merges, s.cells.length]);
+    rows.push([s.name + (s.hidden ? ' (hidden sheet)' : ''), s.maxRow, s.hiddenInXlsx,
+      s.hiddenByUser + ' / ' + s.hiddenByFilter, s.merges, s.cells.length]);
   });
   rows.push(['', '', '', '', '', '']);
   rows.push(['Colour of the cells read', 'GREEN', 'RED', 'YELLOW', 'GREY', 'Other']);

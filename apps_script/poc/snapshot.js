@@ -134,7 +134,43 @@ var Snapshot = (function () {
     };
   }
 
-  return {classify: classify, normText: normText, valueText: valueText, buildSheet: buildSheet};
+  function attr(tag, name) {
+    var m = tag.match(new RegExp("\\s" + name.replace(":", "\\:") + "=\"([^\"]*)\""));
+    return m ? m[1].replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">").replace(/&amp;/g, "&") : "";
+  }
+
+  /*
+   * The rows the .xlsx itself marks hidden, per sheet name, read from its
+   * XML the way openpyxl does. Rows hidden by an Excel filter count too
+   * (Excel writes them hidden), and Google's conversion doesn't always
+   * keep those filters: this is the reading that matches Python.
+   *
+   * parts: {"xl/workbook.xml": text, "xl/_rels/workbook.xml.rels": text,
+   *         "xl/worksheets/sheet1.xml": text, ...}
+   */
+  function hiddenRowsFromXlsx(parts) {
+    var target = {}, out = {};
+    String(parts["xl/_rels/workbook.xml.rels"] || "").replace(/<Relationship\b[^>]*>/g, function (tag) {
+      target[attr(tag, "Id")] = attr(tag, "Target");
+      return tag;
+    });
+    String(parts["xl/workbook.xml"] || "").replace(/<sheet\b[^>]*>/g, function (tag) {
+      var t = target[attr(tag, "r:id")] || "";
+      var path = t.charAt(0) === "/" ? t.slice(1) : "xl/" + t.replace(/^\.\//, "");
+      var rows = [];
+      String(parts[path] || "").replace(/<row\b[^>]*>/g, function (row) {
+        if (/\shidden="(1|true)"/.test(row)) rows.push(Number(attr(row, "r")));
+        return row;
+      });
+      out[attr(tag, "name")] = rows;
+      return tag;
+    });
+    return out;
+  }
+
+  return {classify: classify, normText: normText, valueText: valueText, buildSheet: buildSheet,
+    hiddenRowsFromXlsx: hiddenRowsFromXlsx};
 })();
 
 if (typeof module !== "undefined") module.exports = Snapshot;

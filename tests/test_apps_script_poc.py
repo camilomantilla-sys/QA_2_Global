@@ -38,6 +38,7 @@ const fmt = (d) => d.toISOString().slice(0, 19).replace("T", " ");
 const revive = (v) => (v && typeof v === "object" && v.$date) ? new Date(v.$date + "Z") : v;
 const out = {};
 out.classify = input.colours.map((c) => S.classify(c)[0]);
+out.hidden = input.parts ? S.hiddenRowsFromXlsx(input.parts) : null;
 out.sheets = input.sheets.map((raw) => {
   raw.values = raw.values.map((row) => row.map(revive));
   return Object.assign(S.buildSheet(raw, fmt), {name: raw.name});
@@ -163,3 +164,21 @@ def test_differences_are_told_apart():
     assert text_kind("Display", "display") == "same text, different case"
     assert text_kind("a", "") == "only one side has a value"
     assert text_kind("a", "b") == "different text"
+
+
+def xlsx_parts(path: Path) -> dict:
+    """What Code.gs unzips from the .xlsx: the workbook, its links and the sheets."""
+    import re
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        return {n: z.read(n).decode("utf-8") for n in z.namelist()
+                if re.fullmatch(r"xl/(workbook\.xml|_rels/workbook\.xml\.rels|worksheets/[^/]+\.xml)", n)}
+
+
+def test_hidden_rows_come_from_the_xlsx_like_python(workbook):
+    # Excel's filters hide rows too, and Google's conversion may drop the
+    # filter: the hidden rows are read from the .xlsx, as openpyxl does.
+    got = _node({"colours": [], "sheets": [], "parts": xlsx_parts(workbook)})["hidden"]
+    wb = load_workbook(workbook)
+    assert got == {ws.title: sorted(i for i, d in ws.row_dimensions.items() if d.hidden) for ws in wb.worksheets}
+    assert got["Placements"] == [4]
