@@ -1,9 +1,24 @@
-/* The popup only shows state; the work runs in background.js. */
+/*
+ * popup.js -- the small window that opens when the extension's icon is clicked.
+ *
+ * WHAT IT DOES
+ *   - Checks that it was opened from an Innovid tab (findInnovidTab, showTab).
+ *   - Reads the campaign id(s) and the "What to read" choice.
+ *   - On Extract, sends {type: "start", ...} to background.js, which does the work.
+ *   - Shows the progress that background.js writes to chrome.storage.session (render).
+ *
+ * The popup only shows state; the work runs in background.js, so closing the
+ * popup doesn't stop an extraction. Texts the person reads are in popup.html
+ * and in PLACEHOLDER / HINT below.
+ */
+// $("go") is the element with id="go" in popup.html.
 const $ = (id) => document.getElementById(id);
+// The symbol shown next to each campaign in the progress list.
 const ICON = {ok: "✓", warn: "!", run: "⟳", wait: "○", err: "✕"};
-let innovidTab = null;
-let lastRun = null;
+let innovidTab = null;   // the Innovid tab the popup was opened from (null if it isn't Innovid)
+let lastRun = null;      // the last progress record shown
 
+// 75 -> "1:15"
 function clock(secs) {
   secs = Math.max(0, Math.round(secs));
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
@@ -16,6 +31,7 @@ async function findInnovidTab() {
   return active && active.url && active.url.indexOf(Walk.APP_ORIGIN) === 0 ? active : null;
 }
 
+// Fills the first card: "Innovid open · campaign 311907", or the warning to open this from Innovid.
 function showTab() {
   const card = $("tabCard");
   const campaign = innovidTab ? Walk.campaignFromUrl(innovidTab.url) : "";
@@ -31,6 +47,11 @@ function showTab() {
   }
 }
 
+/*
+ * render(run): draws the progress card from the progress record that
+ * background.js keeps: one line per campaign, the clock, any problem,
+ * and the "Show in folder" button when finished.
+ */
 function render(run) {
   run = run || {};
   lastRun = run;
@@ -64,6 +85,7 @@ function render(run) {
   $("doneActions").hidden = !(run.finished && (run.downloads || []).length);
 }
 
+// Extract button: read the inputs and ask background.js to start.
 $("go").addEventListener("click", () => {
   const ids = Walk.campaignIds($("ids").value);
   if (!ids.length || !innovidTab) return;
@@ -81,12 +103,14 @@ $("go").addEventListener("click", () => {
   });
 });
 
+// Shows a message in red in the progress card.
 function showProblem(text) {
   $("progressCard").hidden = false;
   $("problem").hidden = false;
   $("problem").textContent = text;
 }
 
+// "Show in folder": opens Downloads on the last Excel saved.
 $("openFolder").addEventListener("click", async () => {
   const run = (await chrome.storage.session.get("run")).run || {};
   const last = (run.downloads || []).slice(-1)[0];
@@ -94,6 +118,7 @@ $("openFolder").addEventListener("click", async () => {
   else chrome.downloads.showDefaultFolder();
 });
 
+// Redraw every time background.js updates the progress.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "session" && changes.run) render(changes.run.newValue);
 });
@@ -109,9 +134,11 @@ const HINT = {
   placements: "Placement IDs only, one per line. Copy the Placement ID column from the Traffic Sheet and paste it here as is.",
   dsets: "Decision set names, one per line. Copy the Decision Set column from the Traffic Sheet and paste it here as is."
 };
+// "all", "placements" or "dsets": the "What to read" choice.
 function scopeKind() {
   return document.querySelector('input[name="scope"]:checked').value;
 }
+// Show or hide the list box when the "What to read" choice changes.
 document.querySelectorAll('input[name="scope"]').forEach((r) => r.addEventListener("change", () => {
   const kind = scopeKind();
   $("scopeList").hidden = kind === "all";
@@ -124,6 +151,7 @@ document.querySelectorAll('input[name="scope"]').forEach((r) => r.addEventListen
 // The clock ticks while a run is going.
 setInterval(() => { if (lastRun && lastRun.running) render(lastRun); }, 1000);
 
+// When the popup opens: find the Innovid tab, then show any run in progress.
 (async () => {
   innovidTab = await findInnovidTab();
   showTab();

@@ -1,12 +1,39 @@
 /*
- * The Innovid walk-through, ported from extractor.py.
+ * walk.js -- the "brain" of the extension.
  *
- * Pure functions: they take a `call(url, method, body)` that returns
- * parsed JSON, so the same code runs in the extension and in the tests.
- * No network, no Chrome APIs here.
+ * WHAT IT DOES
+ *   Reads one Innovid campaign through Innovid's own API (the same calls the
+ *   Innovid website makes) and turns the answers into the sheets of the Excel.
+ *   It is the JavaScript version of ../extractor.py.
+ *
+ * WHO USES IT
+ *   - background.js calls Walk.extract() to read a campaign and Walk.sheets()
+ *     to lay the result out as Excel sheets.
+ *   - popup.js uses the small helpers Walk.campaignIds() and Walk.campaignFromUrl().
+ *   - tests/test_chrome_extension.py runs it under Node, without a browser.
+ *
+ * WHY THERE IS NO CHROME CODE HERE
+ *   Every function only takes data and returns data. The one thing that talks
+ *   to Innovid, `call(url, method, body)`, is handed in by background.js. That
+ *   is what lets the tests run this file with fake Innovid answers.
+ *
+ * WHERE TO START READING
+ *   1. extract()   reads a campaign (placements, decision sets, sites).
+ *   2. sheets()    builds the Excel sheets from what extract() read.
+ *   3. Everything else is a small helper used by those two.
+ *
+ * IF YOU KNOW PYTHON
+ *   function f(a) { ... }       is   def f(a): ...
+ *   var x = 1;                  is   x = 1
+ *   {a: 1} / [1, 2]             are  a dict / a list
+ *   list.forEach(function (r) { ... })   is   for r in list: ...
+ *   async / await               work like Python's asyncio
+ *   null / undefined            are  None
  */
 /* eslint-disable no-var */
 var Walk = (function () {
+  // ---------------------------------------------------------------- settings
+  // Innovid's website (where the person is signed in) and its API addresses.
   var APP_ORIGIN = "https://campaign-manager.flashtalking.net";
   var API = "https://api.flashtalking.net";
   var CM_BASE = API + "/cm/v1/ui";
@@ -14,6 +41,8 @@ var Walk = (function () {
   var TAG_BASE = API + "/tag/v1/ui";
   var CM_V1 = API + "/cm/v1";
 
+  // The columns asked for in the campaign summary call. Innovid sends every
+  // field it has for a row anyway; these are the ones the walk reads by name.
   var SUMMARY_FIELDS = [
     "status", "siteName", "placementId", "placementName", "placementType",
     "dimensions", "clickTag1", "startDate", "endDate", "creativeDescription",
@@ -23,13 +52,20 @@ var Walk = (function () {
     "placementModernDtreeId", "modernDtreeId", "modernDtreeName",
     "placementDecisionSetId", "decisionSetId", "decisionSetName"
   ];
-  var SUMMARY_PAGE_SIZE = 500;
-  var MAX_SUMMARY_PAGES = 40;
-  var GIVE_UP_AFTER_FAILED_LOOKUPS = 3;
-  var MAX_SITES = 40;
-  var PARALLEL = 4;
+  var SUMMARY_PAGE_SIZE = 500;          // rows per summary page (Innovid's screen stops at 750; the API pages)
+  var MAX_SUMMARY_PAGES = 40;           // safety stop: 40 x 500 = 20,000 rows
+  var GIVE_UP_AFTER_FAILED_LOOKUPS = 3; // stop asking for a kind of decision set after 3 identical failures
+  var MAX_SITES = 40;                   // most sites read for Media Filters
+  var PARALLEL = 4;                     // decision sets asked for at the same time
 
-  // linesOnly: a decision set name can carry commas, so its list is split by line only.
+  // ---------------------------------------------------------------- filters ("What to read")
+
+  /*
+   * tokens(text, linesOnly) -> list of strings
+   * Splits what the person pasted into the popup box into clean items:
+   * one per line (or per comma/semicolon/tab), spaces collapsed, no repeats.
+   * linesOnly: a decision set name can carry commas, so its list is split by line only.
+   */
   function tokens(textIn, linesOnly) {
     var out = [];
     String(textIn || "").split(linesOnly ? /[\n\r]+/ : /[\n\r,;\t]+/).forEach(function (t) {
@@ -40,9 +76,14 @@ var Walk = (function () {
   }
 
   /*
-   * "Only these placements" (Placement ID or the P code the name starts
-   * with) and "Only these decision sets" (id or name). Both empty: null,
-   * everything. Both filled: their union. What matched nothing is noted.
+   * applyFilters(ex, opts) -> scope, or null for "the whole campaign"
+   * Applies the popup's "Placements" / "Decision sets" choice to the rows
+   * already read from the summary.
+   *   opts.placements: Placement IDs (or the P code the name starts with)
+   *   opts.dsets:      decision set names as the Traffic Sheet writes them, or Innovid IDs
+   * Returns {placements: {id: true}, dsets: {id: true} or null}. Both empty: null,
+   * everything. Both filled: their union. What matched nothing is listed in
+   * ex.filters.unmatched and shown on the Summary sheet.
    */
   function applyFilters(ex, opts) {
     var pl = tokens(opts.placements), ds = tokens(opts.dsets, true);
@@ -99,6 +140,7 @@ var Walk = (function () {
     return scope;
   }
 
+  // True when row r is one of the placements asked for (by ID, full name or P code).
   function placementMatches(r, pl) {
     var name = r.placementName.toUpperCase();
     return pl.some(function (t) {
@@ -107,18 +149,33 @@ var Walk = (function () {
     });
   }
 
+  // ---------------------------------------------------------------- reading Innovid's answers
+
+  // Any value from Innovid as plain trimmed text ("" for null; an object gives its name or value).
   function text(v) {
     if (v === null || v === undefined) return "";
     if (typeof v === "object") v = v.name || v.value || "";
     return String(v).trim();
   }
 
+  /*
+   * The error raised when only signing in to Innovid again can fix things
+   * (the session expired, or Innovid answered 401). Everything else is
+   * written down and the extraction keeps going.
+   */
   function SessionProblem(message) {
     this.name = "SessionProblem";
     this.message = message;
   }
   SessionProblem.prototype = Object.create(Error.prototype);
 
+  /*
+   * parseSummary(payload) -> list of rows
+   * Turns one page of the campaign summary into simple row objects: one per
+   * placement, one per placement-creative line, and one per decision set line.
+   * Each row keeps everything Innovid sent under `raw`, so the export-style
+   * sheets can pick any column from it later.
+   */
   function parseSummary(payload) {
     var items = payload && Array.isArray(payload.items) ? payload.items : [];
     var rows = [];
@@ -148,6 +205,12 @@ var Walk = (function () {
     return rows;
   }
 
+  /*
+   * parseDset(payload, askedFor) -> list of creatives ("nodes")
+   * Reads one decision set: for each creative inside it, its id and name,
+   * its own start and end (with the hour), its rotation weight, and whether
+   * it is the default creative.
+   */
   function parseDset(payload, askedFor) {
     if (!payload || !Array.isArray(payload.nodes)) return [];
     var def = payload.defaultServing && typeof payload.defaultServing === "object" ? payload.defaultServing : {};
@@ -164,6 +227,12 @@ var Walk = (function () {
     });
   }
 
+  /*
+   * dsetMismatch(payload, askedFor, expectedName) -> "" when fine, else the reason
+   * A safety check: the decision set Innovid returned must be the one asked
+   * for (same id, same name as in the summary). If not, it is ignored and the
+   * reason goes to the Summary sheet.
+   */
   function dsetMismatch(payload, askedFor, expectedName) {
     if (!payload || typeof payload !== "object") return "came back in an unexpected shape";
     var got = text(payload.id);
@@ -175,17 +244,31 @@ var Walk = (function () {
     return "";
   }
 
+  // The site's "Remove VPAID" setting (Media Filters), or "Default" when the site has none.
   function mediaFilterOf(detail) {
     var g = (((detail || {}).videoConfig || {}).optionGroups || {}).ctvOttGroup || {};
     var v = g.mediaFilter;
     return v === null || v === undefined || v === "" ? "Default" : String(v);
   }
 
+  // Seconds since the page started; used to time each step for the Summary sheet.
   function now() { return (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000; }
 
+  // ---------------------------------------------------------------- MAIN STEP 1: extract()
+
   /*
-   * Reads one campaign. `say(text)` reports progress. Never throws for a
-   * partial failure; throws SessionProblem when only signing in fixes it.
+   * extract(campaignId, call, say, opts) -> ex (everything read)
+   * Reads one campaign, in three steps:
+   *   1. The campaign summary, page by page: placements and creative lines.
+   *   2. Each decision set used by those placements: the creatives inside it.
+   *   3. Each site of the campaign: its Media Filters (Remove VPAID).
+   * Arguments:
+   *   call(url, method, body)  makes one API call and returns the JSON (see background.js)
+   *   say(text)                shows progress in the popup
+   *   opts                     the popup's filter: {placements: "...", dsets: "..."}
+   * Never throws for a partial failure: what couldn't be read goes to ex.errors
+   * (the Summary sheet's "Could not read" rows). Throws SessionProblem only
+   * when signing in again is the fix.
    */
   async function extract(campaignId, call, say, opts) {
     say = say || function () {};
@@ -194,6 +277,7 @@ var Walk = (function () {
       timings: [], dsetsAsked: 0, dsetsRead: 0, summaryPages: 0
     };
 
+    // Step 1: the campaign summary, 500 rows a page, until Innovid says there are no more pages.
     var t0 = now(), page = 1;
     say("Reading placements…");
     for (;;) {
@@ -212,6 +296,8 @@ var Walk = (function () {
     ex.timings.push(["Campaign summary (placements)", now() - t0]);
 
     t0 = now();
+    // Step 2: collect the decision set ids to read (only those in the filter, each once).
+    // Innovid has three kinds: modern decision trees, decision sets, and decision set links.
     var scope = applyFilters(ex, opts || {});
     var groups = [["modern decision tree", {}], ["decisionSetId", {}], ["placementDecisionSetId", {}]];
     ex.rows.forEach(function (r) {
@@ -229,6 +315,8 @@ var Walk = (function () {
     });
     groups.forEach(function (g) { ex.dsetsAsked += Object.keys(g[1]).length; });
 
+    // Ask for the decision sets a few at a time. When the first 3 of one kind fail the
+    // same way, the rest of that kind would fail too, so it stops asking for them.
     var done = 0;
     for (var gi = 0; gi < groups.length; gi++) {
       var source = groups[gi][0], ids = groups[gi][1], keys = Object.keys(ids).sort();
@@ -266,6 +354,7 @@ var Walk = (function () {
     }
     ex.timings.push(["Decision sets (creatives)", now() - t0]);
 
+    // Step 3: Media Filters (Remove VPAID) of each site of the campaign.
     t0 = now();
     say("Reading Media Filters…");
     try {
@@ -286,10 +375,14 @@ var Walk = (function () {
     return ex;
   }
 
+  // ---------------------------------------------------------------- export columns
+
   /*
    * The columns of Innovid's own exports (placement_v2 and
    * placement-creative_v2), in their order and with their names, so the
    * extension's file reads like the exports it replaces.
+   * TO ADD A COLUMN: add its export name here; if Innovid's field has a
+   * different name, add it to FIELD_ALIASES below.
    */
   var PL_COLUMNS = [
     "Site_ID", "Placement_ID", "Site", "Placement", "Dimensions", "Start_Date", "End_Date",
@@ -312,6 +405,7 @@ var Walk = (function () {
     "Rich", "Instant", "Linked", "Event_Tag_Count", "Custom_Data_1", "Custom_Data_2", "Custom_Data_3"
   ]);
 
+  // numbered("Clicktag_", 3) -> ["Clicktag_1", "Clicktag_2", "Clicktag_3"]
   function numbered(prefix, n) {
     var out = [];
     for (var i = 1; i <= n; i++) out.push(prefix + i);
@@ -345,9 +439,11 @@ var Walk = (function () {
   var DERIVED = {"Stopped": true, "Rotation": true};
 
   /* How the export writes some numbers (checked against campaign 330328). */
+  // decimals(2) returns a function that writes a number with 2 decimals.
   function decimals(d) {
     return function (v) { var n = Number(v); return v !== "" && isFinite(n) ? n.toFixed(d) : v; };
   }
+  // Bytes -> KB with 2 decimals, rounded up, as the export writes file sizes.
   function kilobytes(v) {
     var n = Number(v);
     return isFinite(n) ? (Math.ceil(n * 100 / 1024 - 1e-9) / 100).toFixed(2) : v;
@@ -361,8 +457,10 @@ var Walk = (function () {
     "Total_File_Size (KB)": kilobytes
   };
 
+  // "Site_ID" -> "siteid": names compared without case or punctuation.
   function squash(name) { return String(name).replace(/[^A-Za-z0-9]/g, "").toLowerCase(); }
 
+  // The Innovid field names a column may come from: its aliases, its own name, and "is" + name.
   function candidates(column) {
     var base = squash(column.replace(/\s*\(.*?\)\s*/g, ""));
     return (FIELD_ALIASES[column] || []).map(squash).concat([base, "is" + base]);
@@ -379,11 +477,6 @@ var Walk = (function () {
   }
 
   /*
-   * Fills the export columns of one sheet from the rows' raw fields.
-   * Returns the rows plus, per column, which Innovid field it came from
-   * ("" when no row carried any field by that name).
-   */
-  /*
    * Costs and rates: commercial data the QA never uses. The columns stay,
    * so the sheet keeps the export's layout, but their values are not
    * written, and Innovid fields shows no example of them.
@@ -392,8 +485,15 @@ var Walk = (function () {
     "Flashtalking_Cost_Type", "Flashtalking_Cost"];
   var WITHHELD_FIELD = /cost/i;
 
+  // The label written at the top of the Summary sheet.
   var CLASSIFICATION = "Internal · Confidential. WPP Media campaign data: do not share outside the company.";
 
+  /*
+   * exportColumns(rows, columns) -> {rows: [...], source: {column: Innovid field}}
+   * Fills the export columns of one sheet from the rows' raw fields.
+   * Returns the rows plus, per column, which Innovid field it came from
+   * ("" when no row carried any field by that name).
+   */
   function exportColumns(rows, columns) {
     var source = {};
     columns.forEach(function (c) { source[c] = ""; });
@@ -418,6 +518,7 @@ var Walk = (function () {
   }
 
   /* Every field Innovid sent, how often it had a value, and where it went. */
+  // Builds the "Innovid fields" sheet: a reference for developers of every field Innovid sent.
   function fieldsSheet(rows, usedBy) {
     var info = {};
     rows.forEach(function (r) {
@@ -442,7 +543,21 @@ var Walk = (function () {
     return out;
   }
 
-  /* The sheets of the workbook, as arrays of rows (first row = headers). */
+  // ---------------------------------------------------------------- MAIN STEP 2: sheets()
+
+  /*
+   * sheets(ex, extraTimings) -> [[sheet name, rows], ...]
+   * Lays out what extract() read as the sheets of the Excel. Each sheet is a
+   * list of rows and each row a list of cells; the first row is the header.
+   *   Summary            counts, filters, time per step, and what couldn't be read
+   *   Placement          one row per placement, in the placement_v2 export's columns
+   *   Placement-Creative one row per creative line, in the placement-creative_v2 columns,
+   *                      plus the creative's own dates and weight from its decision set
+   *   Decision sets      every creative inside every decision set
+   *   Media Filters      Remove VPAID per site
+   *   Innovid fields     every field Innovid sent (reference for developers)
+   * background.js turns these lists into the .xlsx file.
+   */
   function sheets(ex, extraTimings) {
     var inScope = {};
     (ex.scope || []).forEach(function (id) { inScope[id] = true; });
@@ -591,10 +706,13 @@ var Walk = (function () {
       ["Media Filters", mf], ["Innovid fields", fields]];
   }
 
+  // ---------------------------------------------------------------- safety and small helpers
+
   /*
    * The only requests the extension may make: three reads and the
    * summary, which Innovid serves as a POST but only reads. Anything
    * else is refused before it leaves the browser.
+   * A NEW API CALL must be added here, or background.js refuses it.
    */
   var ALLOWED = [
     ["POST", /^https:\/\/api\.flashtalking\.net\/cm\/v1\/ui\/campaigns\/\d+\/summary\?fields=[\w,]+$/],
@@ -603,22 +721,26 @@ var Walk = (function () {
     ["GET", /^https:\/\/api\.flashtalking\.net\/tag\/v1\/ui\/campaign-sites\/\d+$/]
   ];
 
+  // True when (method, url) is one of the calls listed in ALLOWED.
   function isAllowedCall(method, url) {
     return ALLOWED.some(function (a) { return a[0] === method && a[1].test(url); });
   }
 
+  // "311907 330328" -> ["311907", "330328"]: every number of 3+ digits, once.
   function campaignIds(textIn) {
     var out = [];
     (String(textIn || "").match(/\d{3,}/g) || []).forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
     return out;
   }
 
+  // The campaign id in an Innovid address (".../311907/summary/" -> "311907"), or "".
   function campaignFromUrl(url) {
     if (!url || url.indexOf(APP_ORIGIN) !== 0) return "";
     var m = url.slice(APP_ORIGIN.length).match(/^\/(?:campaign\/)?(\d{3,})(?:\/|$)/);
     return m ? m[1] : "";
   }
 
+  // What other files can use, as Walk.extract, Walk.sheets, and so on.
   return {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
@@ -627,4 +749,5 @@ var Walk = (function () {
   };
 })();
 
+// Lets Node (the tests) load this file with require().
 if (typeof module !== "undefined") module.exports = Walk;

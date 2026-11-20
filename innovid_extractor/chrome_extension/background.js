@@ -1,18 +1,36 @@
 /*
- * Runs the extraction so it survives the popup closing.
+ * background.js -- the "worker" of the extension.
  *
- * Every API call is made from inside the Innovid tab (world MAIN), so it
- * carries that tab's own session and security token -- exactly what the
- * campaign manager does itself. Nothing is stored but the progress shown
- * in the popup; the Excel goes to Downloads.
+ * WHAT IT DOES
+ *   Runs the extraction when the popup asks for it, and keeps running even if
+ *   the popup closes. For each campaign id it:
+ *     1. opens the campaign in the Innovid tab        (openCampaign)
+ *     2. reads it with Walk.extract()                 (walk.js)
+ *     3. builds the Excel with Walk.sheets() + SheetJS (workbookBase64)
+ *     4. saves it to Downloads                        (chrome.downloads)
+ *   and writes its progress to chrome.storage.session, which the popup shows.
+ *
+ * HOW IT TALKS TO INNOVID
+ *   Every API call is made from inside the Innovid tab (world MAIN), so it
+ *   carries that tab's own session and security token -- exactly what the
+ *   campaign manager does itself. The extension never sees or stores a
+ *   password. Nothing is stored but the progress shown in the popup; the
+ *   Excel goes to Downloads.
+ *
+ * START READING AT run(), near the end of the file.
  */
+
+// Loads SheetJS (writes .xlsx files) and walk.js (exposes `Walk`) into this worker.
 importScripts("lib/xlsx.mini.min.js", "walk.js");
 
+// The key under which the current run's progress is kept in chrome.storage.session.
+// popup.js reads the same key. Session storage is wiped when Chrome closes.
 const RUN = "run";
 
 // Progress updates run one after another: they read and rewrite the
 // same record, and two at once would lose one of them.
 let queue = Promise.resolve();
+// update(fn): fn gets the current progress record and returns the new one.
 function update(fn) {
   queue = queue.then(async () => {
     const cur = (await chrome.storage.session.get(RUN))[RUN] || {};
@@ -21,15 +39,24 @@ function update(fn) {
   return queue;
 }
 
+// setRun({...}): change some fields of the progress record (running, finished, problem, downloads...).
 const setRun = (patch) => update((cur) => Object.assign({}, cur, patch));
 
+// setLine(campaignId, icon, text): change the progress line of one campaign in the popup.
+// icon is one of "wait", "run", "ok", "warn", "err" (see ICON in popup.js).
 function setLine(id, icon, text, extra) {
   return update((cur) => Object.assign({}, cur, {
     lines: (cur.lines || []).map((l) => (l.id === id ? Object.assign({}, l, {icon, text}, extra || {}) : l))
   }));
 }
 
-// Injected into the Innovid tab. Must be self-contained.
+/*
+ * pageFetch(url, method, body) -> {status, text}
+ * Runs INSIDE the Innovid tab (injected by inTab below), so the request goes
+ * out with the tab's own cookies and the page's security token (CSRF), the way
+ * the Innovid site makes its own requests. It must be self-contained: it can't
+ * use anything else from this file, because only its code is copied into the tab.
+ */
 function pageFetch(url, method, body) {
   const keys = ["csrf", "csrfToken", "XSRF-TOKEN", "X-Csrf-Token"];
   let csrf = "";
@@ -46,10 +73,12 @@ function pageFetch(url, method, body) {
     .catch((e) => ({status: 0, text: String(e)}));
 }
 
+// Runs inside the Innovid tab: true once the page has stored its security token.
 function pageHasToken() {
   return ["csrf", "csrfToken", "XSRF-TOKEN", "X-Csrf-Token"].some((k) => !!sessionStorage.getItem(k));
 }
 
+// inTab(tabId, func, args): runs `func(...args)` inside the Innovid tab and returns its result.
 async function inTab(tabId, func, args) {
   const [res] = await chrome.scripting.executeScript({target: {tabId}, world: "MAIN", func, args: args || []});
   return res ? res.result : undefined;
@@ -67,8 +96,15 @@ async function waitForLoad(tabId, timeoutMs) {
   }
 }
 
+// Waits ms milliseconds: await sleep(500).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/*
+ * openCampaign(tabId, campaignId)
+ * Makes the Innovid tab show /<campaignId>/summary/ (if it isn't there
+ * already), waits for it to load and for its security token. If Innovid sent
+ * the tab to the sign-in page instead, raises SessionProblem.
+ */
 async function openCampaign(tabId, campaignId) {
   const tab = await chrome.tabs.get(tabId);
   if (Walk.campaignFromUrl(tab.url) !== campaignId) {
@@ -83,6 +119,14 @@ async function openCampaign(tabId, campaignId) {
   for (let i = 0; i < 60 && !(await inTab(tabId, pageHasToken)); i++) await sleep(500);
 }
 
+/*
+ * makeCall(tabId) -> call(url, method, body)
+ * Builds the `call` function walk.js uses for every API request:
+ *   - refuses any request not in the ALLOWED list of walk.js (read-only by design);
+ *   - runs it inside the Innovid tab with pageFetch;
+ *   - turns HTTP errors into clear messages. 401 = sign in again (SessionProblem);
+ *     403 = reload the tab once and try again.
+ */
 function makeCall(tabId) {
   return async function call(url, method, body, retried) {
     // Read-only by construction: nothing outside the list leaves the browser.
@@ -104,6 +148,11 @@ function makeCall(tabId) {
   };
 }
 
+/*
+ * workbookBase64(ex, extra) -> the .xlsx file as base64 text
+ * Turns Walk.sheets() into an Excel workbook with SheetJS: column widths from
+ * the content (max 60 characters) and a filter on every sheet but Summary.
+ */
 function workbookBase64(ex, extra) {
   const wb = XLSX.utils.book_new();
   for (const [name, rows] of Walk.sheets(ex, extra)) {
@@ -124,6 +173,14 @@ function fileName(campaignId) {
   return `Innovid_${campaignId}_Summary_DecisionSets_Extraction_${day}.xlsx`;
 }
 
+/*
+ * run(ids, tabId, opts) -- THE MAIN FUNCTION
+ * Extracts each campaign in `ids`, one after another, in the Innovid tab
+ * `tabId`, with the popup's filter `opts`. One Excel per campaign goes to
+ * Downloads. If a campaign fails with a session problem, the run stops and
+ * the popup shows the reason; any other partial failure is written in that
+ * campaign's Summary sheet instead.
+ */
 async function run(ids, tabId, opts) {
   await setRun({running: true, finished: false, problem: "", downloads: [], startedAt: Date.now(), endedAt: 0,
     lines: ids.map((id) => ({id, icon: "wait", text: "Waiting"}))});
@@ -159,6 +216,7 @@ async function run(ids, tabId, opts) {
   }
 }
 
+// The popup sends {type: "start", ids, tabId, opts} when the person clicks Extract.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg && msg.type === "start") {
     run(msg.ids, msg.tabId, msg.opts);
