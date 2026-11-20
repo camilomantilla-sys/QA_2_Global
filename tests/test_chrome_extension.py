@@ -153,6 +153,8 @@ const out = {};
   const exBy = await Walk.extract("337000", call, () => {}, {by: "  Ana Ruiz "});
   out.byName = Object.fromEntries(Walk.sheets(exBy, []).find((s) => s[0] === "Summary")[1]);
   out.stamp = Walk.localStamp(new Date(2026, 10, 20, 10, 30));
+  out.users = ["Welcome, Camilo Mantilla", "  Welcome,\n  Ana   Ruiz ", "Bienvenido: Luis Pérez", "", null]
+    .map(Walk.userFromHeader);
   const api = "https://api.flashtalking.net";
   out.allowed = [
     Walk.isAllowedCall("POST", api + "/cm/v1/ui/campaigns/337552/summary?fields=status,placementId"),
@@ -321,7 +323,12 @@ def test_the_file_says_it_is_confidential(walk):
 
 def test_the_file_says_who_extracted_it_and_when(walk):
     assert walk["byName"]["Extracted by"] == "Ana Ruiz"
-    assert dict((r[0], r[1]) for r in walk["summary"])["Extracted by"] == "(not given)"
+    assert dict((r[0], r[1]) for r in walk["summary"])["Extracted by"] == "(Innovid didn't show the user)"
     # Local time of whoever runs it, with the offset (and zone name when known).
     assert re.match(r"^2026-11-20 10:30 \(UTC[+-]\d{2}:\d{2}", walk["stamp"])
     assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \(UTC", walk["byName"]["Extracted"])
+
+
+def test_the_user_is_the_one_innovid_shows_at_the_top(walk):
+    # The text of Innovid's user button ("Welcome, Camilo Mantilla") -> the name.
+    assert walk["users"] == ["Camilo Mantilla", "Ana Ruiz", "Luis Pérez", "", ""]

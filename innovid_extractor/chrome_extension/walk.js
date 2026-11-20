@@ -266,6 +266,24 @@ var Walk = (function () {
       p(d.getMinutes()) + " (UTC" + sign + p(Math.floor(a / 60)) + ":" + p(a % 60) + (zone ? " · " + zone : "") + ")";
   }
 
+  /*
+   * pageUserText() -> the text of Innovid's user button, e.g. "Welcome, Camilo Mantilla"
+   * Runs INSIDE the Innovid tab (popup.js and background.js inject it), so it
+   * must stay self-contained. It only reads what the page already shows at the
+   * top right; "" when the button isn't there (not signed in, or not loaded yet).
+   */
+  function pageUserText() {
+    var el = document.querySelector(".ft-user-info .user-button") || document.querySelector(".ft-user-info button");
+    return el ? String(el.innerText || el.textContent || "") : "";
+  }
+
+  // "Welcome, Camilo Mantilla" -> "Camilo Mantilla" (the name for "Extracted by"), or "".
+  function userFromHeader(raw) {
+    var s = String(raw || "").replace(/\s+/g, " ").trim();
+    s = s.replace(/^(welcome|bienvenid[oa]s?|bem-vind[oa])\b[,:]?\s*/i, "").trim();
+    return s.length > 80 ? s.slice(0, 80) : s;
+  }
+
   // Seconds since the page started; used to time each step for the Summary sheet.
   function now() { return (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000; }
 
@@ -280,7 +298,8 @@ var Walk = (function () {
    * Arguments:
    *   call(url, method, body)  makes one API call and returns the JSON (see background.js)
    *   say(text)                shows progress in the popup
-   *   opts                     the popup's choices: {placements: "...", dsets: "...", by: "person's name"}
+   *   opts                     {placements: "...", dsets: "..."} from the popup, plus
+   *                            by: the Innovid user of the tab (background.js reads it)
    * Never throws for a partial failure: what couldn't be read goes to ex.errors
    * (the Summary sheet's "Could not read" rows). Throws SessionProblem only
    * when signing in again is the fix.
@@ -290,7 +309,7 @@ var Walk = (function () {
     var ex = {
       campaignId: String(campaignId), rows: [], nodes: [], mediaFilters: [], errors: [],
       timings: [], dsetsAsked: 0, dsetsRead: 0, summaryPages: 0,
-      extractedBy: text((opts || {}).by)   // the name typed in the popup, for "Extracted by"
+      extractedBy: text((opts || {}).by)   // the Innovid user, for "Extracted by"
     };
 
     // Step 1: the campaign summary, 500 rows a page, until Innovid says there are no more pages.
@@ -599,7 +618,7 @@ var Walk = (function () {
       ["Classification", CLASSIFICATION],
       ["Campaign ID", ex.campaignId],
       ["Extracted", localStamp(new Date())],
-      ["Extracted by", ex.extractedBy || "(not given)"],
+      ["Extracted by", ex.extractedBy || "(Innovid didn't show the user)"],
       ["Read with", "Chrome extension"],
       ["Placements", Object.keys(placementIds).length],
       ["Placements with a decision set", Object.keys(dsOf).length],
@@ -762,7 +781,8 @@ var Walk = (function () {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
     PL_COLUMNS: PL_COLUMNS, PC_COLUMNS: PC_COLUMNS, WITHHELD: WITHHELD,
-    campaignIds: campaignIds, tokens: tokens, localStamp: localStamp, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
+    campaignIds: campaignIds, tokens: tokens, localStamp: localStamp,
+    pageUserText: pageUserText, userFromHeader: userFromHeader, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();
 

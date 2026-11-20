@@ -14,8 +14,8 @@
  *   Every API call is made from inside the Innovid tab (world MAIN), so it
  *   carries that tab's own session and security token -- exactly what the
  *   campaign manager does itself. The extension never sees or stores a
- *   password. Nothing is stored but the progress shown in the popup (and the
- *   name for "Extracted by", which popup.js keeps); the Excel goes to Downloads.
+ *   password. Nothing is stored but the progress shown in the popup; the
+ *   Excel goes to Downloads.
  *
  * START READING AT run(), near the end of the file.
  */
@@ -98,6 +98,18 @@ async function waitForLoad(tabId, timeoutMs) {
 
 // Waits ms milliseconds: await sleep(500).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// innovidUser(tabId) -> "Camilo Mantilla": the name Innovid shows at the top
+// right of the tab ("Welcome, Camilo Mantilla"), or "" if it doesn't appear
+// within ~5 seconds. It is only read from the page; nothing is asked of Innovid.
+async function innovidUser(tabId) {
+  for (let i = 0; i < 10; i++) {
+    const name = Walk.userFromHeader(await inTab(tabId, Walk.pageUserText).catch(() => ""));
+    if (name) return name;
+    await sleep(500);
+  }
+  return "";
+}
 
 /*
  * openCampaign(tabId, campaignId)
@@ -193,7 +205,9 @@ async function run(ids, tabId, opts) {
       const t0 = performance.now();
       await openCampaign(tabId, id);
       const opened = [["Open the campaign", (performance.now() - t0) / 1000]];
-      const ex = await Walk.extract(id, call, (msg) => setLine(id, "run", msg), opts || {});
+      // "Extracted by": the Innovid user signed in to the tab.
+      const by = await innovidUser(tabId);
+      const ex = await Walk.extract(id, call, (msg) => setLine(id, "run", msg), Object.assign({}, opts || {}, {by}));
       const b64 = workbookBase64(ex, opened);
       const downloadId = await chrome.downloads.download({
         url: "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + b64,
