@@ -29,10 +29,11 @@ var Walk = (function () {
   var MAX_SITES = 40;
   var PARALLEL = 4;
 
-  function tokens(textIn) {
+  // linesOnly: a decision set name can carry commas, so its list is split by line only.
+  function tokens(textIn, linesOnly) {
     var out = [];
-    String(textIn || "").split(/[\n\r,;\t]+/).forEach(function (t) {
-      t = t.trim();
+    String(textIn || "").split(linesOnly ? /[\n\r]+/ : /[\n\r,;\t]+/).forEach(function (t) {
+      t = t.replace(/\s+/g, " ").trim();
       if (t && out.indexOf(t) < 0) out.push(t);
     });
     return out;
@@ -44,7 +45,7 @@ var Walk = (function () {
    * everything. Both filled: their union. What matched nothing is noted.
    */
   function applyFilters(ex, opts) {
-    var pl = tokens(opts.placements), ds = tokens(opts.dsets);
+    var pl = tokens(opts.placements), ds = tokens(opts.dsets, true);
     if (!pl.length && !ds.length) return null;
     var scope = {placements: {}, dsets: null};
     var unmatched = [];
@@ -64,18 +65,27 @@ var Walk = (function () {
 
     if (ds.length) {
       scope.dsets = {};
-      ds.forEach(function (t) {
+      // By name, as the Traffic Sheet has it (the ID only exists once Innovid creates the decision set);
+      // spaces and capitals don't count, and an Innovid ID still works. One name per line: a line that
+      // matches nothing but carries commas is tried as a list, for whoever pastes "a, b".
+      var pick = function (t) {
         var low = t.toLowerCase(), hit = false;
         ex.rows.forEach(function (r) {
           [[r.dtreeId, r.dtreeName], [r.dsetId, r.dsetName], [r.dsetLinkId, r.dsetName]].forEach(function (p) {
-            if (p[0] && (p[0] === t || (p[1] && p[1].toLowerCase() === low))) {
+            if (p[0] && (p[0] === t || (p[1] && p[1].replace(/\s+/g, " ").trim().toLowerCase() === low))) {
               scope.dsets[p[0]] = true;
               scope.placements[r.placementId] = true;
               hit = true;
             }
           });
         });
-        if (!hit) unmatched.push(t);
+        return hit;
+      };
+      ds.forEach(function (t) {
+        if (pick(t)) return;
+        var parts = /[,;\t]/.test(t) ? tokens(t) : [];
+        if (!parts.length) { unmatched.push(t); return; }
+        parts.forEach(function (x) { if (!pick(x)) unmatched.push(x); });
       });
       // Placements asked for by ID keep all their decision sets.
       ex.rows.forEach(function (r) {

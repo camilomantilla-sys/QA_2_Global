@@ -103,11 +103,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Literal on purpose (feedback from the development team): what goes in the box and how.
 const PLACEHOLDER = {
   placements: "11299523\n11299525\n11299527",
-  dsets: "33613\n33614\n33615"
+  dsets: "S&P D&B 728x90\nS&P Bombora 728x90\nS&P Captify 728x90"
 };
 const HINT = {
   placements: "Placement IDs only, one per line. Copy the Placement ID column from the Traffic Sheet and paste it here as is.",
-  dsets: "Decision set IDs only, one per line. Copy them from Innovid and paste them here as is."
+  dsets: "Decision set names, one per line. Copy the Decision Set column from the Traffic Sheet and paste it here as is."
 };
 function scopeKind() {
   return document.querySelector('input[name="scope"]:checked').value;
