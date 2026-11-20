@@ -9,6 +9,7 @@ when it is installed, and are skipped otherwise.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -147,6 +148,11 @@ const out = {};
   asked3.length = 0;
   await Walk.extract("1", bigCall, () => {}, {dsets: "ds 7, 711"});
   out.byDset = asked3.slice().sort();
+
+  // Who and when: the name typed in the popup, and the person's local time with its zone.
+  const exBy = await Walk.extract("337000", call, () => {}, {by: "  Ana Ruiz "});
+  out.byName = Object.fromEntries(Walk.sheets(exBy, []).find((s) => s[0] === "Summary")[1]);
+  out.stamp = Walk.localStamp(new Date(2026, 10, 20, 10, 30));
   const api = "https://api.flashtalking.net";
   out.allowed = [
     Walk.isAllowedCall("POST", api + "/cm/v1/ui/campaigns/337552/summary?fields=status,placementId"),
@@ -311,3 +317,11 @@ def test_costs_never_leave_innovid(walk):
 def test_the_file_says_it_is_confidential(walk):
     assert walk["realSummary"][1][0] == "Classification"
     assert "Confidential" in walk["realSummary"][1][1]
+
+
+def test_the_file_says_who_extracted_it_and_when(walk):
+    assert walk["byName"]["Extracted by"] == "Ana Ruiz"
+    assert dict((r[0], r[1]) for r in walk["summary"])["Extracted by"] == "(not given)"
+    # Local time of whoever runs it, with the offset (and zone name when known).
+    assert re.match(r"^2026-11-20 10:30 \(UTC[+-]\d{2}:\d{2}", walk["stamp"])
+    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \(UTC", walk["byName"]["Extracted"])

@@ -5,8 +5,8 @@ web uses that Excel as its "Innovid Excel". It replaces downloading Innovid's
 exports by hand.
 
 It only **reads**. It uses the Innovid session that is already open in the
-browser tab. It never sees a password, stores nothing, and sends nothing
-anywhere except Innovid's own API.
+browser tab. It never sees a password, keeps nothing but the person's name
+(in their own browser), and sends nothing anywhere except Innovid's own API.
 
 > **Python or JavaScript?** Chrome extensions run JavaScript, so the
 > extension is written in JavaScript. It is the same walk as `../extractor.py`
@@ -16,7 +16,7 @@ anywhere except Innovid's own API.
 > comment that says what it does, and `walk.js` opens with a Python ↔
 > JavaScript cheat sheet.
 
-Version: see `"version"` in `manifest.json` (0.5.2 at the time of writing).
+Version: see `"version"` in `manifest.json` (0.5.3 at the time of writing).
 The map of files and functions is `../docs/extension_code_map.drawio`
 (open it in draw.io; a picture of it is `../docs/extension_code_map.png`).
 
@@ -47,7 +47,7 @@ Person clicks the icon on the Innovid tab
         │
 popup.js ── findInnovidTab(): is this tab Innovid?  ── no ─▶ "Open this from the Innovid tab"
         │ yes
-        │  person types Campaign ID(s), picks All / Placements / Decision sets, clicks Extract
+        │  person types their name (once), Campaign ID(s), picks All / Placements / Decision sets, clicks Extract
         ▼
 popup.js ── chrome.runtime.sendMessage({type: "start", ids, tabId, opts})
         ▼
@@ -81,7 +81,8 @@ popup.js ── render(): one line per campaign, clock, "Show in folder"
 | `makeCall(tabId)` | background.js | Builds the `call()` used for every API request. Refuses anything not on the allowed list, and turns HTTP errors into readable messages. |
 | `pageFetch(url, method, body)` | background.js | Runs inside the Innovid tab, so the request carries the tab's session, like the Innovid site's own requests. |
 | `workbookBase64(ex, extra)` | background.js | Turns the sheets into an `.xlsx` with SheetJS. |
-| `extract(id, call, say, opts)` | walk.js | Reads one campaign: summary pages, decision sets, sites. Partial failures go to the Summary sheet; it only stops for a session problem. |
+| `extract(id, call, say, opts)` | walk.js | Reads one campaign: summary pages, decision sets, sites. Partial failures go to the Summary sheet; it only stops for a session problem. `opts.by` is the name typed in the popup. |
+| `localStamp(date)` | walk.js | The "Extracted" time in the Summary: the person's own local time with its zone, e.g. `2026-11-20 10:30 (UTC-05:00 · America/Bogota)`. |
 | `applyFilters(ex, opts)` | walk.js | The "What to read" filter. Placements by ID; decision sets by the name the Traffic Sheet gives them (or by Innovid ID). |
 | `parseSummary(payload)` | walk.js | One summary page → simple rows (placement, creative line, decision set line). |
 | `parseDset(payload, id)` | walk.js | One decision set → its creatives with dates (with the hour), weight and default. |
@@ -111,6 +112,10 @@ stays empty and the Summary sheet lists it under "Not in Innovid's data".
 `ALLOWED` in `walk.js`. Without that, `makeCall()` refuses it. Only add reads.
 
 **The Excel's file name** → `fileName()` in `background.js`.
+
+**Who and when in the Summary sheet** → the "Extracted" and "Extracted by" rows in
+`sheets()` (`walk.js`). The time comes from `localStamp()`; the name comes from the
+"Your name" box (`popup.js` remembers it with `chrome.storage.local`).
 
 **A new sheet** → add `["Sheet name", rows]` to the list `sheets()` returns at its end.
 
@@ -153,7 +158,7 @@ installed; without it those tests are skipped).
 ## 7. Rules to keep
 
 - **Read only.** Every call goes through `isAllowedCall()`. Never add a call that changes anything in Innovid.
-- **No passwords, no stored data.** The session is the tab's own; only the progress is kept, in session storage, which Chrome clears when it closes.
+- **No passwords, almost no stored data.** The session is the tab's own. Only two things are kept: the progress, in session storage (Chrome clears it when it closes), and the person's name for "Extracted by", in that browser's local storage.
 - **No costs.** `WITHHELD` keeps cost and rate columns empty: the QA doesn't need them.
 - **Minimal permissions.** `activeTab` gives access to the Innovid tab only after the icon is clicked there. Innovid's site permission is asked for only when moving through several campaigns. Adding permissions makes Chrome show scarier warnings to the team.
 - **Partial failures don't stop the run.** They are written in the Summary sheet as "Could not read".

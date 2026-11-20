@@ -14,8 +14,8 @@
  *   Every API call is made from inside the Innovid tab (world MAIN), so it
  *   carries that tab's own session and security token -- exactly what the
  *   campaign manager does itself. The extension never sees or stores a
- *   password. Nothing is stored but the progress shown in the popup; the
- *   Excel goes to Downloads.
+ *   password. Nothing is stored but the progress shown in the popup (and the
+ *   name for "Extracted by", which popup.js keeps); the Excel goes to Downloads.
  *
  * START READING AT run(), near the end of the file.
  */

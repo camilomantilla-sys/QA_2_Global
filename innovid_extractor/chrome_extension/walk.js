@@ -251,6 +251,21 @@ var Walk = (function () {
     return v === null || v === undefined || v === "" ? "Default" : String(v);
   }
 
+  /*
+   * localStamp(date) -> "2026-11-20 10:30 (UTC-05:00 · America/Bogota)"
+   * The date and time where the extraction ran, in that computer's own time
+   * zone (Bogota, Mexico City...), with the zone written next to it so two
+   * files from two countries can still be compared.
+   */
+  function localStamp(d) {
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    var off = -d.getTimezoneOffset(), sign = off >= 0 ? "+" : "-", a = Math.abs(off);
+    var zone = "";
+    try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { zone = ""; }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" +
+      p(d.getMinutes()) + " (UTC" + sign + p(Math.floor(a / 60)) + ":" + p(a % 60) + (zone ? " · " + zone : "") + ")";
+  }
+
   // Seconds since the page started; used to time each step for the Summary sheet.
   function now() { return (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000; }
 
@@ -265,7 +280,7 @@ var Walk = (function () {
    * Arguments:
    *   call(url, method, body)  makes one API call and returns the JSON (see background.js)
    *   say(text)                shows progress in the popup
-   *   opts                     the popup's filter: {placements: "...", dsets: "..."}
+   *   opts                     the popup's choices: {placements: "...", dsets: "...", by: "person's name"}
    * Never throws for a partial failure: what couldn't be read goes to ex.errors
    * (the Summary sheet's "Could not read" rows). Throws SessionProblem only
    * when signing in again is the fix.
@@ -274,7 +289,8 @@ var Walk = (function () {
     say = say || function () {};
     var ex = {
       campaignId: String(campaignId), rows: [], nodes: [], mediaFilters: [], errors: [],
-      timings: [], dsetsAsked: 0, dsetsRead: 0, summaryPages: 0
+      timings: [], dsetsAsked: 0, dsetsRead: 0, summaryPages: 0,
+      extractedBy: text((opts || {}).by)   // the name typed in the popup, for "Extracted by"
     };
 
     // Step 1: the campaign summary, 500 rows a page, until Innovid says there are no more pages.
@@ -549,7 +565,7 @@ var Walk = (function () {
    * sheets(ex, extraTimings) -> [[sheet name, rows], ...]
    * Lays out what extract() read as the sheets of the Excel. Each sheet is a
    * list of rows and each row a list of cells; the first row is the header.
-   *   Summary            counts, filters, time per step, and what couldn't be read
+   *   Summary            who and when, counts, filters, time per step, and what couldn't be read
    *   Placement          one row per placement, in the placement_v2 export's columns
    *   Placement-Creative one row per creative line, in the placement-creative_v2 columns,
    *                      plus the creative's own dates and weight from its decision set
@@ -582,7 +598,8 @@ var Walk = (function () {
     var summary = [["Item", "Value"],
       ["Classification", CLASSIFICATION],
       ["Campaign ID", ex.campaignId],
-      ["Extracted", new Date().toISOString().slice(0, 16).replace("T", " ")],
+      ["Extracted", localStamp(new Date())],
+      ["Extracted by", ex.extractedBy || "(not given)"],
       ["Read with", "Chrome extension"],
       ["Placements", Object.keys(placementIds).length],
       ["Placements with a decision set", Object.keys(dsOf).length],
@@ -745,7 +762,7 @@ var Walk = (function () {
     APP_ORIGIN: APP_ORIGIN, extract: extract, sheets: sheets, parseSummary: parseSummary,
     parseDset: parseDset, dsetMismatch: dsetMismatch, mediaFilterOf: mediaFilterOf,
     PL_COLUMNS: PL_COLUMNS, PC_COLUMNS: PC_COLUMNS, WITHHELD: WITHHELD,
-    campaignIds: campaignIds, tokens: tokens, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
+    campaignIds: campaignIds, tokens: tokens, localStamp: localStamp, campaignFromUrl: campaignFromUrl, isAllowedCall: isAllowedCall, SessionProblem: SessionProblem
   };
 })();
 

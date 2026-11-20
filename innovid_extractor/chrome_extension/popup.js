@@ -89,10 +89,16 @@ function render(run) {
 $("go").addEventListener("click", () => {
   const ids = Walk.campaignIds($("ids").value);
   if (!ids.length || !innovidTab) return;
+  const by = $("by").value.trim();
+  if (!by) {
+    showProblem("Type your name first: it goes in the Excel as \u201cExtracted by\u201d.");
+    $("by").focus();
+    return;
+  }
   const here = Walk.campaignFromUrl(innovidTab.url);
   const kind = scopeKind();
   const opts = {placements: kind === "placements" ? $("scopeList").value : "",
-                dsets: kind === "dsets" ? $("scopeList").value : ""};
+                dsets: kind === "dsets" ? $("scopeList").value : "", by};
   const start = () => chrome.runtime.sendMessage({type: "start", ids, tabId: innovidTab.id, opts});
   if (ids.length === 1 && ids[0] === here) { start(); return; }
   // Moving the tab to other campaigns needs Innovid's site permission,
@@ -151,9 +157,13 @@ document.querySelectorAll('input[name="scope"]').forEach((r) => r.addEventListen
 // The clock ticks while a run is going.
 setInterval(() => { if (lastRun && lastRun.running) render(lastRun); }, 1000);
 
-// When the popup opens: find the Innovid tab, then show any run in progress.
+// "Your name" is remembered in this browser only (chrome.storage.local), so it's typed once.
+$("by").addEventListener("input", () => { chrome.storage.local.set({by: $("by").value.trim()}); });
+
+// When the popup opens: find the Innovid tab, fill in the remembered name, then show any run in progress.
 (async () => {
   innovidTab = await findInnovidTab();
+  $("by").value = (await chrome.storage.local.get("by")).by || "";
   showTab();
   render((await chrome.storage.session.get("run")).run);
 })();
