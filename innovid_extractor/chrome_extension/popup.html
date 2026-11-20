@@ -24,7 +24,7 @@
     <div class="card stripe-corn">
       <label for="ids" class="eyebrow">Campaign ID(s)</label>
       <input id="ids" autocomplete="off" spellcheck="false">
-      <p class="hint">Several at once: separate them with spaces. The Innovid tab moves through them.</p>
+      <p class="hint">Type one Campaign ID, for example 311907. For more than one, leave a space between them: 311907 330328</p>
       <div class="eyebrow scope-title">What to read</div>
       <div class="seg" role="radiogroup" id="scope">
         <label><input type="radio" name="scope" value="all" checked><span>All</span></label>
@@ -32,6 +32,7 @@
         <label><input type="radio" name="scope" value="dsets"><span>Decision sets</span></label>
       </div>
       <textarea id="scopeList" rows="4" spellcheck="false" hidden></textarea>
+      <p class="hint" id="scopeHint" hidden></p>
       <button id="go" class="primary"><span id="goText" class="label">Extract</span><span class="chip" id="goChip">→</span></button>
     </div>
 

@@ -100,9 +100,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // One choice: the whole campaign, only these placements, or only these
 // decision sets -- never a mix, which read as confusing.
+// Literal on purpose (feedback from the development team): what goes in the box and how.
 const PLACEHOLDER = {
-  placements: "Placement IDs or P codes, one per line (paste the TS column as is)",
-  dsets: "Decision set IDs or names, one per line"
+  placements: "11299523\n11299525\n11299527",
+  dsets: "33613\n33614\n33615"
+};
+const HINT = {
+  placements: "Placement IDs only, one per line. Copy the Placement ID column from the Traffic Sheet and paste it here as is.",
+  dsets: "Decision set IDs only, one per line. Copy them from Innovid and paste them here as is."
 };
 function scopeKind() {
   return document.querySelector('input[name="scope"]:checked').value;
@@ -111,6 +116,8 @@ document.querySelectorAll('input[name="scope"]').forEach((r) => r.addEventListen
   const kind = scopeKind();
   $("scopeList").hidden = kind === "all";
   $("scopeList").placeholder = PLACEHOLDER[kind] || "";
+  $("scopeHint").hidden = kind === "all";
+  $("scopeHint").textContent = HINT[kind] || "";
   if (kind !== "all") $("scopeList").focus();
 }));
 
